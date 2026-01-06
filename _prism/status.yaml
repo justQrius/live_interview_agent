@@ -1,7 +1,7 @@
 # Prism Project Status
 phase: implementation
 last_updated: 2026-01-06
-current_work: STORY-004 Complete, Ready for STORY-005 (Audio Capture)
+current_work: STORY-005 Complete, Ready for STORY-006 (Silero VAD)
 beads_available: true
 beads_initialized: false
 tracking_method: _prism/tasks.md
@@ -47,5 +47,9 @@ stories:
     date: 2026-01-06
   STORY-005:
     name: Audio Capture Module
+    status: complete
+    date: 2026-01-06
+  STORY-006:
+    name: Silero VAD Integration
     status: ready
     blocked_by: null
