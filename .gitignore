@@ -1,0 +1,40 @@
+# Node
+node_modules/
+dist/
+package-lock.json
+
+# Tauri
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Python Sidecar
+sidecar/venv/
+sidecar/.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Testing
+coverage/
+
+# Build
+build/
