@@ -387,28 +387,93 @@ live_interview_agent/
 
 ### Next Steps
 
-1. **STORY-005**: Audio Capture Module - Platform-specific audio capture (Windows/macOS/Linux)
-2. **STORY-006**: Silero VAD Integration (depends on STORY-005)
+1. ~~**STORY-005**: Audio Capture Module - Platform-specific audio capture~~ ✅ COMPLETE
+2. **STORY-006**: Silero VAD Integration (depends on STORY-005 ✅)
+
+---
+
+## Session: 2026-01-06 - Implementation Phase (Story 005)
+
+### What Was Accomplished
+
+1. **Story 005: Audio Capture Module - COMPLETE**
+   - Created platform-specific audio capture with WASAPI loopback (Windows) and sounddevice (macOS/Linux)
+   - Implemented thread-safe CircularBuffer with 5-second capacity (80,000 samples at 16kHz)
+   - Added async audio stream generator yielding 500ms chunks (8,000 samples)
+   - Full async lifecycle management with context manager support
+   - Comprehensive error handling for device access and permission errors
+
+2. **Files Created**
+   - `sidecar/src/audio/capture.py` - Main audio capture module (~486 lines)
+     - `CircularBuffer` class - Thread-safe ring buffer with numpy arrays
+     - `AudioCapture` class - Platform-specific capture with async interface
+     - Helper functions: `samples_to_bytes`, `bytes_to_samples`, `get_platform_backend`
+   - `sidecar/tests/test_audio_capture.py` - 35 tests covering all functionality
+   - `sidecar/src/audio/__init__.py` - Updated with all exports
+
+3. **Audio Configuration**
+   - Sample rate: 16kHz
+   - Channels: 1 (mono)
+   - Format: 16-bit PCM (int16)
+   - Chunk size: 500ms (8,000 samples)
+   - Buffer capacity: 5 seconds (80,000 samples)
+
+4. **Tests Added**
+   - TestCircularBuffer: 8 tests (creation, read/write, overflow, thread safety, clear)
+   - TestPlatformDetection: 3 tests (Windows/macOS/Linux backend selection)
+   - TestAudioCaptureConstants: 7 tests (all audio format constants)
+   - TestAudioCaptureClass: 7 tests (creation, state, lifecycle)
+   - TestAudioStream: 4 tests (async iterator, bytes output, chunk size)
+   - TestAudioCaptureErrorHandling: 2 tests (device/permission errors)
+   - TestAudioChunkConversion: 2 tests (samples↔bytes)
+   - TestAudioCaptureLifecycle: 2 tests (full lifecycle, context manager)
+
+### Key Decisions Made
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Thread-safe buffer | `threading.Lock` | Audio callbacks run in separate threads from async code |
+| Resampling method | Linear interpolation | Avoids scipy dependency; sufficient for speech |
+| Polling interval | 50ms | Balance between responsiveness and CPU usage |
+| Runtime imports | Platform libs at runtime | Graceful errors if platform library unavailable |
+
+### Test Summary (All Stories to Date)
+
+| Layer | Tests | Status |
+|-------|-------|--------|
+| React Components | 52 | ✅ Passing |
+| Rust Commands | 9 | ✅ Passing |
+| Python Audio | 35 | ✅ Passing |
+| Python Protocol | 11 | ✅ Passing |
+| Python Server | 6 | ✅ Passing |
+| Integration | 8 | ✅ Passing |
+| **Total** | **121** | **✅ All Passing** |
+
+### Next Steps
+
+1. **STORY-006**: Silero VAD Integration - Voice Activity Detection (depends on STORY-005 ✅)
+2. **STORY-007**: Voice Calibration + Diarization (depends on STORY-006)
 
 ---
 
 ## Context for Next Session
 
 - **Project**: Live Interview Agent - AI assistant for real-time interview support
-- **Phase**: Implementation - Stories 001-004 Complete (4/20)
+- **Phase**: Implementation - Stories 001-005 Complete (5/20)
 - **Foundation Phase**: ✅ COMPLETE (all 4 stories done)
-- **Next Phase**: Audio Pipeline (Stories 005-008)
+- **Audio Pipeline Phase**: 25% (1/4 stories done)
 
 ### Key Files
 - PRD: `_prism/planning/prd.md`
 - Architecture: `_prism/architecture/architecture.md`
 - Tasks: `_prism/tasks.md`
 - Conventions: `AGENTS.md`
+- Audio Capture: `sidecar/src/audio/capture.py`
 
 ### Implementation Progress
 ```
 Phase 1: Foundation    [████████████████] 100% (4/4 stories)
-Phase 2: Audio Pipeline [                ]   0% (0/4 stories)
+Phase 2: Audio Pipeline [████            ]  25% (1/4 stories)
 Phase 3: RAG + Context  [                ]   0% (0/3 stories)
 Phase 4: LLM + Answers  [                ]   0% (0/3 stories)
 Phase 5: Advanced       [                ]   0% (0/3 stories)
@@ -416,5 +481,5 @@ Phase 6: Packaging      [                ]   0% (0/3 stories)
 ```
 
 ### Ready for Next Session
-- STORY-005: Audio Capture Module (unblocked, depends on STORY-003 ✅)
-- Begin Phase 2: Audio Pipeline
+- STORY-006: Silero VAD Integration (unblocked, depends on STORY-005 ✅)
+- Continue Phase 2: Audio Pipeline

@@ -51,12 +51,13 @@ Created: 2026-01-05
 
 ### Phase 2: Audio Pipeline
 
-- [ ] **Story 2.1**: Audio Capture Module (ID: STORY-005)
+- [x] **Story 2.1**: Audio Capture Module (ID: STORY-005) ✅ COMPLETED 2026-01-06
   - Implement platform-specific audio capture (Windows/macOS/Linux)
   - Create circular buffer (5-second capacity)
   - Stream 500ms audio chunks via WebSocket
   - Dependencies: STORY-003
   - Deliverable: Raw audio captured and streamable
+  - **Completed**: Platform-specific backends (pyaudiowpatch/sounddevice), CircularBuffer class (80k samples), async stream generator (500ms chunks), 35 tests passing
 
 - [ ] **Story 2.2**: Silero VAD Integration (ID: STORY-006)
   - Integrate Silero VAD v4 model
