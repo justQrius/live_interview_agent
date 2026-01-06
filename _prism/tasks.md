@@ -1,7 +1,7 @@
 # Live Interview Agent - Task Tracking
 
 **Created**: 2026-01-05
-**Status**: Solution Complete - Ready for Implementation
+**Status**: Implementation In Progress (Story 11/20 Complete)
 **Architecture**: `_prism/architecture/architecture.md`
 
 ---
@@ -152,12 +152,13 @@ Created: 2026-01-05
   - Deliverable: App invisible in screen shares
   - **Completed**: Windows (SetWindowDisplayAffinity), macOS (NSWindow.sharingType), Linux (warning fallback). SettingsPanel toggle connected to Tauri command. 11 Rust tests, 27 React tests for settings.
 
-- [ ] **Story 5.2**: Session Controls (ID: STORY-016)
+- [x] **Story 5.2**: Session Controls (ID: STORY-016) ✅ COMPLETED 2026-01-06
   - Implement Start/Stop session logic
   - Clear session data (transcripts, answers) on stop
   - Add manual question input fallback (text box)
   - Dependencies: STORY-014
   - Deliverable: Users can control session lifecycle
+  - **Completed**: SessionControls with Start/Stop buttons, confirmation dialog, manual question textarea, transcription history in sessionStore and AnswerDisplay. 30 new React tests, all 234 tests passing.
 
 - [ ] **Story 5.3**: Noise Reduction (Optional) (ID: STORY-017)
   - Integrate `noisereduce` library

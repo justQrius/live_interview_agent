@@ -1,10 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSessionStore } from '../store/sessionStore';
 
 const AnswerDisplay: React.FC = () => {
   const currentTranscription = useSessionStore((state) => state.currentTranscription);
   const currentAnswer = useSessionStore((state) => state.currentAnswer);
+  const transcriptionHistory = useSessionStore((state) => state.transcriptionHistory);
+  const answerHistory = useSessionStore((state) => state.answerHistory);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -23,9 +26,54 @@ const AnswerDisplay: React.FC = () => {
     }
   };
 
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 h-full min-h-[600px] flex flex-col">
-      <h2 className="text-xl font-semibold mb-4">AI Answer</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">AI Answer</h2>
+        {(transcriptionHistory.length > 0 || answerHistory.length > 0) && (
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            {showHistory ? 'Hide History' : `Show History (${answerHistory.length})`}
+          </button>
+        )}
+      </div>
+
+      {/* History Panel */}
+      {showHistory && (transcriptionHistory.length > 0 || answerHistory.length > 0) && (
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg max-h-[300px] overflow-y-auto border border-gray-200">
+          <h3 className="font-medium text-sm text-gray-700 mb-3">Session History</h3>
+          <div className="space-y-3">
+            {transcriptionHistory.map((t, idx) => (
+              <div key={`trans-${idx}`} className="text-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-gray-400 text-xs">{formatTime(t.timestamp)}</span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded ${
+                      t.speaker === 'Interviewer'
+                        ? 'bg-purple-100 text-purple-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {t.speaker}
+                  </span>
+                </div>
+                <p className="text-gray-700">{t.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-4 flex-grow overflow-y-auto">
         <div className="p-4 bg-blue-50 rounded-lg">
           <div className="flex items-center justify-between mb-2">

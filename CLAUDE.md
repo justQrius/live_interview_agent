@@ -2,7 +2,7 @@
 
 ## Quick Reference
 
-**Status**: Implementation In Progress (Story 10/20 Complete)
+**Status**: Implementation In Progress (Story 11/20 Complete)
 **Project**: AI-powered live interview agent that provides real-time contextual answers
 **Architecture**: `_prism/architecture/architecture.md`
 **Tasks**: `_prism/tasks.md`
@@ -211,4 +211,4 @@ live_interview_agent/
 
 ## Next Step
 
-Run `/prism-implement STORY-011` to build the RAG Engine (Similarity Search).
+Run `/prism-implement STORY-017` for Noise Reduction (optional) or `/prism-implement STORY-018` for PyInstaller Bundling.
