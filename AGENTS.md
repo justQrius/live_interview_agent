@@ -199,7 +199,7 @@ This project uses the Prism SDLC framework.
 |-------|---------|--------|
 | Planning | `/prism-plan` | Complete |
 | Solution | `/prism-solution` | Complete |
-| Implementation | `/prism-implement` | Ready |
+| Implementation | `/prism-implement` | In Progress (10/20) |
 | Verification | `/prism-verify` | Pending |
 
 ### Key Documents
@@ -208,4 +208,4 @@ This project uses the Prism SDLC framework.
 - Tasks: `_prism/tasks.md`
 
 ### Next Step
-Run `/prism-implement STORY-001` to begin Tauri project setup.
+Run `/prism-implement STORY-011` to build the RAG Engine.
