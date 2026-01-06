@@ -19,10 +19,10 @@ solution:
 
 implementation:
   status: in_progress
-  stories_complete: 8
+  stories_complete: 9
   stories_total: 20
-  current_story: STORY-009
-  last_completed: STORY-008
+  current_story: STORY-010
+  last_completed: STORY-009
 
 verification:
   status: pending
@@ -63,5 +63,9 @@ stories:
     date: 2026-01-06
   STORY-009:
     name: Context Manager
+    status: complete
+    date: 2026-01-06
+  STORY-010:
+    name: ChromaDB + Embeddings
     status: ready
     blocked_by: null

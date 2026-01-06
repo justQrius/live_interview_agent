@@ -643,3 +643,33 @@ Phase 6: Packaging      [                ]   0% (0/3 stories)
 ### Next Steps
 
 1. **STORY-009**: Context Manager - Implement document parsing (PDF/DOCX/TXT) and context upload UI.
+
+---
+
+## Session: 2026-01-06 - Implementation Phase (Story 009)
+
+### What Was Accomplished
+
+1. **Story 009: Context Manager - COMPLETE**
+   - Implemented document parsers for PDF, DOCX, and TXT files.
+   - Built character-based chunking logic (2000 chars ~ 500 tokens, 200 char overlap).
+   - Created `ContextManager` class to orchestrate parsing and chunking.
+   - Updated `SidecarServer` to handle `UPLOAD_CONTEXT` messages, decoding base64 content and processing files.
+   - Stored chunks in memory (temporarily, pending ChromaDB integration).
+
+2. **Files Created/Modified**
+   - `sidecar/src/context/parsers.py`: `BaseParser`, `PDFParser`, `DocxParser`, `TextParser`.
+   - `sidecar/src/context/chunker.py`: `Chunker` class with `chunk_text`.
+   - `sidecar/src/context/manager.py`: `ContextManager` class.
+   - `sidecar/src/server.py`: Integrated `ContextManager`, added `_handle_upload_context`.
+   - `sidecar/tests/test_context.py`: 7 tests for parsers, chunker, and manager.
+   - `sidecar/src/context/__init__.py`: Exports.
+
+3. **Key Decisions**
+   - **Chunking**: Used character-based chunking (2000 chars) instead of token-based to avoid heavy dependencies like `tiktoken` for the MVP.
+   - **Storage**: Chunks are stored in-memory in `ContextManager` for now. Next story will move this to ChromaDB.
+   - **File Handling**: Server accepts base64-encoded file content via WebSocket, decoding it before parsing.
+
+### Next Steps
+1. **STORY-010**: ChromaDB + Embeddings (Implement vector database storage and Gemini embeddings).
+2. **STORY-011**: RAG Engine (Implement similarity search).
