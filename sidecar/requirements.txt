@@ -1,0 +1,41 @@
+# Core dependencies for Live Interview Agent sidecar
+# Python 3.11+ required
+
+# WebSocket server
+websockets>=12.0
+
+# Audio capture
+# Windows: pyaudiowpatch (WASAPI loopback)
+pyaudiowpatch>=0.2.12.7;platform_system=="Windows"
+# macOS/Linux: sounddevice (Core Audio / PulseAudio)
+sounddevice>=0.4.6;platform_system!="Windows"
+
+# Voice Activity Detection
+silero-vad>=4.0
+torch>=2.0.0
+
+# Speaker diarization (ECAPA-TDNN)
+speechbrain>=0.5.16
+
+# STT and LLM (Gemini)
+google-generativeai>=0.3.2
+
+# Vector database
+chromadb>=0.4.22
+
+# Document processing
+pypdf>=3.17.0
+python-docx>=1.1.0
+beautifulsoup4>=4.12.0
+
+# Audio processing
+numpy>=1.26.0
+scipy>=1.11.0
+noisereduce>=3.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Development
+python-dotenv>=1.0.0
