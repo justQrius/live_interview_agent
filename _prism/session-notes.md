@@ -1,29 +1,25 @@
 
-## Session: 2026-01-06 - Implementation Phase (Story 010)
+## Session: 2026-01-06 - Implementation Phase (Story 011)
 
 ### What Was Accomplished
 
-1. **Story 010: ChromaDB + Embeddings - COMPLETE**
-   - Implemented `GeminiEmbeddingFunction` wrapper for `google-generativeai`.
-   - Built `VectorStore` class using `chromadb` with persistent storage.
-   - Integrated with `SidecarServer`:
-     - Initialized vector store with API key on start.
-     - Added context chunks to vector store on upload.
-     - Cleared vector store on stop.
-   - Updated `ContextManager` to return chunks for storage.
+1. **Story 011: RAG Engine - COMPLETE**
+   - Implemented `RAGEngine` class to orchestrate retrieval.
+   - Built `RetrievalResult` dataclass with confidence scoring.
+   - Enhanced `VectorStore` with `query_with_scores` to expose distances.
+   - Integrated with `SidecarServer` to handle context retrieval for manual questions.
 
 2. **Files Created/Modified**
-   - `sidecar/src/rag/embeddings.py`: `GeminiEmbeddingFunction`.
-   - `sidecar/src/rag/store.py`: `VectorStore` class.
-   - `sidecar/src/context/manager.py`: Updated `process_file` return type.
-   - `sidecar/src/server.py`: Integrated `VectorStore`.
-   - `sidecar/tests/test_rag.py`: Unit tests for embeddings and store.
-   - `sidecar/tests/test_server_rag_integration.py`: Integration tests.
+   - `sidecar/src/rag/retrieval.py`: `RetrievalResult`, confidence mapping logic.
+   - `sidecar/src/rag/engine.py`: `RAGEngine`.
+   - `sidecar/src/rag/store.py`: Added `query_with_scores`.
+   - `sidecar/src/server.py`: Integrated `RAGEngine`.
+   - `sidecar/tests/test_rag_engine.py`: Unit tests.
 
 3. **Key Decisions**
-   - **Persistence**: Using `~/.live_interview_agent/chroma/` for storage.
-   - **Model**: Hardcoded `models/text-embedding-004` as per architecture.
-   - **Context Flow**: `ContextManager` parses -> `SidecarServer` receives chunks -> `VectorStore` stores.
+   - **Confidence Scoring**: High (<0.3), Medium (<0.5), Low (>=0.5) using cosine distance.
+   - **Integration**: RAG Engine wraps Vector Store, decoupling retrieval logic from storage.
 
 ### Next Steps
-1. **STORY-011**: RAG Engine (Implement similarity search pipeline).
+1. **STORY-012**: Gemini LLM Integration (Implement prompt generation and streaming answers).
+2. **STORY-013**: Answer Display UI (Streaming UI component).

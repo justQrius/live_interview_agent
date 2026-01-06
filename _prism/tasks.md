@@ -105,12 +105,13 @@ Created: 2026-01-05
   - Deliverable: Documents chunked and stored in vector DB
   - **Completed**: GeminiEmbeddingFunction with text-embedding-004, VectorStore with ChromaDB persistence, Server integration for adding/clearing chunks, ContextManager updated to return chunks. 9 tests passed.
 
-- [ ] **Story 3.3**: RAG Engine (ID: STORY-011)
+- [x] **Story 3.3**: RAG Engine (ID: STORY-011) ✅ COMPLETED 2026-01-06
   - Implement similarity search (top-5 retrieval)
   - Build query embedding → retrieval pipeline
   - Implement confidence scoring (high/medium/low based on similarity)
   - Dependencies: STORY-010
   - Deliverable: Given question, retrieve relevant chunks
+  - **Completed**: RAGEngine implemented with confidence scoring (High < 0.3, Medium < 0.5), integrated into server loop for manual questions. 5 tests passed.
 
 ### Phase 4: LLM + Answer Generation
 

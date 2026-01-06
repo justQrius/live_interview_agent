@@ -19,10 +19,10 @@ solution:
 
 implementation:
   status: in_progress
-  stories_complete: 10
+  stories_complete: 11
   stories_total: 20
-  current_story: STORY-011
-  last_completed: STORY-010
+  current_story: STORY-012
+  last_completed: STORY-011
 
 verification:
   status: pending

@@ -78,19 +78,36 @@ class VectorStore:
             List of matching text chunks.
         """
         try:
-            results = self.collection.query(
-                query_texts=[text],
-                n_results=n_results
-            )
+            results = self.query_with_scores(text, n_results)
             
             # ChromaDB returns list of lists (one per query)
-            if results and results['documents']:
+            if results and results.get('documents'):
                 return results['documents'][0]
             return []
             
         except Exception as e:
             logger.error(f"Failed to query ChromaDB: {e}")
             return []
+
+    def query_with_scores(self, text: str, n_results: int = 5) -> Dict[str, Any]:
+        """
+        Query the vector store and return full results including scores/metadata.
+        
+        Args:
+            text: Query text.
+            n_results: Number of results to return.
+            
+        Returns:
+            Dict containing 'ids', 'distances', 'metadatas', 'documents'.
+        """
+        try:
+            return self.collection.query(
+                query_texts=[text],
+                n_results=n_results
+            )
+        except Exception as e:
+            logger.error(f"Failed to query ChromaDB: {e}")
+            return {}
 
     def clear(self) -> None:
         """Clear the vector store (delete collection and recreate)."""
