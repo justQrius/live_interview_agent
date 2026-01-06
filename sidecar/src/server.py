@@ -28,6 +28,9 @@ from protocol import (
     create_status_message,
 )
 from audio.diarization import SpeakerRecognizer
+from audio.capture import AudioCapture, AudioCaptureError
+from audio.vad import VADProcessor, SpeechSegment
+from stt.gemini_stt import GeminiSTT, GeminiSTTError
 
 # Configure logging
 logging.basicConfig(
@@ -69,6 +72,12 @@ class SidecarServer:
         self._server: Optional[Any] = None
         self._running = False
         
+        # Audio processing components
+        self.stt: Optional[GeminiSTT] = None
+        self.vad: Optional[VADProcessor] = None
+        self.audio_capture: Optional[AudioCapture] = None
+        self._audio_task: Optional[asyncio.Task] = None
+        
         # Initialize components
         try:
             self.speaker_recognizer = SpeakerRecognizer()
@@ -102,6 +111,9 @@ class SidecarServer:
                 return_exceptions=True
             )
             self.clients.clear()
+            
+        # Stop audio processing
+        await self._stop_audio_processing()
 
         # Close server
         if self._server:
@@ -203,6 +215,19 @@ class SidecarServer:
         # SECURITY: API key stored in memory only, never log session_state
         self.session_state.api_key = api_key
         self.session_state.status = SessionStatus.LISTENING
+        
+        # Initialize and start audio processing
+        try:
+            await self._start_audio_processing(api_key)
+        except Exception as e:
+            logger.error(f"Failed to start audio processing: {e}")
+            error_msg = create_error_message(
+                f"Failed to start audio processing: {e}",
+                code="ERR_AUDIO_START"
+            )
+            await websocket.send(error_msg.to_json())
+            self.session_state.status = SessionStatus.IDLE
+            return
 
         logger.info("Session started")
 
@@ -217,6 +242,8 @@ class SidecarServer:
         """Handle STOP_SESSION message."""
         self.session_state.status = SessionStatus.IDLE
         self.session_state.api_key = None
+        
+        await self._stop_audio_processing()
 
         logger.info("Session stopped")
 
@@ -356,6 +383,85 @@ class SidecarServer:
             *[client.send(message.to_json()) for client in self.clients],
             return_exceptions=True
         )
+
+    async def _start_audio_processing(self, api_key: str) -> None:
+        """Initialize and start audio processing components."""
+        self.stt = GeminiSTT(api_key=api_key)
+        self.vad = VADProcessor()
+        self.audio_capture = AudioCapture()
+        
+        await self.audio_capture.start_capture()
+        self._audio_task = asyncio.create_task(self._audio_loop())
+        logger.info("Audio processing started")
+
+    async def _stop_audio_processing(self) -> None:
+        """Stop audio processing components."""
+        if self._audio_task:
+            self._audio_task.cancel()
+            try:
+                await self._audio_task
+            except asyncio.CancelledError:
+                pass
+            self._audio_task = None
+            
+        if self.audio_capture:
+            await self.audio_capture.stop_capture()
+            self.audio_capture = None
+            
+        self.stt = None
+        self.vad = None
+        logger.info("Audio processing stopped")
+
+    async def _audio_loop(self) -> None:
+        """Main audio processing loop."""
+        if not self.audio_capture or not self.vad or not self.stt:
+            logger.error("Audio components not initialized")
+            return
+
+        logger.info("Starting audio processing loop")
+        
+        try:
+            async for chunk in self.audio_capture.get_audio_stream():
+                segments = await self.vad.process_chunk(chunk)
+                
+                for segment in segments:
+                    speaker = Speaker.INTERVIEWER
+                    if self.session_state.voice_calibrated and self.session_state.user_embedding is not None:
+                         if self.speaker_recognizer:
+                             is_user = self.speaker_recognizer.verify_speaker(
+                                 np.frombuffer(segment.audio, dtype=np.int16),
+                                 self.session_state.user_embedding
+                             )
+                             if is_user:
+                                 speaker = Speaker.USER
+                    
+                    try:
+                        text = await self.stt.transcribe(segment.audio)
+                        if text:
+                            msg = create_transcription_message(
+                                speaker=speaker,
+                                text=text,
+                                timestamp=segment.start_time,
+                                confidence=segment.confidence
+                            )
+                            await self.broadcast(msg)
+                            logger.info(f"Transcribed ({speaker}): {text[:50]}...")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing speech segment: {e}")
+                        
+        except asyncio.CancelledError:
+            logger.info("Audio loop cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"Fatal error in audio loop: {e}")
+            error_msg = create_error_message(
+                f"Audio processing error: {e}",
+                code="ERR_AUDIO_LOOP"
+            )
+            await self.broadcast(error_msg)
+            self.session_state.status = SessionStatus.IDLE
+            await self.broadcast(create_status_message(SessionStatus.IDLE))
 
 
 async def main() -> None:
