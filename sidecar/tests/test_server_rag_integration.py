@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 import sys
 import os
@@ -36,7 +37,7 @@ class TestServerRagIntegration:
             mock_cls.return_value = instance
             yield instance
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def server(self):
         # We need to mock Audio things to prevent server startup failure or errors
         with patch('server.SpeakerRecognizer'), \
@@ -45,6 +46,8 @@ class TestServerRagIntegration:
              patch('server.AudioCapture'):
             s = SidecarServer()
             yield s
+            # Cleaning up any running tasks if necessary, though stop() is not awaited in existing code?
+            # Looking at SidecarServer.stop(), it is async.
             await s.stop()
 
     async def test_start_session_initializes_vector_store(self, server, mock_vector_store):

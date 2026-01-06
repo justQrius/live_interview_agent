@@ -115,12 +115,14 @@ Created: 2026-01-05
 
 ### Phase 4: LLM + Answer Generation
 
-- [ ] **Story 4.1**: Gemini LLM Integration (ID: STORY-012)
+- [x] **Story 4.1**: Gemini LLM Integration (ID: STORY-012) ✅ COMPLETED 2026-01-06
   - Implement Gemini LLM client with streaming (gemini-1.5-flash)
   - Build prompt template with context injection
   - Connect RAG retrieval → LLM generation
   - Dependencies: STORY-011, STORY-004
   - Deliverable: Streaming answers generated
+  - **Completed**: GeminiLLM class with streaming, integration with RAG Engine and Server, 5 unit tests + 2 integration tests passing.
+
 
 - [ ] **Story 4.2**: Answer Display UI (ID: STORY-013)
   - Build streaming answer display component

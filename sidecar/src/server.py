@@ -31,6 +31,7 @@ from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
 from stt.gemini_stt import GeminiSTT, GeminiSTTError
+from llm.gemini_llm import GeminiLLM, GeminiLLMError
 from context.manager import ContextManager
 from rag.store import VectorStore
 from rag.engine import RAGEngine
@@ -80,6 +81,9 @@ class SidecarServer:
         self.vad: Optional[VADProcessor] = None
         self.audio_capture: Optional[AudioCapture] = None
         self._audio_task: Optional[asyncio.Task] = None
+        
+        # LLM component
+        self.llm: Optional[GeminiLLM] = None
         
         # Context management
         self.context_manager = ContextManager()
@@ -233,7 +237,14 @@ class SidecarServer:
             logger.error(f"Failed to initialize vector store: {e}")
             # Continue without RAG support, or fail? 
             # We'll log it but let the session start, RAG features will just be unavailable.
-        
+            
+        # Initialize LLM
+        try:
+            self.llm = GeminiLLM(api_key=api_key)
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM: {e}")
+            # We can continue, but manual questions won't work
+            
         # Initialize and start audio processing
         try:
             await self._start_audio_processing(api_key)
@@ -452,23 +463,49 @@ class SidecarServer:
         await websocket.send(status_msg.to_json())
 
         # Retrieve context
+        context_chunks = []
         if self.rag_engine:
             try:
                 retrieval_results = self.rag_engine.retrieve(question, limit=5)
                 logger.info(f"Retrieved {len(retrieval_results)} chunks for question")
+                context_chunks = [r.text for r in retrieval_results]
                 for i, r in enumerate(retrieval_results):
                     logger.debug(f"Chunk {i}: {r.confidence} ({r.distance:.2f}) - {r.text[:50]}...")
             except Exception as e:
                 logger.error(f"RAG retrieval failed: {e}")
 
-        # TODO: Implement RAG + LLM pipeline in Stories 011-012
-        # For now, send a placeholder response
-        answer_msg = create_answer_chunk_message(
-            chunk="[Answer generation not yet implemented]",
-            complete=True,
-            confidence=ConfidenceLevel.LOW
-        )
-        await websocket.send(answer_msg.to_json())
+        # Generate answer using LLM
+        if self.llm:
+            try:
+                async for chunk in self.llm.generate_answer(question, context_chunks):
+                    answer_msg = create_answer_chunk_message(
+                        chunk=chunk,
+                        complete=False
+                    )
+                    await websocket.send(answer_msg.to_json())
+                
+                # Send final completion message
+                await websocket.send(create_answer_chunk_message(
+                    chunk="",
+                    complete=True,
+                    confidence=ConfidenceLevel.HIGH
+                ).to_json())
+                
+            except Exception as e:
+                logger.error(f"LLM generation failed: {e}")
+                error_msg = create_error_message(
+                    f"Failed to generate answer: {e}",
+                    code="ERR_LLM_GENERATION"
+                )
+                await websocket.send(error_msg.to_json())
+        else:
+             error_msg = create_error_message(
+                "LLM not initialized",
+                code="ERR_LLM_NOT_READY"
+            )
+             await websocket.send(error_msg.to_json())
+
+        # Return to listening state
 
         # Return to listening state
         self.session_state.status = SessionStatus.LISTENING
