@@ -3,7 +3,14 @@
 
 ### What Was Accomplished
 
-1. **Story 011: RAG Engine - COMPLETE**
+1. **Story 012: Gemini LLM Integration - COMPLETE**
+   - Implemented `GeminiLLM` class using `gemini-1.5-flash`.
+   - Enabled streaming responses (`ANSWER_CHUNK` over WebSocket).
+   - Integrated with `RAGEngine` for context-aware answers.
+   - Connected `MANUAL_QUESTION` event to RAG → LLM pipeline.
+   - Fixed integration tests by patching external APIs.
+
+2. **Story 011: RAG Engine - COMPLETE**
    - Implemented `RAGEngine` class to orchestrate retrieval.
    - Built `RetrievalResult` dataclass with confidence scoring.
    - Enhanced `VectorStore` with `query_with_scores` to expose distances.
@@ -21,5 +28,5 @@
    - **Integration**: RAG Engine wraps Vector Store, decoupling retrieval logic from storage.
 
 ### Next Steps
-1. **STORY-012**: Gemini LLM Integration (Implement prompt generation and streaming answers).
-2. **STORY-013**: Answer Display UI (Streaming UI component).
+1. **STORY-013**: Answer Display UI (Streaming UI component).
+2. **STORY-014**: Full Pipeline Integration (Audio -> Answer).
