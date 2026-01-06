@@ -33,6 +33,7 @@ from audio.vad import VADProcessor, SpeechSegment
 from stt.gemini_stt import GeminiSTT, GeminiSTTError
 from context.manager import ContextManager
 from rag.store import VectorStore
+from rag.engine import RAGEngine
 
 # Configure logging
 logging.basicConfig(
@@ -83,6 +84,7 @@ class SidecarServer:
         # Context management
         self.context_manager = ContextManager()
         self.vector_store: Optional[VectorStore] = None
+        self.rag_engine: Optional[RAGEngine] = None
         
         # Initialize components
         try:
@@ -226,6 +228,7 @@ class SidecarServer:
         # Initialize Vector Store
         try:
             self.vector_store = VectorStore(api_key=api_key)
+            self.rag_engine = RAGEngine(self.vector_store)
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")
             # Continue without RAG support, or fail? 
@@ -265,6 +268,8 @@ class SidecarServer:
             except Exception as e:
                 logger.error(f"Error clearing vector store: {e}")
             self.vector_store = None
+        
+        self.rag_engine = None
         
         await self._stop_audio_processing()
 
@@ -445,6 +450,16 @@ class SidecarServer:
         self.session_state.status = SessionStatus.PROCESSING
         status_msg = create_status_message(SessionStatus.PROCESSING)
         await websocket.send(status_msg.to_json())
+
+        # Retrieve context
+        if self.rag_engine:
+            try:
+                retrieval_results = self.rag_engine.retrieve(question, limit=5)
+                logger.info(f"Retrieved {len(retrieval_results)} chunks for question")
+                for i, r in enumerate(retrieval_results):
+                    logger.debug(f"Chunk {i}: {r.confidence} ({r.distance:.2f}) - {r.text[:50]}...")
+            except Exception as e:
+                logger.error(f"RAG retrieval failed: {e}")
 
         # TODO: Implement RAG + LLM pipeline in Stories 011-012
         # For now, send a placeholder response
