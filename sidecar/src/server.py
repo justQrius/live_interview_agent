@@ -8,8 +8,10 @@ Coordinates audio capture, STT, RAG, and LLM processing.
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
+import base64
+from dataclasses import dataclass, field
 from typing import Any, Optional, Set
+import numpy as np
 
 import websockets
 from websockets.asyncio.server import serve, ServerConnection
@@ -25,6 +27,7 @@ from protocol import (
     create_error_message,
     create_status_message,
 )
+from audio.diarization import SpeakerRecognizer
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +44,7 @@ class SessionState:
     status: SessionStatus = SessionStatus.IDLE
     api_key: Optional[str] = None
     voice_calibrated: bool = False
+    user_embedding: Optional[np.ndarray] = field(default=None, repr=False)
 
 
 class SidecarServer:
@@ -64,6 +68,14 @@ class SidecarServer:
         self.session_state = SessionState()
         self._server: Optional[Any] = None
         self._running = False
+        
+        # Initialize components
+        try:
+            self.speaker_recognizer = SpeakerRecognizer()
+        except Exception as e:
+            logger.error(f"Failed to initialize SpeakerRecognizer: {e}")
+            # We don't crash here, but calibration will fail if called
+            self.speaker_recognizer = None
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -233,22 +245,64 @@ class SidecarServer:
         message: Message
     ) -> None:
         """Handle CALIBRATE_VOICE message."""
-        # TODO: Implement voice calibration in Story 007
+        if not self.speaker_recognizer:
+            error_msg = create_error_message(
+                "Speaker recognizer not initialized",
+                code="ERR_COMPONENT_NOT_READY"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+
         self.session_state.status = SessionStatus.CALIBRATING
-
-        logger.info("Voice calibration requested")
-
+        
+        # Notify client we are starting
         status_msg = create_status_message(SessionStatus.CALIBRATING)
         await websocket.send(status_msg.to_json())
 
-        # Simulate calibration (will be replaced with real implementation)
-        await asyncio.sleep(0.1)
+        try:
+            data = message.data or {}
+            audio_b64 = data.get("audioData")
+            
+            if not audio_b64:
+                raise ValueError("No audioData provided")
+                
+            # Decode base64
+            audio_bytes = base64.b64decode(audio_b64)
+            
+            # Convert to numpy array (int16)
+            # Assuming incoming data is raw 16kHz mono int16 PCM
+            audio_chunk = np.frombuffer(audio_bytes, dtype=np.int16)
+            
+            # Run embedding creation in thread pool to avoid blocking event loop
+            loop = asyncio.get_running_loop()
+            embedding = await loop.run_in_executor(
+                None, 
+                self.speaker_recognizer.create_embedding, 
+                audio_chunk
+            )
+            
+            self.session_state.user_embedding = embedding
+            self.session_state.voice_calibrated = True
+            
+            logger.info("Voice calibration completed successfully")
+            
+            self.session_state.status = SessionStatus.IDLE
+            status_msg = create_status_message(SessionStatus.IDLE)
+            await websocket.send(status_msg.to_json())
 
-        self.session_state.voice_calibrated = True
-        self.session_state.status = SessionStatus.IDLE
-
-        status_msg = create_status_message(SessionStatus.IDLE)
-        await websocket.send(status_msg.to_json())
+        except Exception as e:
+            logger.error(f"Voice calibration failed: {e}")
+            self.session_state.status = SessionStatus.IDLE
+            
+            error_msg = create_error_message(
+                f"Calibration failed: {str(e)}",
+                code="ERR_CALIBRATION_FAILED"
+            )
+            await websocket.send(error_msg.to_json())
+            
+            # Send idle status after error
+            status_msg = create_status_message(SessionStatus.IDLE)
+            await websocket.send(status_msg.to_json())
 
     async def _handle_manual_question(
         self,

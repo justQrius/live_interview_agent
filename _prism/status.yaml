@@ -1,7 +1,7 @@
 # Prism Project Status
 phase: implementation
 last_updated: 2026-01-06
-current_work: STORY-006 Complete, Ready for STORY-007 (Voice Calibration + Diarization)
+current_work: STORY-007 Complete, Ready for STORY-008 (Gemini STT Integration)
 beads_available: true
 beads_initialized: false
 tracking_method: _prism/tasks.md
@@ -19,10 +19,10 @@ solution:
 
 implementation:
   status: in_progress
-  stories_complete: 6
+  stories_complete: 7
   stories_total: 20
   current_story: null
-  last_completed: STORY-006
+  last_completed: STORY-007
 
 verification:
   status: pending
@@ -55,5 +55,9 @@ stories:
     date: 2026-01-06
   STORY-007:
     name: Voice Calibration + Diarization
+    status: complete
+    date: 2026-01-06
+  STORY-008:
+    name: Gemini STT Integration
     status: ready
     blocked_by: null

@@ -39,7 +39,7 @@ const SessionControls: React.FC = () => {
 
   const handleCalibrateVoice = () => {
     setStatus('calibrating');
-    sendMessage({ type: 'CALIBRATE_VOICE' });
+    // Don't send message yet, let CalibrationModal handle the recording and sending
   };
 
   const getStatusColor = () => {

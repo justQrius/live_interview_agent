@@ -29,6 +29,7 @@ export const useWebSocket = () => {
   const appendAnswerText = useSessionStore((state) => state.appendAnswerText);
   const completeAnswer = useSessionStore((state) => state.completeAnswer);
   const setStatus = useSessionStore((state) => state.setStatus);
+  const setLastError = useSessionStore((state) => state.setLastError);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -70,6 +71,7 @@ export const useWebSocket = () => {
         case 'ERROR': {
           const data = message.data as { message: string };
           console.error('Python sidecar error:', data.message);
+          setLastError(data.message);
           break;
         }
 

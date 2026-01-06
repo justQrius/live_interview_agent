@@ -44,6 +44,7 @@ export interface SessionState {
   // Current data
   currentTranscription: Transcription | null;
   currentAnswer: Answer | null;
+  lastError: string | null;
 
   // History (session only, not persisted)
   answerHistory: Answer[];
@@ -56,6 +57,7 @@ export interface SessionState {
   setApiKey: (key: string | null) => void;
   setCurrentTranscription: (transcription: Transcription | null) => void;
   setCurrentAnswer: (answer: Answer | null) => void;
+  setLastError: (error: string | null) => void;
   appendAnswerText: (text: string) => void;
   completeAnswer: (confidence: 'high' | 'medium' | 'low') => void;
   addContextFile: (file: ContextFile) => void;
@@ -71,6 +73,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   apiKey: null,
   currentTranscription: null,
   currentAnswer: null,
+  lastError: null,
   answerHistory: [],
   loadedContextFiles: [],
 
@@ -86,6 +89,8 @@ export const useSessionStore = create<SessionState>((set) => ({
   setCurrentTranscription: (transcription) => set({ currentTranscription: transcription }),
 
   setCurrentAnswer: (answer) => set({ currentAnswer: answer }),
+
+  setLastError: (error) => set({ lastError: error }),
 
   appendAnswerText: (text) =>
     set((state) => {
