@@ -143,13 +143,14 @@ Created: 2026-01-05
 
 ### Phase 5: Advanced Features
 
-- [ ] **Story 5.1**: Screen Invisibility (ID: STORY-015)
+- [x] **Story 5.1**: Screen Invisibility (ID: STORY-015) ✅ COMPLETED 2026-01-06
   - Implement platform-specific window flags (DWM/NSWindow/X11)
   - Create Tauri command `toggle_screen_invisibility`
   - Add UI toggle button
   - Test on each OS with screen sharing tools
   - Dependencies: STORY-001
   - Deliverable: App invisible in screen shares
+  - **Completed**: Windows (SetWindowDisplayAffinity), macOS (NSWindow.sharingType), Linux (warning fallback). SettingsPanel toggle connected to Tauri command. 11 Rust tests, 27 React tests for settings.
 
 - [ ] **Story 5.2**: Session Controls (ID: STORY-016)
   - Implement Start/Stop session logic

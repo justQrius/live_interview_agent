@@ -1,10 +1,17 @@
-// Placeholder for screen invisibility commands
-// Will be implemented in Story: Screen Invisibility
-
-use tauri::command;
+use crate::utils::platform;
+use tauri::{command, Window};
 
 #[command]
-pub fn toggle_screen_invisibility(_enabled: bool) -> Result<(), String> {
-    // TODO: Implement platform-specific window flags
-    Err("Not implemented yet".to_string())
+pub fn toggle_screen_invisibility(window: Window, enabled: bool) -> Result<(), String> {
+    platform::apply_screen_invisibility(&window, enabled)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_toggle_screen_invisibility_compiles() {
+        let _ = toggle_screen_invisibility;
+    }
 }

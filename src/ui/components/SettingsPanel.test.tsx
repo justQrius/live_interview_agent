@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SettingsPanel from './SettingsPanel';
 import { useSessionStore } from '../store/sessionStore';
@@ -345,7 +345,20 @@ describe('SettingsPanel', () => {
   });
 
   describe('screen invisibility toggle', () => {
-    it('should toggle screen invisibility state', async () => {
+    it('should call toggle_screen_invisibility Tauri command', async () => {
+      const user = userEvent.setup();
+      render(<SettingsPanel />);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('screen-invisibility-toggle'));
+
+      expect(mockInvoke).toHaveBeenCalledWith('toggle_screen_invisibility', { enabled: true });
+    });
+
+    it('should toggle screen invisibility state on success', async () => {
       const user = userEvent.setup();
       render(<SettingsPanel />);
 
@@ -357,7 +370,9 @@ describe('SettingsPanel', () => {
 
       await user.click(screen.getByTestId('screen-invisibility-toggle'));
 
-      expect(useSessionStore.getState().isScreenInvisible).toBe(true);
+      await waitFor(() => {
+        expect(useSessionStore.getState().isScreenInvisible).toBe(true);
+      });
     });
 
     it('should show info text when enabled', async () => {
@@ -370,7 +385,79 @@ describe('SettingsPanel', () => {
 
       await user.click(screen.getByTestId('screen-invisibility-toggle'));
 
-      expect(screen.getByText(/hidden from screen sharing/i)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText(/hidden from screen sharing/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should toggle off when clicked again', async () => {
+      const user = userEvent.setup();
+      useSessionStore.setState({ isScreenInvisible: true });
+      render(<SettingsPanel />);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('screen-invisibility-toggle'));
+
+      expect(mockInvoke).toHaveBeenCalledWith('toggle_screen_invisibility', { enabled: false });
+      await waitFor(() => {
+        expect(useSessionStore.getState().isScreenInvisible).toBe(false);
+      });
+    });
+
+    it('should show error when Tauri command fails', async () => {
+      mockInvoke.mockImplementation((command: string) => {
+        if (command === 'has_api_key') {
+          return Promise.resolve({ exists: false });
+        }
+        if (command === 'toggle_screen_invisibility') {
+          return Promise.reject('Platform not supported');
+        }
+        return Promise.resolve();
+      });
+
+      const user = userEvent.setup();
+      render(<SettingsPanel />);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('screen-invisibility-toggle'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toHaveTextContent('Failed to toggle screen invisibility');
+      });
+    });
+
+    it('should not update state when Tauri command fails', async () => {
+      mockInvoke.mockImplementation((command: string) => {
+        if (command === 'has_api_key') {
+          return Promise.resolve({ exists: false });
+        }
+        if (command === 'toggle_screen_invisibility') {
+          return Promise.reject('Platform not supported');
+        }
+        return Promise.resolve();
+      });
+
+      const user = userEvent.setup();
+      render(<SettingsPanel />);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+      });
+
+      expect(useSessionStore.getState().isScreenInvisible).toBe(false);
+
+      await user.click(screen.getByTestId('screen-invisibility-toggle'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+      });
+      expect(useSessionStore.getState().isScreenInvisible).toBe(false);
     });
   });
 });

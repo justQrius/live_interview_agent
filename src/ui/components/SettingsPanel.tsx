@@ -81,12 +81,11 @@ const SettingsPanel: React.FC = () => {
   const handleToggleScreenInvisibility = async () => {
     const newValue = !isScreenInvisible;
     try {
-      // TODO: Call Tauri command to toggle screen invisibility (STORY-015)
-      // await invoke('toggle_screen_invisibility', { enabled: newValue });
-      console.log('Screen invisibility toggle not implemented yet (STORY-015)');
+      await invoke('toggle_screen_invisibility', { enabled: newValue });
       setScreenInvisibility(newValue);
     } catch (err) {
       console.error('Failed to toggle screen invisibility:', err);
+      setError(`Failed to toggle screen invisibility: ${err}`);
     }
   };
 
