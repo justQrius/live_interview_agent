@@ -3,7 +3,14 @@
 
 ### What Was Accomplished
 
-1. **Story 012: Gemini LLM Integration - COMPLETE**
+1. **Story 013: Answer Display UI - COMPLETE**
+   - Built `AnswerDisplay` React component.
+   - Implemented auto-scrolling to show streaming text.
+   - Added confidence badges (High/Medium/Low) based on RAG scores.
+   - Integrated with `sessionStore` and `App.tsx`.
+   - Verified with 5 Vitest unit tests.
+
+2. **Story 012: Gemini LLM Integration - COMPLETE**
    - Implemented `GeminiLLM` class using `gemini-1.5-flash`.
    - Enabled streaming responses (`ANSWER_CHUNK` over WebSocket).
    - Integrated with `RAGEngine` for context-aware answers.
@@ -28,5 +35,5 @@
    - **Integration**: RAG Engine wraps Vector Store, decoupling retrieval logic from storage.
 
 ### Next Steps
-1. **STORY-013**: Answer Display UI (Streaming UI component).
-2. **STORY-014**: Full Pipeline Integration (Audio -> Answer).
+1. **STORY-014**: Full Pipeline Integration (Audio -> Answer).
+2. **STORY-015**: Screen Invisibility (Tauri window flags).
