@@ -556,7 +556,14 @@ class SidecarServer:
         logger.info("Audio processing stopped")
 
     async def _audio_loop(self) -> None:
-        """Main audio processing loop."""
+        """
+        Main audio processing loop.
+        
+        Pipeline: Audio → VAD → STT → Diarization → RAG → LLM → UI
+        
+        - User speech: transcribed and displayed (filtered from RAG+LLM)
+        - Interviewer speech: transcribed, then triggers RAG retrieval and LLM generation
+        """
         if not self.audio_capture or not self.vad or not self.stt:
             logger.error("Audio components not initialized")
             return
@@ -568,30 +575,7 @@ class SidecarServer:
                 segments = await self.vad.process_chunk(chunk)
                 
                 for segment in segments:
-                    speaker = Speaker.INTERVIEWER
-                    if self.session_state.voice_calibrated and self.session_state.user_embedding is not None:
-                         if self.speaker_recognizer:
-                             is_user = self.speaker_recognizer.verify_speaker(
-                                 np.frombuffer(segment.audio, dtype=np.int16),
-                                 self.session_state.user_embedding
-                             )
-                             if is_user:
-                                 speaker = Speaker.USER
-                    
-                    try:
-                        text = await self.stt.transcribe(segment.audio)
-                        if text:
-                            msg = create_transcription_message(
-                                speaker=speaker,
-                                text=text,
-                                timestamp=segment.start_time,
-                                confidence=segment.confidence
-                            )
-                            await self.broadcast(msg)
-                            logger.info(f"Transcribed ({speaker}): {text[:50]}...")
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing speech segment: {e}")
+                    await self._process_speech_segment(segment)
                         
         except asyncio.CancelledError:
             logger.info("Audio loop cancelled")
@@ -605,6 +589,116 @@ class SidecarServer:
             await self.broadcast(error_msg)
             self.session_state.status = SessionStatus.IDLE
             await self.broadcast(create_status_message(SessionStatus.IDLE))
+
+    async def _process_speech_segment(self, segment) -> None:
+        """Process a speech segment: Speaker ID → STT → Broadcast → (RAG+LLM if Interviewer)."""
+        import time
+        pipeline_start = time.time()
+        
+        speaker = self._identify_speaker(segment.audio)
+        
+        try:
+            text = await self.stt.transcribe(segment.audio)
+            if not text:
+                return
+        except Exception as e:
+            logger.error(f"STT error: {e}")
+            return
+        
+        transcription_msg = create_transcription_message(
+            speaker=speaker,
+            text=text,
+            timestamp=segment.start_time,
+            confidence=segment.confidence
+        )
+        await self.broadcast(transcription_msg)
+        logger.info(f"Transcribed ({speaker.value}): {text[:50]}...")
+        
+        if speaker == Speaker.INTERVIEWER:
+            await self._generate_answer_for_question(text, pipeline_start)
+
+    def _identify_speaker(self, audio: bytes) -> Speaker:
+        """Identify speaker as User or Interviewer based on voice calibration."""
+        if not self.session_state.voice_calibrated or self.session_state.user_embedding is None:
+            return Speaker.INTERVIEWER
+            
+        if not self.speaker_recognizer:
+            return Speaker.INTERVIEWER
+            
+        try:
+            is_user = self.speaker_recognizer.verify_speaker(
+                np.frombuffer(audio, dtype=np.int16),
+                self.session_state.user_embedding
+            )
+            return Speaker.USER if is_user else Speaker.INTERVIEWER
+        except Exception as e:
+            logger.warning(f"Speaker verification failed: {e}, defaulting to Interviewer")
+            return Speaker.INTERVIEWER
+
+    async def _generate_answer_for_question(self, question: str, start_time: float) -> None:
+        """Generate answer using RAG retrieval + LLM streaming."""
+        import time
+        
+        context_chunks, rag_confidence = self._retrieve_context(question)
+        
+        if not self.llm:
+            logger.warning("LLM not initialized, cannot generate answer")
+            return
+            
+        try:
+            async for chunk in self.llm.generate_answer(question, context_chunks):
+                answer_msg = create_answer_chunk_message(chunk=chunk, complete=False)
+                await self.broadcast(answer_msg)
+            
+            latency = time.time() - start_time
+            logger.info(f"Answer generation complete. Latency: {latency:.2f}s")
+            
+            final_msg = create_answer_chunk_message(
+                chunk="",
+                complete=True,
+                confidence=rag_confidence
+            )
+            await self.broadcast(final_msg)
+            
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            error_msg = create_error_message(
+                f"Failed to generate answer: {e}",
+                code="ERR_LLM_GENERATION"
+            )
+            await self.broadcast(error_msg)
+
+    def _retrieve_context(self, question: str) -> tuple[list[str], ConfidenceLevel]:
+        """Retrieve context chunks from RAG engine for the given question."""
+        context_chunks = []
+        rag_confidence = ConfidenceLevel.LOW
+        
+        if not self.rag_engine:
+            return context_chunks, rag_confidence
+            
+        try:
+            retrieval_results = self.rag_engine.retrieve(question, limit=5)
+            logger.info(f"Retrieved {len(retrieval_results)} chunks for question")
+            
+            if retrieval_results:
+                context_chunks = [r.text for r in retrieval_results]
+                rag_confidence = self._confidence_from_string(retrieval_results[0].confidence)
+                
+                for i, r in enumerate(retrieval_results):
+                    logger.debug(f"Chunk {i}: {r.confidence} ({r.distance:.2f}) - {r.text[:50]}...")
+        except Exception as e:
+            logger.error(f"RAG retrieval failed: {e}")
+            
+        return context_chunks, rag_confidence
+
+    def _confidence_from_string(self, confidence_str: str) -> ConfidenceLevel:
+        """Convert string confidence to ConfidenceLevel enum."""
+        mapping = {
+            "high": ConfidenceLevel.HIGH,
+            "medium": ConfidenceLevel.MEDIUM,
+            "low": ConfidenceLevel.LOW,
+        }
+        return mapping.get(confidence_str.lower(), ConfidenceLevel.LOW)
 
 
 async def main() -> None:
