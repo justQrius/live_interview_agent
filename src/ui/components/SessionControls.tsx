@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSessionStore } from '../store/sessionStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -7,7 +7,11 @@ const SessionControls: React.FC = () => {
   const setStatus = useSessionStore((state) => state.setStatus);
   const clearSession = useSessionStore((state) => state.clearSession);
   const apiKey = useSessionStore((state) => state.apiKey);
+  const setCurrentAnswer = useSessionStore((state) => state.setCurrentAnswer);
   const { sendMessage, isConnected } = useWebSocket();
+
+  const [manualQuestion, setManualQuestion] = useState('');
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   const handleStartSession = () => {
     if (!isConnected) {
@@ -33,8 +37,41 @@ const SessionControls: React.FC = () => {
   };
 
   const handleStopSession = () => {
+    setShowStopConfirm(true);
+  };
+
+  const confirmStopSession = () => {
     sendMessage({ type: 'STOP_SESSION' });
     clearSession();
+    setManualQuestion('');
+    setShowStopConfirm(false);
+  };
+
+  const cancelStopSession = () => {
+    setShowStopConfirm(false);
+  };
+
+  const handleSendManualQuestion = () => {
+    const trimmedQuestion = manualQuestion.trim();
+    if (!trimmedQuestion || !isConnected || status !== 'listening') {
+      return;
+    }
+
+    // Clear current answer before sending new question
+    setCurrentAnswer(null);
+
+    sendMessage({
+      type: 'MANUAL_QUESTION',
+      data: { question: trimmedQuestion }
+    });
+    setManualQuestion('');
+  };
+
+  const handleQuestionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendManualQuestion();
+    }
   };
 
   const handleCalibrateVoice = () => {
@@ -103,11 +140,65 @@ const SessionControls: React.FC = () => {
           Calibrate Voice
         </button>
       </div>
+
+      {/* Manual Question Input */}
+      {status === 'listening' && (
+        <div className="mt-4 space-y-2">
+          <label htmlFor="manual-question" className="block text-sm font-medium text-gray-700">
+            Ask a Question Manually
+          </label>
+          <textarea
+            id="manual-question"
+            value={manualQuestion}
+            onChange={(e) => setManualQuestion(e.target.value)}
+            onKeyDown={handleQuestionKeyDown}
+            placeholder="Type a question and press Enter to send..."
+            className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+            disabled={!isConnected || status !== 'listening'}
+          />
+          <button
+            onClick={handleSendManualQuestion}
+            disabled={!manualQuestion.trim() || !isConnected || status !== 'listening'}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+          >
+            Send Question
+          </button>
+        </div>
+      )}
+
       <div className="mt-4 p-3 bg-gray-100 rounded">
         <p className="text-sm text-gray-600">
           Status: <span className={`font-medium ${getStatusColor()}`}>{getStatusText()}</span>
         </p>
       </div>
+
+      {/* Stop Session Confirmation Modal */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Stop Session?</h3>
+            <p className="text-gray-600 mb-4">
+              This will stop the current session and clear all transcriptions and answers.
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelStopSession}
+                className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmStopSession}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition duration-200"
+              >
+                Stop Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

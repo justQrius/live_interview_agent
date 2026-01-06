@@ -47,6 +47,7 @@ export interface SessionState {
   lastError: string | null;
 
   // History (session only, not persisted)
+  transcriptionHistory: Transcription[];
   answerHistory: Answer[];
   loadedContextFiles: ContextFile[];
 
@@ -62,6 +63,7 @@ export interface SessionState {
   completeAnswer: (confidence: 'high' | 'medium' | 'low') => void;
   addContextFile: (file: ContextFile) => void;
   removeContextFile: (id: string) => void;
+  addTranscription: (transcription: Transcription) => void;
   clearSession: () => void;
 }
 
@@ -74,6 +76,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   currentTranscription: null,
   currentAnswer: null,
   lastError: null,
+  transcriptionHistory: [],
   answerHistory: [],
   loadedContextFiles: [],
 
@@ -137,11 +140,19 @@ export const useSessionStore = create<SessionState>((set) => ({
       loadedContextFiles: state.loadedContextFiles.filter((f) => f.id !== id),
     })),
 
+  addTranscription: (transcription) =>
+    set((state) => ({
+      currentTranscription: transcription,
+      transcriptionHistory: [...state.transcriptionHistory, transcription],
+    })),
+
   clearSession: () =>
     set({
       status: 'idle',
       currentTranscription: null,
       currentAnswer: null,
+      transcriptionHistory: [],
       answerHistory: [],
+      lastError: null,
     }),
 }));

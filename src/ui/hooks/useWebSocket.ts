@@ -25,7 +25,7 @@ export const useWebSocket = () => {
   const reconnectTimeoutRef = useRef<number | undefined>(undefined);
   const mountedRef = useRef(true);
   const [isConnected, setIsConnected] = useState(false);
-  const setCurrentTranscription = useSessionStore((state) => state.setCurrentTranscription);
+  const addTranscription = useSessionStore((state) => state.addTranscription);
   const appendAnswerText = useSessionStore((state) => state.appendAnswerText);
   const completeAnswer = useSessionStore((state) => state.completeAnswer);
   const setStatus = useSessionStore((state) => state.setStatus);
@@ -43,7 +43,7 @@ export const useWebSocket = () => {
             timestamp: number;
             confidence: number;
           };
-          setCurrentTranscription(data);
+          addTranscription(data);
           break;
         }
 
