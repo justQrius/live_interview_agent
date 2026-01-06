@@ -78,12 +78,13 @@ Created: 2026-01-05
 
 - [ ] **Story 2.4**: Gemini STT Integration (ID: STORY-008)
 
-- [ ] **Story 2.4**: Gemini STT Integration (ID: STORY-008)
+- [x] **Story 2.4**: Gemini STT Integration (ID: STORY-008) ✅ COMPLETED 2026-01-06
   - Implement Gemini STT client in Python
   - Connect VAD output → STT input
   - Send transcriptions with speaker labels to UI
   - Dependencies: STORY-006, STORY-004 (needs API key)
   - Deliverable: Live transcription displayed in UI
+  - **Completed**: GeminiSTT class with google-generativeai, PCM-to-WAV conversion, SidecarServer integration with speaker verification, 6 new tests passed.
 
 ### Phase 3: RAG + Context
 

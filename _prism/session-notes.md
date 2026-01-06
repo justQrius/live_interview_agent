@@ -171,7 +171,7 @@ live_interview_agent/
 
 1. ~~**STORY-002**: Python Sidecar Setup - Create WebSocket server on port 8765~~ ✅ COMPLETE
 2. **STORY-003**: WebSocket Communication - Test bidirectional messaging (both dependencies now complete)
-3. **STORY-004**: Config Store - Implement keyring for API key storage (depends only on STORY-001)
+3. **STORY-004**: Config Store - API Keys (implement Rust keyring for API key storage)
 
 ---
 
@@ -611,3 +611,35 @@ Phase 6: Packaging      [                ]   0% (0/3 stories)
 
 1. **STORY-008**: Gemini STT Integration - Implement Google Gemini STT
 2. **STORY-009**: Context Manager - Document parsing
+
+---
+
+## Session: 2026-01-06 - Implementation Phase (Story 008)
+
+### What Was Accomplished
+
+1. **Story 008: Gemini STT Integration - COMPLETE**
+   - Implemented Gemini STT client using `google-generativeai` 1.5 Flash
+   - Added in-memory WAV conversion (raw PCM → WAV) for Gemini API compatibility
+   - Integrated STT into `SidecarServer` audio loop
+   - Connected Speaker Recognition (STORY-007) to tag "User" vs "Interviewer"
+   - Implemented error handling and logging for STT failures
+
+2. **Files Created/Modified**
+   - `sidecar/src/stt/gemini_stt.py` - `GeminiSTT` class with async transcribe
+   - `sidecar/src/server.py` - Updated `_audio_loop` to pipeline Capture → VAD → SpeakerID → STT → Broadcast
+   - `sidecar/tests/test_stt.py` - Unit tests for STT client (mocked)
+   - `sidecar/tests/test_server_stt_integration.py` - Integration tests for full audio pipeline
+
+3. **Key Features**
+   - **Streaming Pipeline**: Audio captured in 500ms chunks, VAD detects speech segments, segments sent to Gemini.
+   - **Speaker Verification**: Checks audio segment against calibrated user profile before transcribing to assign `Speaker.USER` or `Speaker.INTERVIEWER`.
+   - **Resilience**: STT errors don't crash the server, just log and skip segment.
+
+4. **Verification Passed**
+   - 6 new tests passed (Unit + Integration)
+   - Total tests: 156 passing
+
+### Next Steps
+
+1. **STORY-009**: Context Manager - Implement document parsing (PDF/DOCX/TXT) and context upload UI.
