@@ -59,12 +59,13 @@ Created: 2026-01-05
   - Deliverable: Raw audio captured and streamable
   - **Completed**: Platform-specific backends (pyaudiowpatch/sounddevice), CircularBuffer class (80k samples), async stream generator (500ms chunks), 35 tests passing
 
-- [ ] **Story 2.2**: Silero VAD Integration (ID: STORY-006)
+- [x] **Story 2.2**: Silero VAD Integration (ID: STORY-006) ✅ COMPLETED 2026-01-06
   - Integrate Silero VAD v4 model
   - Implement speech segment detection (512 samples, 0.5 threshold)
   - Filter silence from audio stream
   - Dependencies: STORY-005
   - Deliverable: Only speech segments passed downstream
+  - **Completed**: VADProcessor class with Silero VAD v4, 512-sample sliding window (32ms), 0.5 threshold, 3-frame smoothing, SpeechSegment dataclass, thread-safe, 29 tests passing
 
 - [ ] **Story 2.3**: Voice Calibration + Diarization (ID: STORY-007)
   - Build calibration modal in UI (5-10s voice sample)

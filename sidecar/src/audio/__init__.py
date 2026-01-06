@@ -22,8 +22,18 @@ from audio.capture import (
     bytes_to_samples,
 )
 
-__all__ = [
+from audio.vad import (
     # Constants
+    DEFAULT_VAD_THRESHOLD,
+    DEFAULT_VAD_WINDOW_SIZE,
+    # Classes
+    VADProcessor,
+    VADModelError,
+    SpeechSegment,
+)
+
+__all__ = [
+    # Audio Capture Constants
     "SAMPLE_RATE",
     "CHANNELS",
     "SAMPLE_DTYPE",
@@ -31,12 +41,19 @@ __all__ = [
     "CHUNK_SAMPLES",
     "BUFFER_DURATION_SEC",
     "BUFFER_SAMPLES",
-    # Classes
+    # Audio Capture Classes
     "AudioCapture",
     "AudioCaptureError",
     "CircularBuffer",
-    # Functions
+    # Audio Capture Functions
     "get_platform_backend",
     "samples_to_bytes",
     "bytes_to_samples",
+    # VAD Constants
+    "DEFAULT_VAD_THRESHOLD",
+    "DEFAULT_VAD_WINDOW_SIZE",
+    # VAD Classes
+    "VADProcessor",
+    "VADModelError",
+    "SpeechSegment",
 ]

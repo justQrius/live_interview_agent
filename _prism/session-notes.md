@@ -473,7 +473,7 @@ live_interview_agent/
 ### Implementation Progress
 ```
 Phase 1: Foundation    [████████████████] 100% (4/4 stories)
-Phase 2: Audio Pipeline [████            ]  25% (1/4 stories)
+Phase 2: Audio Pipeline [████████        ]  50% (2/4 stories)
 Phase 3: RAG + Context  [                ]   0% (0/3 stories)
 Phase 4: LLM + Answers  [                ]   0% (0/3 stories)
 Phase 5: Advanced       [                ]   0% (0/3 stories)
@@ -481,5 +481,104 @@ Phase 6: Packaging      [                ]   0% (0/3 stories)
 ```
 
 ### Ready for Next Session
-- STORY-006: Silero VAD Integration (unblocked, depends on STORY-005 ✅)
+- STORY-007: Voice Calibration + Diarization (unblocked, depends on STORY-006 ✅)
+- Continue Phase 2: Audio Pipeline
+
+---
+
+## Session: 2026-01-06 - Implementation Phase (Story 006)
+
+### What Was Accomplished
+
+1. **Story 006: Silero VAD Integration - COMPLETE**
+   - Integrated Silero VAD v4 model via `silero_vad` package
+   - Implemented VADProcessor class with 512-sample sliding window (32ms at 16kHz)
+   - Speech probability threshold: 0.5
+   - Smoothing: requires 3 consecutive frames for speech start/end
+   - Thread-safe operation with threading.Lock
+   - SpeechSegment dataclass with audio, start_time, end_time, confidence fields
+
+2. **Files Created**
+   - `sidecar/src/audio/vad.py` - VADProcessor class (~300 lines)
+     - `SpeechSegment` dataclass
+     - `VADModelError` exception
+     - `DEFAULT_VAD_THRESHOLD`, `DEFAULT_VAD_WINDOW_SIZE` constants
+   - `sidecar/tests/test_vad.py` - 29 tests covering all functionality
+
+3. **Files Modified**
+   - `sidecar/src/audio/__init__.py` - Added VAD module exports
+
+4. **Tests Added (29 new tests)**
+   - TestSpeechSegmentDataclass: 3 tests (structure, creation, types)
+   - TestVADProcessorInitialization: 5 tests (defaults, model loading, sample rate)
+   - TestVADThresholdConfiguration: 3 tests (validation, range)
+   - TestVADWindowSize: 2 tests (512 samples = 32ms)
+   - TestVADProcessChunk: 5 tests (returns, silence filtering, speech detection, times, confidence)
+   - TestVADEmptyInput: 2 tests (empty bytes, short audio)
+   - TestVADReset: 2 tests (state clearing, session reset)
+   - TestVADContinuousSpeech: 1 test (multi-chunk tracking)
+   - TestVADIntegrationWithAudioModule: 2 tests (sample rate, exports)
+   - TestVADConstants: 2 tests (threshold, window size)
+   - TestVADModelLoading: 2 tests (error handling)
+
+5. **Code Review Completed**
+   - Reviewer approved with confidence 88%
+   - Fixed: Removed redundant SAMPLE_RATE constant, now imports from audio.capture
+
+### Key Decisions Made
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Class name | VADProcessor | Follows established pattern in codebase |
+| Async interface | process_chunk is async | Consistency with audio pipeline |
+| Model loading | On instantiation | Fail-fast if model unavailable |
+| SAMPLE_RATE | Import from capture.py | Single source of truth |
+
+### Test Summary (All Stories to Date)
+
+| Layer | Tests | Status |
+|-------|-------|--------|
+| React Components | 52 | ✅ Passing |
+| Rust Commands | 9 | ✅ Passing |
+| Python VAD | 29 | ✅ Passing |
+| Python Audio | 35 | ✅ Passing |
+| Python Protocol | 11 | ✅ Passing |
+| Python Server | 6 | ✅ Passing |
+| Integration | 8 | ✅ Passing |
+| **Total** | **150** | **✅ All Passing** |
+
+### Next Steps
+
+1. **STORY-007**: Voice Calibration + Diarization (depends on STORY-006 ✅)
+2. **STORY-008**: Gemini STT Integration (depends on STORY-006 ✅, STORY-004 ✅)
+
+---
+
+## Context for Next Session
+
+- **Project**: Live Interview Agent - AI assistant for real-time interview support
+- **Phase**: Implementation - Stories 001-006 Complete (6/20)
+- **Foundation Phase**: ✅ COMPLETE (all 4 stories done)
+- **Audio Pipeline Phase**: 50% (2/4 stories done)
+
+### Key Files
+- PRD: `_prism/planning/prd.md`
+- Architecture: `_prism/architecture/architecture.md`
+- Tasks: `_prism/tasks.md`
+- Conventions: `AGENTS.md`
+- VAD Module: `sidecar/src/audio/vad.py`
+
+### Implementation Progress
+```
+Phase 1: Foundation    [████████████████] 100% (4/4 stories)
+Phase 2: Audio Pipeline [████████        ]  50% (2/4 stories)
+Phase 3: RAG + Context  [                ]   0% (0/3 stories)
+Phase 4: LLM + Answers  [                ]   0% (0/3 stories)
+Phase 5: Advanced       [                ]   0% (0/3 stories)
+Phase 6: Packaging      [                ]   0% (0/3 stories)
+```
+
+### Ready for Next Session
+- STORY-007: Voice Calibration + Diarization (unblocked, depends on STORY-006 ✅)
+- STORY-008: Gemini STT Integration (unblocked, depends on STORY-006 ✅, STORY-004 ✅)
 - Continue Phase 2: Audio Pipeline
