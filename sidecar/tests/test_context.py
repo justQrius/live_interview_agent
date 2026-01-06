@@ -66,9 +66,9 @@ class TestContextManager(unittest.IsolatedAsyncioTestCase):
         content = "Hello context world"
         content_b64 = base64.b64encode(content.encode('utf-8')).decode('utf-8')
         
-        chunks_count = await manager.process_file("test.txt", content_b64)
+        chunks = await manager.process_file("test.txt", content_b64)
         
-        self.assertGreater(chunks_count, 0)
+        self.assertGreater(len(chunks), 0)
         self.assertEqual(len(manager.chunks), 1)
         self.assertEqual(manager.chunks[0].text, "Hello context world")
         self.assertEqual(manager.processed_files["test.txt"]["chunk_count"], 1)

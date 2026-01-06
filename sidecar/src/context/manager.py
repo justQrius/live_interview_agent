@@ -23,7 +23,7 @@ class ContextManager:
         self.chunks: List[Chunk] = []
         self.processed_files: Dict[str, dict] = {} # filename -> metadata
         
-    async def process_file(self, filename: str, content_b64: str) -> int:
+    async def process_file(self, filename: str, content_b64: str) -> List[Chunk]:
         """
         Process a file: decode, parse, and chunk.
         
@@ -32,7 +32,7 @@ class ContextManager:
             content_b64: Base64 encoded file content
             
         Returns:
-            Number of chunks created
+            List of new chunks created
         """
         try:
             # Decode base64
@@ -51,7 +51,7 @@ class ContextManager:
             
             if not text.strip():
                 logger.warning(f"No text extracted from {filename}")
-                return 0
+                return []
                 
             # Chunk text
             logger.info(f"Chunking {filename}...")
@@ -73,7 +73,7 @@ class ContextManager:
             }
             
             logger.info(f"Processed {filename}: {len(new_chunks)} chunks created")
-            return len(new_chunks)
+            return new_chunks
             
         except Exception as e:
             logger.error(f"Failed to process {filename}: {e}")

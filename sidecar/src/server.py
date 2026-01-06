@@ -32,6 +32,7 @@ from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
 from stt.gemini_stt import GeminiSTT, GeminiSTTError
 from context.manager import ContextManager
+from rag.store import VectorStore
 
 # Configure logging
 logging.basicConfig(
@@ -81,6 +82,7 @@ class SidecarServer:
         
         # Context management
         self.context_manager = ContextManager()
+        self.vector_store: Optional[VectorStore] = None
         
         # Initialize components
         try:
@@ -221,6 +223,14 @@ class SidecarServer:
         self.session_state.api_key = api_key
         self.session_state.status = SessionStatus.LISTENING
         
+        # Initialize Vector Store
+        try:
+            self.vector_store = VectorStore(api_key=api_key)
+        except Exception as e:
+            logger.error(f"Failed to initialize vector store: {e}")
+            # Continue without RAG support, or fail? 
+            # We'll log it but let the session start, RAG features will just be unavailable.
+        
         # Initialize and start audio processing
         try:
             await self._start_audio_processing(api_key)
@@ -247,6 +257,14 @@ class SidecarServer:
         """Handle STOP_SESSION message."""
         self.session_state.status = SessionStatus.IDLE
         self.session_state.api_key = None
+        
+        # Clear vector store
+        if self.vector_store:
+            try:
+                self.vector_store.clear()
+            except Exception as e:
+                logger.error(f"Error clearing vector store: {e}")
+            self.vector_store = None
         
         await self._stop_audio_processing()
 
@@ -293,8 +311,20 @@ class SidecarServer:
                     continue
                     
                 try:
-                    chunks_count = await self.context_manager.process_file(filename, content)
-                    total_chunks += chunks_count
+                    new_chunks = await self.context_manager.process_file(filename, content)
+                    
+                    # Add to vector store if available
+                    if new_chunks and self.vector_store:
+                        chunk_texts = [c.text for c in new_chunks]
+                        chunk_metas = [c.metadata for c in new_chunks]
+                        try:
+                            self.vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
+                        except Exception as e:
+                            logger.error(f"Failed to add chunks to vector store: {e}")
+                            # We count them as processed even if RAG index failed, 
+                            # because they are in memory context
+                    
+                    total_chunks += len(new_chunks)
                     processed_count += 1
                 except Exception as e:
                     logger.error(f"Failed to process {filename}: {e}")
