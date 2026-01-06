@@ -1,7 +1,7 @@
 # Prism Project Status
 phase: implementation
 last_updated: 2026-01-06
-current_work: STORY-007 Complete, Ready for STORY-008 (Gemini STT Integration)
+current_work: STORY-015 Complete, Ready for STORY-016 (Session Controls)
 beads_available: true
 beads_initialized: false
 tracking_method: _prism/tasks.md
@@ -19,10 +19,10 @@ solution:
 
 implementation:
   status: in_progress
-  stories_complete: 14
+  stories_complete: 15
   stories_total: 20
-  current_story: STORY-015
-  last_completed: STORY-014
+  current_story: STORY-016
+  last_completed: STORY-015
 
 verification:
   status: pending
@@ -82,3 +82,11 @@ stories:
     status: complete
     date: 2026-01-06
     blocked_by: null
+  STORY-014:
+    name: Full Pipeline Integration
+    status: complete
+    date: 2026-01-06
+  STORY-015:
+    name: Screen Invisibility
+    status: complete
+    date: 2026-01-06
