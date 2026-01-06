@@ -97,12 +97,13 @@ Created: 2026-01-05
   - **Completed**: Parsers (PDF/DOCX/TXT), Character-based Chunker (2000 chars ~ 500 tokens), ContextManager, Server integration for UPLOAD_CONTEXT, 7 tests passing.
 
 
-- [ ] **Story 3.2**: ChromaDB + Embeddings (ID: STORY-010)
+- [x] **Story 3.2**: ChromaDB + Embeddings (ID: STORY-010) ✅ COMPLETED 2026-01-06
   - Initialize ChromaDB persistent storage (~/.live_interview_agent/chroma/)
   - Integrate Gemini Embeddings API (text-embedding-004)
   - Implement embed_chunks and store_in_db
   - Dependencies: STORY-009, STORY-004 (needs API key)
   - Deliverable: Documents chunked and stored in vector DB
+  - **Completed**: GeminiEmbeddingFunction with text-embedding-004, VectorStore with ChromaDB persistence, Server integration for adding/clearing chunks, ContextManager updated to return chunks. 9 tests passed.
 
 - [ ] **Story 3.3**: RAG Engine (ID: STORY-011)
   - Implement similarity search (top-5 retrieval)
