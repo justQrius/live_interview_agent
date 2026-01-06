@@ -88,12 +88,14 @@ Created: 2026-01-05
 
 ### Phase 3: RAG + Context
 
-- [ ] **Story 3.1**: Context Manager (ID: STORY-009)
+- [x] **Story 3.1**: Context Manager (ID: STORY-009) ✅ COMPLETED 2026-01-06
   - Implement document parsers (PDF via pypdf, DOCX, TXT, URL)
   - Build chunking logic (500 tokens, 50 token overlap)
   - Create context upload UI with file picker
   - Dependencies: STORY-003
   - Deliverable: Users can upload files, see preview
+  - **Completed**: Parsers (PDF/DOCX/TXT), Character-based Chunker (2000 chars ~ 500 tokens), ContextManager, Server integration for UPLOAD_CONTEXT, 7 tests passing.
+
 
 - [ ] **Story 3.2**: ChromaDB + Embeddings (ID: STORY-010)
   - Initialize ChromaDB persistent storage (~/.live_interview_agent/chroma/)

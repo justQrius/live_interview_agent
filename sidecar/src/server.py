@@ -31,6 +31,7 @@ from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
 from stt.gemini_stt import GeminiSTT, GeminiSTTError
+from context.manager import ContextManager
 
 # Configure logging
 logging.basicConfig(
@@ -78,6 +79,9 @@ class SidecarServer:
         self.audio_capture: Optional[AudioCapture] = None
         self._audio_task: Optional[asyncio.Task] = None
         
+        # Context management
+        self.context_manager = ContextManager()
+        
         # Initialize components
         try:
             self.speaker_recognizer = SpeakerRecognizer()
@@ -122,6 +126,7 @@ class SidecarServer:
 
         # Reset session state
         self.session_state = SessionState()
+        self.context_manager.clear_context()
 
         logger.info("Sidecar server stopped")
 
@@ -256,15 +261,71 @@ class SidecarServer:
         message: Message
     ) -> None:
         """Handle UPLOAD_CONTEXT message."""
-        # TODO: Implement context upload in Story 009
         data = message.data or {}
         files = data.get("files", [])
 
-        logger.info(f"Context upload requested: {len(files)} files")
+        if not files:
+            logger.warning("No files provided in context upload")
+            error_msg = create_error_message(
+                "No files provided",
+                code="ERR_NO_FILES"
+            )
+            await websocket.send(error_msg.to_json())
+            return
 
-        # For now, just acknowledge
-        status_msg = create_status_message(self.session_state.status)
-        await websocket.send(status_msg.to_json())
+        logger.info(f"Context upload requested: {len(files)} files")
+        
+        self.session_state.status = SessionStatus.PROCESSING
+        await websocket.send(create_status_message(SessionStatus.PROCESSING).to_json())
+
+        processed_count = 0
+        total_chunks = 0
+        errors = []
+
+        try:
+            for file_data in files:
+                filename = file_data.get("name")
+                content = file_data.get("content")
+                
+                if not filename or not content:
+                    logger.warning(f"Invalid file data: {filename}")
+                    errors.append(f"Invalid data for {filename or 'unknown file'}")
+                    continue
+                    
+                try:
+                    chunks_count = await self.context_manager.process_file(filename, content)
+                    total_chunks += chunks_count
+                    processed_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to process {filename}: {e}")
+                    errors.append(f"Failed to process {filename}: {str(e)}")
+
+            if processed_count == 0 and errors:
+                 error_msg = create_error_message(
+                    f"Failed to process files: {'; '.join(errors)}",
+                    code="ERR_CONTEXT_PROCESSING"
+                )
+                 await websocket.send(error_msg.to_json())
+            else:
+                logger.info(f"Context processed: {processed_count}/{len(files)} files, {total_chunks} chunks")
+                if errors:
+                    logger.warning(f"Some files failed: {errors}")
+        
+        except Exception as e:
+            logger.error(f"Context upload fatal error: {e}")
+            error_msg = create_error_message(
+                f"Context upload failed: {e}",
+                code="ERR_CONTEXT_FATAL"
+            )
+            await websocket.send(error_msg.to_json())
+
+        finally:
+            if self.session_state.api_key and self._audio_task:
+                 self.session_state.status = SessionStatus.LISTENING
+            else:
+                 self.session_state.status = SessionStatus.IDLE
+                 
+            await websocket.send(create_status_message(self.session_state.status).to_json())
 
     async def _handle_calibrate_voice(
         self,
