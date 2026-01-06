@@ -582,3 +582,32 @@ Phase 6: Packaging      [                ]   0% (0/3 stories)
 - STORY-007: Voice Calibration + Diarization (unblocked, depends on STORY-006 ✅)
 - STORY-008: Gemini STT Integration (unblocked, depends on STORY-006 ✅, STORY-004 ✅)
 - Continue Phase 2: Audio Pipeline
+
+## Session: 2026-01-06 - Implementation Phase (Story 007)
+
+### What Was Accomplished
+
+1. **Story 007: Voice Calibration + Diarization - COMPLETE**
+   - Implemented `SpeakerRecognizer` class using SpeechBrain ECAPA-TDNN
+   - Created `CalibrationModal` UI with 5-second countdown and audio capture
+   - Implemented client-side audio capture (16kHz mono int16) using AudioContext
+   - Handled `CALIBRATE_VOICE` message in Python sidecar
+   - Fixed `speechbrain` compatibility issue by downgrading `huggingface-hub` to 0.24.7
+
+2. **Files Created/Modified**
+   - `sidecar/src/audio/diarization.py` - Speaker recognition logic
+   - `sidecar/tests/test_diarization.py` - Unit tests
+   - `sidecar/tests/test_server_calibration.py` - Integration tests
+   - `src/ui/components/CalibrationModal.tsx` - React UI for calibration
+   - `src/ui/components/CalibrationModal.test.tsx` - UI tests
+   - `sidecar/requirements.txt` - Added speechbrain, torchaudio, huggingface-hub constraint
+
+3. **Key Decisions**
+   - **Audio Capture**: UI captures mic for calibration (guarantees User voice), while Python captures system audio for main session.
+   - **Compatibility**: Pinned `huggingface-hub<0.25.0` to support `speechbrain 1.0.3`.
+   - **Model**: Used `speechbrain/spkrec-ecapa-voxceleb`.
+
+### Next Steps
+
+1. **STORY-008**: Gemini STT Integration - Implement Google Gemini STT
+2. **STORY-009**: Context Manager - Document parsing

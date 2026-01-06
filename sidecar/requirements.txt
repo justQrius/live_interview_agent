@@ -15,7 +15,9 @@ silero-vad>=4.0
 torch>=2.0.0
 
 # Speaker diarization (ECAPA-TDNN)
-speechbrain>=0.5.16
+speechbrain>=1.0.0
+torchaudio>=2.0.0
+huggingface-hub<0.25.0
 
 # STT and LLM (Gemini)
 google-generativeai>=0.3.2

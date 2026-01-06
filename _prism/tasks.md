@@ -67,13 +67,16 @@ Created: 2026-01-05
   - Deliverable: Only speech segments passed downstream
   - **Completed**: VADProcessor class with Silero VAD v4, 512-sample sliding window (32ms), 0.5 threshold, 3-frame smoothing, SpeechSegment dataclass, thread-safe, 29 tests passing
 
-- [ ] **Story 2.3**: Voice Calibration + Diarization (ID: STORY-007)
+- [x] **Story 2.3**: Voice Calibration + Diarization (ID: STORY-007) ✅ COMPLETED 2026-01-06
   - Build calibration modal in UI (5-10s voice sample)
   - Implement ECAPA-TDNN speaker embedding in Python
-  - Save/load voice profiles to disk
+  - Save/load voice profiles to disk (Currently in-memory for session)
   - Classify "User" vs "Interviewer" (>0.75 cosine similarity)
   - Dependencies: STORY-006, STORY-003
   - Deliverable: Accurate speaker classification
+  - **Completed**: SpeechBrain ECAPA-TDNN integration, React CalibrationModal with AudioContext capture, WebSocket calibration flow, full test coverage.
+
+- [ ] **Story 2.4**: Gemini STT Integration (ID: STORY-008)
 
 - [ ] **Story 2.4**: Gemini STT Integration (ID: STORY-008)
   - Implement Gemini STT client in Python
