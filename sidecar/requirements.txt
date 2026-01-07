@@ -22,6 +22,9 @@ huggingface-hub<0.25.0
 # STT and LLM (Gemini)
 google-generativeai>=0.3.2
 
+# OpenAI
+openai>=1.10.0
+
 # Groq
 groq>=0.4.0
 
