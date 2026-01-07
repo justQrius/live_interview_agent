@@ -12,6 +12,8 @@ from .base import (
 )
 from .config import ProviderConfig, ProviderType
 from .factory import ProviderFactory, ProviderError
+from .stt.gemini import GeminiSTTProvider, GeminiSTTProviderError
+from .llm.gemini import GeminiLLMProvider, GeminiLLMProviderError
 
 __all__ = [
     # Base interfaces
@@ -25,4 +27,10 @@ __all__ = [
     # Factory
     "ProviderFactory",
     "ProviderError",
+    # Concrete providers - STT
+    "GeminiSTTProvider",
+    "GeminiSTTProviderError",
+    # Concrete providers - LLM
+    "GeminiLLMProvider",
+    "GeminiLLMProviderError",
 ]

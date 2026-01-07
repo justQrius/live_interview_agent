@@ -126,7 +126,7 @@ class TestBidirectionalMessaging:
             yield "This is a "
             yield "mock answer."
 
-        with patch("server.GeminiLLM") as MockLLM:
+        with patch("server.GeminiLLMProvider") as MockLLM:
             mock_llm_instance = MockLLM.return_value
             mock_llm_instance.generate_answer = mock_generate_answer
             
