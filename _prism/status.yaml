@@ -122,7 +122,7 @@ phase1_stories:
 phase2_stories:
   STORY-021:
     name: Model Pre-warming Infrastructure
-    status: pending
+    status: complete
     priority: high
     effort: 1 day
   STORY-022:

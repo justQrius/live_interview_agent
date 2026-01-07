@@ -27,20 +27,15 @@
 ### CURRENT STATE
 
 - **Phase 1**: 19/20 stories complete (STORY-020 E2E Testing remains)
-- **Phase 2**: 0/13 stories complete (planning done, ready to implement)
+- **Phase 2**: 1/13 stories complete (STORY-021 Model Pre-warming)
 
 ### NEXT STEPS
 
-1. **STORY-021**: Model Pre-warming Infrastructure
-   - Create `sidecar/src/warmup.py`
-   - Load VAD + ECAPA-TDNN at startup
-   - Target: <1s cold start
-
-2. **STORY-022**: Provider Base Interfaces
+1. **STORY-022**: Provider Base Interfaces
    - Create `sidecar/src/providers/base.py`
    - Define STTProvider, LLMProvider, EmbeddingProvider ABCs
 
-3. **STORY-031**: Browser VAD Integration (can run in parallel)
+2. **STORY-031**: Browser VAD Integration (can run in parallel)
    - Add `@ricky0123/vad-react` to package.json
    - Create `useVADFilter.ts` hook
    - Update Tauri CSP for WASM
