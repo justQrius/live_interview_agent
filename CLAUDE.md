@@ -2,7 +2,7 @@
 
 ## Quick Reference
 
-**Status**: Implementation In Progress (Story 11/20 Complete)
+**Status**: Implementation In Progress (Phase 1: 19/20, Phase 2: 3/13)
 **Project**: AI-powered live interview agent that provides real-time contextual answers
 **Architecture**: `_prism/architecture/architecture.md`
 **Tasks**: `_prism/tasks.md`
@@ -212,4 +212,4 @@ live_interview_agent/
 
 ## Next Step
 
-Run `/prism-implement STORY-017` for Noise Reduction (optional) or `/prism-implement STORY-018` for PyInstaller Bundling.
+Run `/prism-implement STORY-024` to refactor Gemini STT to the provider interface, or `/prism-implement STORY-025` for Gemini LLM provider refactoring.

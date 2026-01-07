@@ -16,6 +16,19 @@ class STTProvider(ABC):
     """
     Abstract Base Class for Speech-to-Text providers.
     """
+
+    def is_available(self) -> bool:
+        """
+        Check if the provider is available and ready to use.
+
+        Default implementation returns True. Subclasses can override
+        to check API keys, network connectivity, etc.
+
+        Returns:
+            True if provider is ready to accept requests
+        """
+        return True
+
     @abstractmethod
     async def transcribe(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
         """
@@ -34,6 +47,16 @@ class LLMProvider(ABC):
     """
     Abstract Base Class for Large Language Model providers.
     """
+
+    def is_available(self) -> bool:
+        """
+        Check if the provider is available and ready to use.
+
+        Returns:
+            True if provider is ready to accept requests
+        """
+        return True
+
     @abstractmethod
     async def generate_response(self, prompt: str, context: str, history: List[Dict]) -> AsyncGenerator[str, None]:
         """
@@ -53,6 +76,16 @@ class EmbeddingProvider(ABC):
     """
     Abstract Base Class for Embedding providers.
     """
+
+    def is_available(self) -> bool:
+        """
+        Check if the provider is available and ready to use.
+
+        Returns:
+            True if provider is ready to accept requests
+        """
+        return True
+
     @abstractmethod
     async def embed_text(self, text: str) -> List[float]:
         """
