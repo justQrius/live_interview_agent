@@ -205,19 +205,21 @@ Created: 2026-01-05
 
 ### Phase 2.1: Foundation
 
-- [ ] **Story 2.1**: Model Pre-warming Infrastructure (ID: STORY-021)
+- [x] **Story 2.1**: Model Pre-warming Infrastructure (ID: STORY-021) ✅ COMPLETED 2026-01-06
   - Create `sidecar/src/warmup.py` with ModelWarmer class
   - Load Silero VAD and ECAPA-TDNN at sidecar startup
   - Background thread loading with ready signal
   - Dependencies: None
   - Deliverable: Models pre-loaded, cold start <1s
+  - **Completed**: ModelWarmer class implemented, integrated into server.py startup.
 
-- [ ] **Story 2.2**: Provider Base Interfaces (ID: STORY-022)
+- [x] **Story 2.2**: Provider Base Interfaces (ID: STORY-022) ✅ COMPLETED 2026-01-06
   - Create `sidecar/src/providers/base.py`
   - Define STTProvider, LLMProvider, EmbeddingProvider ABCs
   - Define ProviderType enum and result dataclasses
   - Dependencies: None
   - Deliverable: Abstract interfaces for all providers
+  - **Completed**: Base interfaces and dataclasses implemented.
 
 - [x] **Story 2.3**: Provider Factory (ID: STORY-023) ✅ COMPLETED 2026-01-07
   - Create `sidecar/src/providers/factory.py`
@@ -247,12 +249,13 @@ Created: 2026-01-05
 
 ### Phase 2.3: New STT Providers
 
-- [ ] **Story 2.6**: Groq STT Provider (ID: STORY-026)
+- [x] **Story 2.6**: Groq STT Provider (ID: STORY-026) ✅ COMPLETED 2026-01-07
   - Create `providers/stt/groq.py`
   - Integrate `groq` Python package
   - Implement Whisper-large-v3 transcription
   - Dependencies: STORY-023
   - Deliverable: Groq STT available as option
+  - **Completed**: Implemented GroqSTTProvider with asyncio.to_thread for non-blocking API calls. Integrated groq package. Verified with unit tests mocking the API.
 
 - [ ] **Story 2.7**: Deepgram STT Provider (ID: STORY-027)
   - Create `providers/stt/deepgram.py`
