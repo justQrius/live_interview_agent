@@ -28,10 +28,10 @@ implementation:
   phase1_stories_complete: 19
   phase1_stories_total: 20
   phase1_remaining: STORY-020
-  phase2_stories_complete: 0
+  phase2_stories_complete: 2
   phase2_stories_total: 13
-  phase2_next_story: STORY-021
-  last_completed: STORY-019
+  phase2_next_story: STORY-023
+  last_completed: STORY-022
 
 verification:
   status: pending
@@ -127,7 +127,7 @@ phase2_stories:
     effort: 1 day
   STORY-022:
     name: Provider Base Interfaces
-    status: pending
+    status: complete
     priority: high
     effort: 0.5 days
   STORY-023:

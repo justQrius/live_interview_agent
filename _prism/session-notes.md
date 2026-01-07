@@ -17,6 +17,12 @@
    - Browser VAD as Phase 2 priority (not deferred)
    - Implementation starts immediately
 
+3. **Story 022: Provider Base Interfaces - COMPLETE**
+   - Created `_prism/stories/STORY-022.md`
+   - Created `sidecar/src/providers/base.py` with `STTProvider`, `LLMProvider`, `EmbeddingProvider` ABCs
+   - Created `sidecar/tests/test_providers_base.py` with 100% pass rate
+   - Defined `TranscriptionResult` dataclass
+
 ### PREVIOUS SESSION (Story 017)
 
 - **Story 017: Noise Reduction - COMPLETE**
@@ -31,9 +37,9 @@
 
 ### NEXT STEPS
 
-1. **STORY-022**: Provider Base Interfaces
-   - Create `sidecar/src/providers/base.py`
-   - Define STTProvider, LLMProvider, EmbeddingProvider ABCs
+1. **STORY-023**: Provider Factory
+   - Create `sidecar/src/providers/factory.py`
+   - Implement `ProviderFactory` class
 
 2. **STORY-031**: Browser VAD Integration (can run in parallel)
    - Add `@ricky0123/vad-react` to package.json
