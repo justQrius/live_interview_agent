@@ -1,8 +1,13 @@
 # Live Interview Agent - Task Tracking
 
 **Created**: 2026-01-05
-**Status**: Implementation In Progress (Story 19/20 Complete)
-**Architecture**: `_prism/architecture/architecture.md`
+**Status**: Phase 1 Complete (19/20), Phase 2 Planning Complete
+**Architecture**: 
+- Phase 1: `_prism/architecture/architecture.md`
+- Phase 2: `_prism/architecture/architecture-phase2.md`
+**PRD**:
+- Phase 1: `_prism/planning/prd.md`
+- Phase 2: `_prism/planning/prd-phase2.md`
 
 ---
 
@@ -193,6 +198,152 @@ Created: 2026-01-05
   - Screen invisibility verification
   - Dependencies: STORY-019
   - Deliverable: MVP meets all NFRs
+
+---
+
+## Phase 2: Optimizations & Multi-Provider Support
+
+### Phase 2.1: Foundation
+
+- [ ] **Story 2.1**: Model Pre-warming Infrastructure (ID: STORY-021)
+  - Create `sidecar/src/warmup.py` with ModelWarmer class
+  - Load Silero VAD and ECAPA-TDNN at sidecar startup
+  - Background thread loading with ready signal
+  - Dependencies: None
+  - Deliverable: Models pre-loaded, cold start <1s
+
+- [ ] **Story 2.2**: Provider Base Interfaces (ID: STORY-022)
+  - Create `sidecar/src/providers/base.py`
+  - Define STTProvider, LLMProvider, EmbeddingProvider ABCs
+  - Define ProviderType enum and result dataclasses
+  - Dependencies: None
+  - Deliverable: Abstract interfaces for all providers
+
+- [ ] **Story 2.3**: Provider Factory (ID: STORY-023)
+  - Create `sidecar/src/providers/factory.py`
+  - Implement ProviderFactory with fallback chains
+  - Add ProviderConfig for multi-key management
+  - Dependencies: STORY-022
+  - Deliverable: Factory creates providers with fallback
+
+### Phase 2.2: Provider Refactoring
+
+- [ ] **Story 2.4**: Refactor Gemini STT to Provider (ID: STORY-024)
+  - Move `stt/gemini_stt.py` to `providers/stt/gemini.py`
+  - Implement STTProvider interface
+  - Update server.py imports
+  - Dependencies: STORY-022
+  - Deliverable: Gemini STT works via provider interface
+
+- [ ] **Story 2.5**: Refactor Gemini LLM to Provider (ID: STORY-025)
+  - Move `llm/gemini_llm.py` to `providers/llm/gemini.py`
+  - Implement LLMProvider interface
+  - Update server.py imports
+  - Dependencies: STORY-022
+  - Deliverable: Gemini LLM works via provider interface
+
+### Phase 2.3: New STT Providers
+
+- [ ] **Story 2.6**: Groq STT Provider (ID: STORY-026)
+  - Create `providers/stt/groq.py`
+  - Integrate `groq` Python package
+  - Implement Whisper-large-v3 transcription
+  - Dependencies: STORY-023
+  - Deliverable: Groq STT available as option
+
+- [ ] **Story 2.7**: Deepgram STT Provider (ID: STORY-027)
+  - Create `providers/stt/deepgram.py`
+  - Integrate `deepgram-sdk` Python package
+  - Implement Nova-2 transcription
+  - Dependencies: STORY-023
+  - Deliverable: Deepgram STT available as option
+
+- [ ] **Story 2.8**: OpenAI Whisper STT Provider (ID: STORY-028)
+  - Create `providers/stt/openai.py`
+  - Integrate `openai` Python package for Whisper
+  - Implement Whisper-1 transcription
+  - Dependencies: STORY-023
+  - Deliverable: OpenAI Whisper STT available as option
+
+### Phase 2.4: New LLM Providers
+
+- [ ] **Story 2.9**: OpenAI LLM Provider (ID: STORY-029)
+  - Create `providers/llm/openai.py`
+  - Integrate `openai` Python package for GPT-4o
+  - Implement streaming with same prompt template
+  - Dependencies: STORY-023
+  - Deliverable: OpenAI GPT-4o available as LLM option
+
+- [ ] **Story 2.10**: Anthropic LLM Provider (ID: STORY-030)
+  - Create `providers/llm/anthropic.py`
+  - Integrate `anthropic` Python package
+  - Implement Claude 3.5 Sonnet streaming
+  - Dependencies: STORY-023
+  - Deliverable: Anthropic Claude available as LLM option
+
+### Phase 2.5: Browser VAD & UI
+
+- [ ] **Story 2.11**: Browser VAD Integration (ID: STORY-031)
+  - Add `@ricky0123/vad-react` and `onnxruntime-web` to package.json
+  - Create `src/ui/hooks/useVADFilter.ts`
+  - Update Tauri CSP for WASM
+  - Bundle ONNX assets in public folder
+  - Modify WebSocket to send speech-only segments
+  - Dependencies: None
+  - Deliverable: Browser filters silence, 60%+ WebSocket reduction
+
+- [ ] **Story 2.12**: Provider Configuration UI (ID: STORY-032)
+  - Create `src/ui/components/ProviderSettings.tsx`
+  - Add multi-provider API key inputs to SettingsPanel
+  - Store keys per-provider in OS keychain
+  - Add provider preference dropdowns (STT/LLM)
+  - Dependencies: STORY-023 through STORY-030
+  - Deliverable: Users can configure and select providers
+
+### Phase 2.6: Integration
+
+- [ ] **Story 2.13**: Server Integration + E2E Testing (ID: STORY-033)
+  - Update `server.py` to use ProviderFactory
+  - Update `protocol.py` with provider config messages
+  - Integration tests for all providers
+  - Latency benchmarking (target: P50 <1.5s)
+  - Dependencies: All above
+  - Deliverable: Full Phase 2 integration, all tests passing
+
+---
+
+## Phase 2 Story Dependencies
+
+```
+                    STORY-021 (Pre-warming)
+                           |
+    +----------------------+----------------------+
+    |                                              |
+STORY-022 (Interfaces)                      STORY-031 (Browser VAD)
+    |                                              |
+    v                                              |
+STORY-023 (Factory)                                |
+    |                                              |
+    +------+------+------+------+                  |
+    |      |      |      |      |                  |
+    v      v      v      v      v                  |
+  024    025    026    029    027                  |
+(Gemini (Gemini (Groq (OpenAI (Deepgram           |
+  STT)   LLM)   STT)   LLM)   STT)                |
+                  |      |      |                  |
+                  v      v      v                  |
+                028    030                         |
+             (OpenAI (Anthropic                    |
+              STT)    LLM)                         |
+                  |      |                         |
+                  +------+-------------------------+
+                         |
+                         v
+                  STORY-032 (Provider UI)
+                         |
+                         v
+                  STORY-033 (Integration)
+```
 
 ---
 

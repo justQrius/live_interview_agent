@@ -6,6 +6,7 @@
 **Project**: AI-powered live interview agent that provides real-time contextual answers
 **Architecture**: `_prism/architecture/architecture.md`
 **Tasks**: `_prism/tasks.md`
+**SDLC Constitution**: [docs/SDLC_BEST_PRACTICES.md](docs/SDLC_BEST_PRACTICES.md)
 
 ## You Are The Orchestrator
 

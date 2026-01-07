@@ -24,12 +24,23 @@ Enforce SDLC phases: **Planning → Solutioning → Implementation → Verificat
 
 **Never skip phases without explicit user approval.**
 
-### Agent Delegation
-When specialized work is needed, delegate:
+### Subagent Delegation
+
+When specialized work is needed, delegate to **subagents** (isolated context):
 - "Use the **pm** agent to gather requirements"
 - "Use the **architect** agent to design the system"
 - "Use the **developer** agent to implement with TDD"
 - "Use the **reviewer** agent to check this code"
+
+**Subagent Pattern**: Subagents run in isolated context to prevent polluting the main session. Use when:
+- Processing multiple items in parallel
+- Handling conditional logic with branching
+- Running exploratory tasks that generate lots of output
+
+**Component Hierarchy** (build in reverse order):
+```
+Skills (foundation) → Subagents (isolated execution) → Commands (user trigger)
+```
 
 ### Compaction Survival
 Before context gets full, write to `_prism/session-notes.md`:
@@ -39,6 +50,39 @@ IN PROGRESS: [Current state]
 NEXT STEPS: [What to do next]
 DECISIONS: [Key choices made]
 ```
+
+---
+
+## Context Budget Management
+
+**Context is precious.** Performance degrades as tokens increase, even before hitting limits.
+
+### Context Thresholds
+
+| Usage | Status | Action |
+|-------|--------|--------|
+| 0-40% | ✅ Healthy | Work freely |
+| 40-60% | ⚠️ Growing | Reference `_prism/todo.md` to anchor attention |
+| 60-75% | 🔶 Heavy | Run `/prism-handoff`, consider `/compact` |
+| 75%+ | 🔴 Critical | `/compact` immediately or start new session |
+
+### Best Practices
+
+1. **Check context regularly**: Run `/context` before complex tasks
+2. **Use Task tool for exploration**: Subagents don't bloat main context
+3. **Anchor attention with todos**: Reference `_prism/todo.md` at 50%+
+4. **Handoff before compacting**: Run `/prism-handoff` to preserve decisions
+5. **Use /rewind for mistakes**: Checkpoints save context (`Esc + Esc`)
+
+### When to Use Extended Thinking (ultrathink)
+
+| Situation | Trigger |
+|-----------|---------|
+| Complex algorithm design | "ultrathink this solution" |
+| Debugging elusive bugs | "think deeply about this bug" |
+| Architecture decisions | "reason carefully about tradeoffs" |
+| Self-review before committing | "ultrathink review this code" |
+| Multi-step refactoring | "think through this refactor" |
 
 ---
 
@@ -62,6 +106,9 @@ DECISIONS: [Key choices made]
 | Editing files in a specific directory | **Use jit-rules skill** to load directory conventions |
 | Issue tracking needed or task status update | **Use beads-integration skill** for `bd` commands |
 | Phase transition requested ("ready for implementation") | **Use phase-gate skill** to validate gates |
+| "ultrathink", "think deeply", "reason carefully" | Engage **extended thinking mode** |
+| Context > 60% and complex task ahead | Suggest `/prism-handoff` then `/compact` |
+| Session ending or breaking for long time | Suggest `/prism-handoff` for continuity |
 | "risk", "unknown integration", "spike" mentioned | **Use explorer agent** + suggest spike plan |
 | "SLO", "latency", "observability", "opentelemetry" | **Use architect agent** + add observability section |
 | "security", "auth", "tokens", "PII", "secrets" | **Use reviewer agent (security lens)** earlier |

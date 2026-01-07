@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 
 # VAD configuration constants
 DEFAULT_VAD_THRESHOLD: float = 0.5
-DEFAULT_VAD_WINDOW_SIZE: int = 512  # 512 samples = 32ms at 16kHz
+DEFAULT_VAD_WINDOW_SIZE: int = 1024  # 1024 samples = 64ms at 16kHz
 
 # Smoothing configuration - require consecutive frames for speech start/end
-SPEECH_START_FRAMES: int = 3
-SPEECH_END_FRAMES: int = 3
+SPEECH_START_FRAMES: int = 5   # Approx 320ms to confirm speech start (5 * 64ms)
+SPEECH_END_FRAMES: int = 25    # Approx 1.6s silence to confirm speech end (25 * 64ms)
 
 
 class VADModelError(Exception):

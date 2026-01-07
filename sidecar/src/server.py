@@ -77,27 +77,22 @@ class SidecarServer:
         self._server: Optional[Any] = None
         self._running = False
         
-        # Audio processing components
         self.stt: Optional[GeminiSTT] = None
         self.vad: Optional[VADProcessor] = None
         self.noise_reducer: Optional[NoiseReducer] = None
         self.audio_capture: Optional[AudioCapture] = None
         self._audio_task: Optional[asyncio.Task] = None
         
-        # LLM component
         self.llm: Optional[GeminiLLM] = None
         
-        # Context management
         self.context_manager = ContextManager()
         self.vector_store: Optional[VectorStore] = None
         self.rag_engine: Optional[RAGEngine] = None
         
-        # Initialize components
         try:
             self.speaker_recognizer = SpeakerRecognizer()
         except Exception as e:
             logger.error(f"Failed to initialize SpeakerRecognizer: {e}")
-            # We don't crash here, but calibration will fail if called
             self.speaker_recognizer = None
 
     async def start(self) -> None:
@@ -110,7 +105,6 @@ class SidecarServer:
         )
         logger.info(f"Sidecar server started on ws://{self.host}:{self.port}")
 
-        # Keep running until stopped
         while self._running:
             await asyncio.sleep(0.1)
 
@@ -118,7 +112,6 @@ class SidecarServer:
         """Stop the WebSocket server."""
         self._running = False
 
-        # Close all client connections
         if self.clients:
             await asyncio.gather(
                 *[client.close() for client in self.clients],
@@ -126,15 +119,12 @@ class SidecarServer:
             )
             self.clients.clear()
             
-        # Stop audio processing
         await self._stop_audio_processing()
 
-        # Close server
         if self._server:
             self._server.close()
             self._server = None
 
-        # Reset session state
         self.session_state = SessionState()
         self.context_manager.clear_context()
 
@@ -152,6 +142,8 @@ class SidecarServer:
 
         try:
             async for raw_message in websocket:
+                if isinstance(raw_message, bytes):
+                    raw_message = raw_message.decode('utf-8')
                 await self._process_message(websocket, raw_message)
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Client disconnected: {websocket.remote_address}")
@@ -191,7 +183,6 @@ class SidecarServer:
             await websocket.send(error_msg.to_json())
             return
 
-        # Route message to appropriate handler
         handlers = {
             MessageType.START_SESSION: self._handle_start_session,
             MessageType.STOP_SESSION: self._handle_stop_session,
@@ -227,27 +218,31 @@ class SidecarServer:
             await websocket.send(error_msg.to_json())
             return
 
-        # SECURITY: API key stored in memory only, never log session_state
         self.session_state.api_key = api_key
         self.session_state.status = SessionStatus.LISTENING
         
-        # Initialize Vector Store
         try:
             self.vector_store = VectorStore(api_key=api_key)
             self.rag_engine = RAGEngine(self.vector_store)
+            
+            pre_loaded_chunks = self.context_manager.get_all_chunks()
+            if pre_loaded_chunks:
+                logger.info(f"Adding {len(pre_loaded_chunks)} pre-loaded chunks to vector store")
+                chunk_texts = [c.text for c in pre_loaded_chunks]
+                chunk_metas = [c.metadata for c in pre_loaded_chunks]
+                try:
+                    self.vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
+                except Exception as e:
+                    logger.error(f"Failed to add pre-loaded chunks to vector store: {e}")
+                    
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")
-            # Continue without RAG support, or fail? 
-            # We'll log it but let the session start, RAG features will just be unavailable.
             
-        # Initialize LLM
         try:
             self.llm = GeminiLLM(api_key=api_key)
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {e}")
-            # We can continue, but manual questions won't work
             
-        # Initialize and start audio processing
         try:
             await self._start_audio_processing(api_key)
         except Exception as e:
@@ -274,7 +269,6 @@ class SidecarServer:
         self.session_state.status = SessionStatus.IDLE
         self.session_state.api_key = None
         
-        # Clear vector store
         if self.vector_store:
             try:
                 self.vector_store.clear()
@@ -331,7 +325,6 @@ class SidecarServer:
                 try:
                     new_chunks = await self.context_manager.process_file(filename, content)
                     
-                    # Add to vector store if available
                     if new_chunks and self.vector_store:
                         chunk_texts = [c.text for c in new_chunks]
                         chunk_metas = [c.metadata for c in new_chunks]
@@ -339,8 +332,6 @@ class SidecarServer:
                             self.vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
                         except Exception as e:
                             logger.error(f"Failed to add chunks to vector store: {e}")
-                            # We count them as processed even if RAG index failed, 
-                            # because they are in memory context
                     
                     total_chunks += len(new_chunks)
                     processed_count += 1
@@ -391,7 +382,6 @@ class SidecarServer:
 
         self.session_state.status = SessionStatus.CALIBRATING
         
-        # Notify client we are starting
         status_msg = create_status_message(SessionStatus.CALIBRATING)
         await websocket.send(status_msg.to_json())
 
@@ -402,14 +392,10 @@ class SidecarServer:
             if not audio_b64:
                 raise ValueError("No audioData provided")
                 
-            # Decode base64
             audio_bytes = base64.b64decode(audio_b64)
             
-            # Convert to numpy array (int16)
-            # Assuming incoming data is raw 16kHz mono int16 PCM
             audio_chunk = np.frombuffer(audio_bytes, dtype=np.int16)
             
-            # Run embedding creation in thread pool to avoid blocking event loop
             loop = asyncio.get_running_loop()
             embedding = await loop.run_in_executor(
                 None, 
@@ -436,7 +422,6 @@ class SidecarServer:
             )
             await websocket.send(error_msg.to_json())
             
-            # Send idle status after error
             status_msg = create_status_message(SessionStatus.IDLE)
             await websocket.send(status_msg.to_json())
 
@@ -459,12 +444,10 @@ class SidecarServer:
 
         logger.info(f"Manual question received: {question[:50]}...")
 
-        # Update status to processing
         self.session_state.status = SessionStatus.PROCESSING
         status_msg = create_status_message(SessionStatus.PROCESSING)
         await websocket.send(status_msg.to_json())
 
-        # Retrieve context
         context_chunks = []
         if self.rag_engine:
             try:
@@ -476,7 +459,6 @@ class SidecarServer:
             except Exception as e:
                 logger.error(f"RAG retrieval failed: {e}")
 
-        # Generate answer using LLM
         if self.llm:
             try:
                 async for chunk in self.llm.generate_answer(question, context_chunks):
@@ -486,7 +468,6 @@ class SidecarServer:
                     )
                     await websocket.send(answer_msg.to_json())
                 
-                # Send final completion message
                 await websocket.send(create_answer_chunk_message(
                     chunk="",
                     complete=True,
@@ -507,9 +488,6 @@ class SidecarServer:
             )
              await websocket.send(error_msg.to_json())
 
-        # Return to listening state
-
-        # Return to listening state
         self.session_state.status = SessionStatus.LISTENING
         status_msg = create_status_message(SessionStatus.LISTENING)
         await websocket.send(status_msg.to_json())
@@ -608,6 +586,10 @@ class SidecarServer:
         speaker = self._identify_speaker(segment.audio)
         
         try:
+            if not self.stt:
+                logger.error("STT component is None during speech processing")
+                return
+
             text = await self.stt.transcribe(audio_for_stt)
             if not text:
                 return

@@ -18,7 +18,10 @@
       "Bash(npm run test)",
       "Bash(./venv/Scripts/pytest tests/test_integration.py -v)",
       "Bash(npx tsc:*)",
-      "Bash(./venv/Scripts/pytest tests/ -v --tb=short)"
+      "Bash(./venv/Scripts/pytest tests/ -v --tb=short)",
+      "Bash(./venv/Scripts/python:*)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

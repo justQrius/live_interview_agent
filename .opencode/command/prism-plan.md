@@ -44,36 +44,89 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 
 ---
 
-## Phase 1: Discovery
+## Phase 1: Spec Discovery (Effective Requirements)
 
-**Goal**: Understand what needs to be built
+**Goal**: Create a comprehensive specification through structured discovery - "waterfall in 15 minutes"
+
+**Related Skill**: `create-spec`
 
 Initial request: $ARGUMENTS
 
-**Actions**:
-1. Create TodoWrite list with planning phases
-2. Ask the user:
-   - What problem are we solving?
-   - Who are the target users?
-   - What defines success?
-   - What are the constraints?
-   - What's the timeline/priority?
-3. **WAIT FOR ANSWERS** - do not proceed without user input
+### Step 1: Structured Q&A
+
+Ask these questions ONE AT A TIME, waiting for each answer:
+
+1. **Problem Statement**
+   > "What problem are we solving? Why does it matter?"
+
+2. **Target Users**  
+   > "Who will use this? What are their main characteristics?"
+
+3. **Success Definition**
+   > "What defines success? How will we know this works?"
+
+4. **Constraints**
+   > "What are the constraints? (Time, budget, tech stack, integrations)"
+
+5. **Priority**
+   > "What's the timeline? What's must-have vs nice-to-have?"
+
+**⚠️ WAIT FOR ANSWERS** - Do not proceed without user input on each question.
+
+### Step 2: Edge Case Discovery
+
+After gathering basics, probe for edge cases:
+
+> "Let's think about edge cases. What happens when:
+> - A user does something unexpected?
+> - The system is under load?
+> - Data is missing or malformed?"
+
+Document all edge cases identified.
+
+### Step 3: Spec Creation
+
+Create `_prism/discovery/spec.md` with:
+- Problem statement
+- User personas
+- Discovery Q&A summary
+- Edge cases table
+- Initial requirements list (FR-1, FR-2, NFR-1, etc.)
+- Testing strategy outline
+
+See `templates/spec-template.md` for full template.
+
+### Step 4: Spec Approval
+
+**Action**: Ask user to review `_prism/discovery/spec.md`.
+
+When approved:
+1. Update status to "approved" in frontmatter
+2. Report checklist of comprehensive requirements
+
+## Phase 5: Capture Learnings
+
+Run `/prism-reflect` to capture any insights from the requirements gathering process:
+- Common requirement patterns?
+- Questions that clarified ambiguity?
+- Edge cases relevant to other projects?
+
+Present spec summary to user:
+> "Here's the specification I've created. Does this capture your vision?"
+
+**Wait for approval before Phase 2.**
 
 ---
 
-## Phase 2: Requirements Gathering
+## Phase 2: Requirements Synthesis
 
-**Goal**: Derive structured requirements from user answers
+**Goal**: Derive structured requirements from approved spec
 
 **Actions**:
-1. Synthesize answers into:
-   - Functional requirements (what it does)
-   - Non-functional requirements (how it performs)
-   - User personas and their needs
-   - Use cases and user journeys
-2. Present summary to user for validation
-3. **Ask if anything is missing** before documenting
+1. Read spec from `_prism/discovery/spec.md`
+2. Expand requirements into detailed list with acceptance criteria
+3. Present summary to user for validation
+4. **Ask if anything is missing** before PRD creation
 
 ---
 

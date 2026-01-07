@@ -27,6 +27,7 @@ Look for:
 - [ ] "You Are The Orchestrator" section
 - [ ] "Intelligent Auto-Invocation Rules" section
 - [ ] "Skill Trigger Patterns" section
+- [ ] `_prism/learnings/` directory exists
 
 If ANY of these are missing, proceed with upgrade.
 
@@ -105,6 +106,10 @@ If "Intelligent Auto-Invocation Rules" section is missing, add this:
 | User asks about capabilities or tools | **Use mcp-discovery skill** to recommend tools |
 | Editing files in a specific directory | **Use jit-rules skill** to load directory conventions |
 | Issue tracking needed or task status update | **Use beads-integration skill** for `bd` commands |
+| Phase transition requested ("ready for implementation") | **Use phase-gate skill** to validate gates |
+| "ultrathink", "think deeply", "reason carefully" | Engage **extended thinking mode** |
+| Context > 60% and complex task ahead | Suggest `/prism-handoff` then `/compact` |
+| Session ending or breaking for long time | Suggest `/prism-handoff` for continuity |
 
 ### Proactive Behavior
 
@@ -134,18 +139,108 @@ If "Intelligent Auto-Invocation Rules" section is missing, add this:
 | `jit-rules` | Editing code, need directory-specific rules |
 ```
 
-### Step 5: Verify Upgrade
+### Step 5: Add SDLC Constitution
+
+If `docs/SDLC_BEST_PRACTICES.md` doesn't exist:
+
+```bash
+mkdir -p docs
+cp .claude/plugins/prism/docs/SDLC_BEST_PRACTICES.md docs/
+```
+
+Add reference to CLAUDE.md if not present:
+```markdown
+**SDLC Constitution**: See [docs/SDLC_BEST_PRACTICES.md](docs/SDLC_BEST_PRACTICES.md) for development standards
+```
+
+### Step 6: Add Project Rules (Claude Code)
+
+If `.claude/rules/` doesn't exist or is empty:
+
+```bash
+mkdir -p .claude/rules
+cp .claude/plugins/prism/templates/rules/*.md .claude/rules/
+```
+
+This installs phase-specific rules:
+- `planning.md` - Activates when editing `_prism/planning/**/*`
+- `architecture.md` - Activates when editing `_prism/architecture/**/*`
+- `implementation.md` - Activates when editing `src/**/*.{ts,js,py,go}`
+- `verification.md` - Activates when editing `tests/**/*`
+
+**Note**: `.claude/rules/` is Claude Code-specific. OpenCode users should reference rules manually.
+
+### Step 7: Add Phase Gate Hooks
+
+If `.claude/settings.json` doesn't have hooks configured:
+
+Merge Prism hooks into `.claude/settings.json`:
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash .claude/plugins/prism/hooks/scripts/prism-gate-hook.sh",
+        "timeout": 15
+      }]
+    }]
+  }
+}
+```
+
+This enables automatic phase gate enforcement for both Claude Code and Oh-My-OpenCode.
+
+### Step 8: Add Learning Infrastructure
+
+If `_prism/learnings` doesn't exist:
+
+```bash
+mkdir -p _prism/learnings/skills
+mkdir -p _prism/learnings/sessions
+cp .claude/plugins/prism/templates/learnings-template.md _prism/learnings/project.md
+```
+
+### Step 9: Add Auto-Reflect Hook
+
+If `.claude/settings.json` is missing the Stop hook:
+
+Merge the following hook configuration:
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash .claude/plugins/prism/hooks/scripts/prism-reflect-hook.sh"
+      }]
+    }]
+  }
+}
+```
+
+### Step 10: Verify Upgrade
 
 After adding sections, confirm:
 - [ ] CLAUDE.md has "You Are The Orchestrator" section
 - [ ] CLAUDE.md has "Intelligent Auto-Invocation Rules" section  
 - [ ] CLAUDE.md has "Skill Trigger Patterns" table
+- [ ] docs/SDLC_BEST_PRACTICES.md exists
+- [ ] .claude/rules/ contains 4 phase rules
+- [ ] .claude/settings.json has hooks configured
 
-### Step 6: Report Completion
+### Step 11: Report Completion
 
 Summarize what was upgraded:
 - Added orchestrator persona: Yes/No
 - Added intelligent invocation rules: Yes/No
+- Added SDLC constitution: Yes/No
+- Added project rules: Yes/No (N/A for OpenCode)
+- Added phase gate hooks: Yes/No
+- **Added learning infrastructure: Yes/No**
+- **Added auto-reflect hook: Yes/No**
 - Backup created at: CLAUDE.md.backup
 
 ## Post-Upgrade Testing
@@ -154,5 +249,7 @@ After upgrade, test by:
 1. Starting a new Claude Code session in the project
 2. Describing a feature idea (don't ask for specific agent)
 3. Claude should automatically invoke the pm agent
+4. Try `/prism-solution` without PRD - should warn about missing gate requirements
 
 If it doesn't work, check that the plugin is loaded with `claude --debug`.
+
