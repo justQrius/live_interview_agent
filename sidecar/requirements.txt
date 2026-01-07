@@ -41,3 +41,6 @@ pytest-asyncio>=0.21.0
 
 # Development
 python-dotenv>=1.0.0
+
+# Bundling
+pyinstaller>=6.0.0
