@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Live Interview Agent",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.liveinterviewagent.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -36,6 +36,62 @@
     "externalBin": [
       "binaries/sidecar-server"
     ],
-    "resources": []
+    "resources": [],
+    "licenseFile": "../LICENSE",
+    "license": "MIT",
+    "copyright": "Copyright 2026 Live Interview Agent",
+    "category": "Utility",
+    "shortDescription": "AI-powered live interview assistant",
+    "longDescription": "Live Interview Agent is an AI-powered desktop application that provides real-time contextual answers during job interviews. It captures audio, transcribes speech, identifies speakers, and generates helpful responses using RAG and LLM technology.",
+    "publisher": "Live Interview Agent",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "5f8a9c2b-3d4e-4a1f-b8c6-7e9d0f1a2b3c"
+      },
+      "nsis": {
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "dmg": {
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        }
+      },
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libssl3",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1"
+        ],
+        "section": "utils",
+        "priority": "optional"
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "openssl",
+          "gtk3"
+        ]
+      }
+    }
   }
 }

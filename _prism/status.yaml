@@ -1,7 +1,7 @@
 # Prism Project Status
 phase: implementation
 last_updated: 2026-01-06
-current_work: STORY-018 Complete, Ready for STORY-019 (Platform Installers)
+current_work: STORY-019 Complete, Ready for STORY-020 (End-to-End Testing)
 beads_available: true
 beads_initialized: false
 tracking_method: _prism/tasks.md
@@ -19,10 +19,10 @@ solution:
 
 implementation:
   status: in_progress
-  stories_complete: 17
+  stories_complete: 18
   stories_total: 20
-  current_story: STORY-019
-  last_completed: STORY-018
+  current_story: STORY-020
+  last_completed: STORY-019
 
 verification:
   status: pending
@@ -99,5 +99,9 @@ stories:
     note: Optional feature, can be added later
   STORY-018:
     name: PyInstaller Bundling
+    status: complete
+    date: 2026-01-06
+  STORY-019:
+    name: Platform Installers
     status: complete
     date: 2026-01-06
