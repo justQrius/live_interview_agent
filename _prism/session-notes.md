@@ -1,5 +1,68 @@
 # Session Notes - Live Interview Agent
 
+## Session: 2026-01-07 - Story 025 Complete
+
+### COMPLETED TODAY
+
+1. **Story 025: Refactor Gemini LLM to Provider - COMPLETE**
+   - Created `sidecar/src/providers/llm/` directory
+   - Created `sidecar/src/providers/llm/__init__.py`
+   - Created `sidecar/src/providers/llm/gemini.py` with GeminiLLMProvider
+   - Created `sidecar/tests/test_gemini_llm_provider.py` with 20 tests
+   - Updated `sidecar/src/server.py` to use new provider
+   - Updated `sidecar/src/providers/__init__.py` to export new provider
+   - Fixed test patches in `test_integration.py` and `test_full_pipeline.py`
+   - All 267 tests passing (52 provider/integration tests verified)
+
+### KEY IMPLEMENTATION DETAILS
+
+**GeminiLLMProvider Interface:**
+- Implements `LLMProvider` abstract base class
+- Primary method: `generate_response(prompt, context, history)` → AsyncGenerator
+- Backwards-compatible: `generate_answer(question, context_chunks)` → AsyncGenerator
+- Server integration uses backwards-compatible method, no server logic changes needed
+
+**Files Modified:**
+| File | Change |
+|------|--------|
+| `sidecar/src/providers/llm/gemini.py` | New - LLMProvider implementation |
+| `sidecar/src/providers/llm/__init__.py` | New - Package exports |
+| `sidecar/src/providers/__init__.py` | Added GeminiLLMProvider exports |
+| `sidecar/src/server.py` | Changed imports and type hints |
+| `sidecar/tests/test_gemini_llm_provider.py` | New - 20 tests |
+| `sidecar/tests/test_integration.py` | Fixed patch path |
+| `sidecar/tests/test_full_pipeline.py` | Fixed patch path |
+| `_prism/tasks.md` | Marked STORY-025 complete |
+
+### CURRENT STATE
+
+- **Phase 1**: 19/20 stories complete (STORY-020 E2E Testing remains)
+- **Phase 2**: 4/13 stories complete
+  - STORY-021 ✅ Model Pre-warming
+  - STORY-022 ✅ Provider Base Interfaces
+  - STORY-023 ✅ Provider Factory
+  - STORY-024 ✅ Refactor Gemini STT to Provider
+  - STORY-025 ✅ Refactor Gemini LLM to Provider
+
+### KNOWN ISSUES (Pre-existing, out of scope)
+
+- 2 VAD tests failing: `test_vad_processor_creation_with_defaults` and `test_default_window_size_constant`
+  - Tests expect `window_size=512` but constant is `DEFAULT_VAD_WINDOW_SIZE=1024`
+  - Not related to Story 025, pre-existing mismatch
+
+### NEXT STEPS
+
+1. **STORY-026**: Groq STT Provider
+   - Create `providers/stt/groq.py`
+   - Integrate `groq` Python package
+   - Implement Whisper-large-v3 transcription
+
+2. **STORY-029**: OpenAI LLM Provider (can run in parallel)
+   - Create `providers/llm/openai.py`
+   - Integrate `openai` Python package for GPT-4o
+
+---
+
 ## Session: 2026-01-06 - Phase 2 Planning Complete
 
 ### COMPLETED TODAY

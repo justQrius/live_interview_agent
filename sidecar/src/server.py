@@ -32,7 +32,7 @@ from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
 from audio.noise_reduction import NoiseReducer
 from providers.stt.gemini import GeminiSTTProvider, GeminiSTTProviderError
-from llm.gemini_llm import GeminiLLM, GeminiLLMError
+from providers.llm.gemini import GeminiLLMProvider, GeminiLLMProviderError
 from context.manager import ContextManager
 from rag.store import VectorStore
 from rag.engine import RAGEngine
@@ -84,7 +84,7 @@ class SidecarServer:
         self.audio_capture: Optional[AudioCapture] = None
         self._audio_task: Optional[asyncio.Task] = None
         
-        self.llm: Optional[GeminiLLM] = None
+        self.llm: Optional[GeminiLLMProvider] = None
         
         self.context_manager = ContextManager()
         self.vector_store: Optional[VectorStore] = None
@@ -239,7 +239,7 @@ class SidecarServer:
             logger.error(f"Failed to initialize vector store: {e}")
             
         try:
-            self.llm = GeminiLLM(api_key=api_key)
+            self.llm = GeminiLLMProvider(api_key=api_key)
         except Exception as e:
             logger.error(f"Failed to initialize LLM: {e}")
             

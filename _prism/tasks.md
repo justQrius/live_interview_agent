@@ -1,7 +1,7 @@
 # Live Interview Agent - Task Tracking
 
 **Created**: 2026-01-05
-**Status**: Phase 1 Complete (19/20), Phase 2 Planning Complete
+**Status**: Phase 1 Complete (19/20), Phase 2 In Progress (4/13)
 **Architecture**: 
 - Phase 1: `_prism/architecture/architecture.md`
 - Phase 2: `_prism/architecture/architecture-phase2.md`
@@ -237,12 +237,13 @@ Created: 2026-01-05
   - Deliverable: Gemini STT works via provider interface
   - **Completed**: Created `providers/stt/gemini.py` with GeminiSTTProvider implementing STTProvider interface. Returns TranscriptionResult from transcribe(). Updated server.py to use new provider. 16 new provider tests + updated existing tests. 247 tests passing.
 
-- [ ] **Story 2.5**: Refactor Gemini LLM to Provider (ID: STORY-025)
+- [x] **Story 2.5**: Refactor Gemini LLM to Provider (ID: STORY-025) ✅ COMPLETED 2026-01-07
   - Move `llm/gemini_llm.py` to `providers/llm/gemini.py`
   - Implement LLMProvider interface
   - Update server.py imports
   - Dependencies: STORY-022
   - Deliverable: Gemini LLM works via provider interface
+  - **Completed**: Created `providers/llm/gemini.py` with GeminiLLMProvider implementing LLMProvider interface. Provides both `generate_response(prompt, context, history)` and backwards-compatible `generate_answer(question, context_chunks)`. Updated server.py to use new provider. 20 new provider tests + updated existing tests. 267 tests passing.
 
 ### Phase 2.3: New STT Providers
 

@@ -37,7 +37,7 @@ def mock_full_pipeline():
          patch("server.VADProcessor") as mock_vad_cls, \
          patch("server.AudioCapture") as mock_capture_cls, \
          patch("server.SpeakerRecognizer") as mock_recognizer_cls, \
-         patch("server.GeminiLLM") as mock_llm_cls, \
+         patch("server.GeminiLLMProvider") as mock_llm_cls, \
          patch("server.VectorStore") as mock_vector_cls, \
          patch("server.RAGEngine") as mock_rag_cls, \
          patch("server.ModelWarmer") as mock_warmer_cls, \
