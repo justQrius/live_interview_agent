@@ -14,13 +14,24 @@ from protocol import Message, MessageType, SessionStatus
 
 @pytest.mark.asyncio
 class TestServerCalibration:
-    
+
     @pytest.fixture
     def mock_recognizer(self):
-        with patch('server.SpeakerRecognizer') as mock:
-            instance = mock.return_value
-            # Mock create_embedding to return a dummy embedding
+        with patch('server.SpeakerRecognizer') as mock_rec, \
+             patch('server.ModelWarmer') as mock_warmer_cls:
+            # Configure recognizer mock
+            instance = mock_rec.return_value
             instance.create_embedding.return_value = np.zeros(192, dtype=np.float32)
+
+            # Configure ModelWarmer mock - models not ready, so calibration creates fresh recognizer
+            mock_warmer = mock_warmer_cls.get_instance.return_value
+            mock_warmer.wait_for_ready.return_value = False
+            mock_models = MagicMock()
+            mock_models.is_ready = False
+            mock_models.vad_processor = None
+            mock_models.speaker_recognizer = None
+            mock_warmer.get_models.return_value = mock_models
+
             yield instance
 
     async def test_calibrate_voice_success(self, mock_recognizer):

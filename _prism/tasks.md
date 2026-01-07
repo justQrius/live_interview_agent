@@ -229,12 +229,13 @@ Created: 2026-01-05
 
 ### Phase 2.2: Provider Refactoring
 
-- [ ] **Story 2.4**: Refactor Gemini STT to Provider (ID: STORY-024)
+- [x] **Story 2.4**: Refactor Gemini STT to Provider (ID: STORY-024) ✅ COMPLETED 2026-01-07
   - Move `stt/gemini_stt.py` to `providers/stt/gemini.py`
   - Implement STTProvider interface
   - Update server.py imports
   - Dependencies: STORY-022
   - Deliverable: Gemini STT works via provider interface
+  - **Completed**: Created `providers/stt/gemini.py` with GeminiSTTProvider implementing STTProvider interface. Returns TranscriptionResult from transcribe(). Updated server.py to use new provider. 16 new provider tests + updated existing tests. 247 tests passing.
 
 - [ ] **Story 2.5**: Refactor Gemini LLM to Provider (ID: STORY-025)
   - Move `llm/gemini_llm.py` to `providers/llm/gemini.py`

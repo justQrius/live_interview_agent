@@ -28,10 +28,10 @@ implementation:
   phase1_stories_complete: 19
   phase1_stories_total: 20
   phase1_remaining: STORY-020
-  phase2_stories_complete: 3
+  phase2_stories_complete: 4
   phase2_stories_total: 13
-  phase2_next_story: STORY-024
-  last_completed: STORY-023
+  phase2_next_story: STORY-025
+  last_completed: STORY-024
 
 verification:
   status: pending
@@ -138,9 +138,10 @@ phase2_stories:
     date: 2026-01-07
   STORY-024:
     name: Refactor Gemini STT to Provider
-    status: pending
+    status: complete
     priority: high
     effort: 0.5 days
+    date: 2026-01-07
   STORY-025:
     name: Refactor Gemini LLM to Provider
     status: pending

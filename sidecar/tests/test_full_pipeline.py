@@ -27,18 +27,21 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src"
 from server import SidecarServer, SessionStatus, Speaker
 from protocol import Message, MessageType, ConfidenceLevel
 from audio.vad import SpeechSegment
+from providers.base import TranscriptionResult
 
 
 @pytest.fixture
 def mock_full_pipeline():
     """Mock all pipeline components for full integration testing."""
-    with patch("server.GeminiSTT") as mock_stt_cls, \
+    with patch("server.GeminiSTTProvider") as mock_stt_cls, \
          patch("server.VADProcessor") as mock_vad_cls, \
          patch("server.AudioCapture") as mock_capture_cls, \
          patch("server.SpeakerRecognizer") as mock_recognizer_cls, \
          patch("server.GeminiLLM") as mock_llm_cls, \
          patch("server.VectorStore") as mock_vector_cls, \
-         patch("server.RAGEngine") as mock_rag_cls:
+         patch("server.RAGEngine") as mock_rag_cls, \
+         patch("server.ModelWarmer") as mock_warmer_cls, \
+         patch("server.NoiseReducer") as mock_noise_reducer_cls:
         
         # Setup mocks
         mock_stt = mock_stt_cls.return_value
@@ -48,7 +51,21 @@ def mock_full_pipeline():
         mock_llm = mock_llm_cls.return_value
         mock_vector = mock_vector_cls.return_value
         mock_rag = mock_rag_cls.return_value
-        
+
+        # Configure ModelWarmer mock - return models as not ready so server creates fresh mocks
+        mock_warmer = mock_warmer_cls.get_instance.return_value
+        mock_warmer.wait_for_ready.return_value = False
+        mock_models = MagicMock()
+        mock_models.is_ready = False
+        mock_models.vad_processor = None
+        mock_models.speaker_recognizer = None
+        mock_warmer.get_models.return_value = mock_models
+
+        # Configure NoiseReducer mock - pass through audio unchanged
+        mock_noise_reducer = mock_noise_reducer_cls.return_value
+        mock_noise_reducer.enabled = True
+        mock_noise_reducer.reduce_noise = MagicMock(side_effect=lambda audio: audio)
+
         # Configure AsyncMocks
         mock_capture.start_capture = AsyncMock()
         mock_capture.stop_capture = AsyncMock()
@@ -125,7 +142,7 @@ class TestFullPipelineIntegration:
         mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[interviewer_segment])
         
         # Configure STT to return a question
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value="What is Python?")
+        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="What is Python?"))
         
         # Configure speaker recognizer - NOT user (interviewer)
         mock_full_pipeline["recognizer"].verify_speaker.return_value = False
@@ -188,7 +205,7 @@ class TestFullPipelineIntegration:
         mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[user_segment])
         
         # Configure STT
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value="I have experience with Python.")
+        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="I have experience with Python."))
         
         # Configure speaker recognizer - IS user
         mock_full_pipeline["recognizer"].verify_speaker.return_value = True
@@ -241,7 +258,7 @@ class TestFullPipelineIntegration:
         mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[segment])
         
         # Configure STT
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value="Tell me about yourself.")
+        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="Tell me about yourself."))
         
         # NOT calibrated
         server.session_state.voice_calibrated = False
@@ -296,7 +313,7 @@ class TestFullPipelineIntegration:
         mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[segment])
         
         # Configure STT
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value="Question?")
+        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="Question?"))
         
         # NOT user
         mock_full_pipeline["recognizer"].verify_speaker.return_value = False
@@ -344,7 +361,7 @@ class TestLatencyTracking:
         # Configure components
         segment = SpeechSegment(b"audioquestion", 0.0, 1.0, 0.9)
         mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[segment])
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value="What is AI?")
+        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="What is AI?"))
         mock_full_pipeline["recognizer"].verify_speaker.return_value = False
         
         server.session_state.voice_calibrated = True
@@ -407,7 +424,7 @@ class TestPipelineErrorHandling:
         # First transcription fails, second succeeds
         mock_full_pipeline["stt"].transcribe = AsyncMock(side_effect=[
             Exception("STT API Error"),
-            "Second question?"
+            TranscriptionResult(text="Second question?")
         ])
         mock_full_pipeline["recognizer"].verify_speaker.return_value = False
         
@@ -443,7 +460,7 @@ class TestPipelineErrorHandling:
         
         segment = SpeechSegment(b"questionaudio", 0.0, 1.0, 0.9)
         mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[segment])
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value="What is RAG?")
+        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="What is RAG?"))
         mock_full_pipeline["recognizer"].verify_speaker.return_value = False
         
         # RAG fails
