@@ -10,7 +10,7 @@ import json
 import logging
 import base64
 from dataclasses import dataclass, field
-from typing import Any, Optional, Set
+from typing import Any, Optional, Set, cast
 import numpy as np
 
 import websockets
@@ -36,6 +36,7 @@ from llm.gemini_llm import GeminiLLM, GeminiLLMError
 from context.manager import ContextManager
 from rag.store import VectorStore
 from rag.engine import RAGEngine
+from warmup import ModelWarmer
 
 # Configure logging
 logging.basicConfig(
@@ -89,11 +90,10 @@ class SidecarServer:
         self.vector_store: Optional[VectorStore] = None
         self.rag_engine: Optional[RAGEngine] = None
         
-        try:
-            self.speaker_recognizer = SpeakerRecognizer()
-        except Exception as e:
-            logger.error(f"Failed to initialize SpeakerRecognizer: {e}")
-            self.speaker_recognizer = None
+        self.model_warmer = ModelWarmer.get_instance()
+        self.model_warmer.start_warming()
+        
+        self.speaker_recognizer = None 
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -373,6 +373,21 @@ class SidecarServer:
     ) -> None:
         """Handle CALIBRATE_VOICE message."""
         if not self.speaker_recognizer:
+            # Try to get from warmer
+            if self.model_warmer.wait_for_ready(timeout=2.0):
+                models = self.model_warmer.get_models()
+                if models.speaker_recognizer:
+                    self.speaker_recognizer = cast(SpeakerRecognizer, models.speaker_recognizer)
+            
+            # If still None, try synchronous load
+            if not self.speaker_recognizer:
+                try:
+                    logger.info("Loading SpeakerRecognizer synchronously for calibration")
+                    self.speaker_recognizer = SpeakerRecognizer()
+                except Exception as e:
+                    logger.error(f"Failed to load SpeakerRecognizer: {e}")
+
+        if not self.speaker_recognizer:
             error_msg = create_error_message(
                 "Speaker recognizer not initialized",
                 code="ERR_COMPONENT_NOT_READY"
@@ -510,7 +525,20 @@ class SidecarServer:
     async def _start_audio_processing(self, api_key: str) -> None:
         """Initialize and start audio processing components."""
         self.stt = GeminiSTT(api_key=api_key)
-        self.vad = VADProcessor()
+        
+        if not self.model_warmer.wait_for_ready(timeout=2.0):
+             logger.warning("Models not ready after timeout")
+        
+        models = self.model_warmer.get_models()
+        if models.is_ready and models.vad_processor and models.speaker_recognizer:
+             self.vad = cast(VADProcessor, models.vad_processor)
+             self.vad.reset()
+             self.speaker_recognizer = cast(SpeakerRecognizer, models.speaker_recognizer)
+        else:
+             logger.info("Initializing models synchronously")
+             self.vad = VADProcessor()
+             self.speaker_recognizer = SpeakerRecognizer()
+
         self.noise_reducer = NoiseReducer(enabled=True)
         self.audio_capture = AudioCapture()
         
