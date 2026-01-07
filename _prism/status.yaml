@@ -1,7 +1,7 @@
 # Prism Project Status
 phase: implementation
 last_updated: 2026-01-06
-current_work: STORY-015 Complete, Ready for STORY-016 (Session Controls)
+current_work: STORY-018 Complete, Ready for STORY-019 (Platform Installers)
 beads_available: true
 beads_initialized: false
 tracking_method: _prism/tasks.md
@@ -19,10 +19,10 @@ solution:
 
 implementation:
   status: in_progress
-  stories_complete: 15
+  stories_complete: 17
   stories_total: 20
-  current_story: STORY-016
-  last_completed: STORY-015
+  current_story: STORY-019
+  last_completed: STORY-018
 
 verification:
   status: pending
@@ -81,12 +81,23 @@ stories:
     name: Answer Display UI
     status: complete
     date: 2026-01-06
-    blocked_by: null
   STORY-014:
     name: Full Pipeline Integration
     status: complete
     date: 2026-01-06
   STORY-015:
     name: Screen Invisibility
+    status: complete
+    date: 2026-01-06
+  STORY-016:
+    name: Session Controls
+    status: complete
+    date: 2026-01-06
+  STORY-017:
+    name: Noise Reduction (Optional)
+    status: skipped
+    note: Optional feature, can be added later
+  STORY-018:
+    name: PyInstaller Bundling
     status: complete
     date: 2026-01-06

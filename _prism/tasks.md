@@ -169,12 +169,13 @@ Created: 2026-01-05
 
 ### Phase 6: Packaging + Distribution
 
-- [ ] **Story 6.1**: PyInstaller Bundling (ID: STORY-018)
+- [x] **Story 6.1**: PyInstaller Bundling (ID: STORY-018) ✅ COMPLETED 2026-01-06
   - Create PyInstaller spec file
   - Bundle Python sidecar into single executable
   - Configure Tauri to include sidecar in resources
   - Dependencies: All sidecar stories (STORY-002 through STORY-012)
   - Deliverable: Self-contained sidecar executable
+  - **Completed**: Created sidecar.spec with hidden imports for torch/speechbrain/chromadb/google-generativeai, build.py script for cross-platform builds, updated Tauri config with externalBin, implemented full sidecar.rs with process management (start/stop/is_running). 16 new bundling tests (13 pass, 3 skip until build runs), 14 Rust tests, 100 React tests all passing.
 
 - [ ] **Story 6.2**: Platform Installers (ID: STORY-019)
   - Configure Tauri bundler (MSI, DMG, AppImage)

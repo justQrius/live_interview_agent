@@ -26,6 +26,7 @@ pub fn run() {
       window::toggle_screen_invisibility,
       sidecar::start_sidecar,
       sidecar::stop_sidecar,
+      sidecar::is_sidecar_running,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
