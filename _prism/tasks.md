@@ -1,7 +1,7 @@
 # Live Interview Agent - Task Tracking
 
 **Created**: 2026-01-05
-**Status**: Implementation In Progress (Story 18/20 Complete)
+**Status**: Implementation In Progress (Story 19/20 Complete)
 **Architecture**: `_prism/architecture/architecture.md`
 
 ---
@@ -160,12 +160,13 @@ Created: 2026-01-05
   - Deliverable: Users can control session lifecycle
   - **Completed**: SessionControls with Start/Stop buttons, confirmation dialog, manual question textarea, transcription history in sessionStore and AnswerDisplay. 30 new React tests, all 234 tests passing.
 
-- [ ] **Story 5.3**: Noise Reduction (Optional) (ID: STORY-017)
+- [x] **Story 5.3**: Noise Reduction (Optional) (ID: STORY-017) ✅ COMPLETED 2026-01-06
   - Integrate `noisereduce` library
-  - Apply preprocessing before STT
+  - Apply preprocessing before STT (after VAD detection)
   - Test accuracy improvement
   - Dependencies: STORY-005
   - Deliverable: Improved STT accuracy in noisy conditions
+  - **Completed**: NoiseReducer class with configurable options (stationary/non-stationary, aggressiveness), integrated in server pipeline (VAD → NoiseReducer → STT), 42 tests passing (31 unit + 11 integration), <100ms latency, NoiseReducerError exception class for consistency, comprehensive documentation in sidecar/docs/noise_reduction.md
 
 ### Phase 6: Packaging + Distribution
 

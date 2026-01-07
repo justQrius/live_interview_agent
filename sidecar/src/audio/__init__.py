@@ -32,6 +32,14 @@ from audio.vad import (
     SpeechSegment,
 )
 
+from audio.noise_reduction import (
+    # Constants
+    DEFAULT_PROP_DECREASE,
+    # Classes
+    NoiseReducer,
+    NoiseReducerError,
+)
+
 __all__ = [
     # Audio Capture Constants
     "SAMPLE_RATE",
@@ -56,4 +64,9 @@ __all__ = [
     "VADProcessor",
     "VADModelError",
     "SpeechSegment",
+    # Noise Reduction Constants
+    "DEFAULT_PROP_DECREASE",
+    # Noise Reduction Classes
+    "NoiseReducer",
+    "NoiseReducerError",
 ]
