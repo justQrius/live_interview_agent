@@ -30,6 +30,7 @@ from protocol import (
 from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
+from audio.noise_reduction import NoiseReducer
 from stt.gemini_stt import GeminiSTT, GeminiSTTError
 from llm.gemini_llm import GeminiLLM, GeminiLLMError
 from context.manager import ContextManager
@@ -79,6 +80,7 @@ class SidecarServer:
         # Audio processing components
         self.stt: Optional[GeminiSTT] = None
         self.vad: Optional[VADProcessor] = None
+        self.noise_reducer: Optional[NoiseReducer] = None
         self.audio_capture: Optional[AudioCapture] = None
         self._audio_task: Optional[asyncio.Task] = None
         
@@ -531,6 +533,7 @@ class SidecarServer:
         """Initialize and start audio processing components."""
         self.stt = GeminiSTT(api_key=api_key)
         self.vad = VADProcessor()
+        self.noise_reducer = NoiseReducer(enabled=True)
         self.audio_capture = AudioCapture()
         
         await self.audio_capture.start_capture()
@@ -553,13 +556,14 @@ class SidecarServer:
             
         self.stt = None
         self.vad = None
+        self.noise_reducer = None
         logger.info("Audio processing stopped")
 
     async def _audio_loop(self) -> None:
         """
         Main audio processing loop.
         
-        Pipeline: Audio → VAD → STT → Diarization → RAG → LLM → UI
+        Pipeline: Audio → VAD → NoiseReducer → STT → Diarization → RAG → LLM → UI
         
         - User speech: transcribed and displayed (filtered from RAG+LLM)
         - Interviewer speech: transcribed, then triggers RAG retrieval and LLM generation
@@ -591,14 +595,20 @@ class SidecarServer:
             await self.broadcast(create_status_message(SessionStatus.IDLE))
 
     async def _process_speech_segment(self, segment) -> None:
-        """Process a speech segment: Speaker ID → STT → Broadcast → (RAG+LLM if Interviewer)."""
+        """Process a speech segment: NoiseReducer → Speaker ID → STT → Broadcast → (RAG+LLM if Interviewer)."""
         import time
         pipeline_start = time.time()
+        
+        audio_for_stt = segment.audio
+        if self.noise_reducer and self.noise_reducer.enabled:
+            clean_audio = self.noise_reducer.reduce_noise(segment.audio)
+            if isinstance(clean_audio, bytes):
+                audio_for_stt = clean_audio
         
         speaker = self._identify_speaker(segment.audio)
         
         try:
-            text = await self.stt.transcribe(segment.audio)
+            text = await self.stt.transcribe(audio_for_stt)
             if not text:
                 return
         except Exception as e:
