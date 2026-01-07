@@ -282,12 +282,13 @@ Created: 2026-01-05
   - Deliverable: OpenAI GPT-4o available as LLM option
   - **Completed**: Implemented `OpenAILLMProvider` using `openai` async client. Verified with unit tests.
 
-- [ ] **Story 2.10**: Anthropic LLM Provider (ID: STORY-030)
+- [x] **Story 2.10**: Anthropic LLM Provider (ID: STORY-030) ✅ COMPLETED 2026-01-07
   - Create `providers/llm/anthropic.py`
   - Integrate `anthropic` Python package
   - Implement Claude 3.5 Sonnet streaming
   - Dependencies: STORY-023
   - Deliverable: Anthropic Claude available as LLM option
+  - **Completed**: Implemented `AnthropicLLMProvider` using `anthropic` async client with streaming. Verified with unit tests.
 
 ### Phase 2.5: Browser VAD & UI
 
