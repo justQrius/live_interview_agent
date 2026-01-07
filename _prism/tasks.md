@@ -292,7 +292,7 @@ Created: 2026-01-05
 
 ### Phase 2.5: Browser VAD & UI
 
-- [ ] **Story 2.11**: Browser VAD Integration (ID: STORY-031)
+- [x] **Story 2.11**: Browser VAD Integration (ID: STORY-031) ✅ COMPLETED 2026-01-07
   - Add `@ricky0123/vad-react` and `onnxruntime-web` to package.json
   - Create `src/ui/hooks/useVADFilter.ts`
   - Update Tauri CSP for WASM
@@ -300,6 +300,7 @@ Created: 2026-01-05
   - Modify WebSocket to send speech-only segments
   - Dependencies: None
   - Deliverable: Browser filters silence, 60%+ WebSocket reduction
+  - **Completed**: Implemented `useVADFilter` hook, updated CSP, bundled assets. (WebSocket modification pending Story 033 integration).
 
 - [ ] **Story 2.12**: Provider Configuration UI (ID: STORY-032)
   - Create `src/ui/components/ProviderSettings.tsx`
