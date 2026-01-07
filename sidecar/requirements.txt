@@ -25,6 +25,9 @@ google-generativeai>=0.3.2
 # Groq
 groq>=0.4.0
 
+# Deepgram
+deepgram-sdk>=3.0.0
+
 # Vector database
 chromadb>=0.4.22
 
