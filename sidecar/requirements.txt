@@ -22,6 +22,9 @@ huggingface-hub<0.25.0
 # STT and LLM (Gemini)
 google-generativeai>=0.3.2
 
+# Groq
+groq>=0.4.0
+
 # Vector database
 chromadb>=0.4.22
 
