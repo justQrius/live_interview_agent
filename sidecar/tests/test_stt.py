@@ -17,9 +17,9 @@ def mock_genai():
 async def test_init(mock_genai):
     """Test initialization."""
     stt = GeminiSTT(api_key="test_key")
-    
+
     mock_genai.configure.assert_called_once_with(api_key="test_key")
-    mock_genai.GenerativeModel.assert_called_once_with("gemini-1.5-flash")
+    mock_genai.GenerativeModel.assert_called_once_with("gemini-3-flash-preview")
     assert stt.api_key == "test_key"
 
 @pytest.mark.asyncio

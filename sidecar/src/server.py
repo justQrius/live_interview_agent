@@ -31,7 +31,7 @@ from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
 from audio.noise_reduction import NoiseReducer
-from stt.gemini_stt import GeminiSTT, GeminiSTTError
+from providers.stt.gemini import GeminiSTTProvider, GeminiSTTProviderError
 from llm.gemini_llm import GeminiLLM, GeminiLLMError
 from context.manager import ContextManager
 from rag.store import VectorStore
@@ -78,7 +78,7 @@ class SidecarServer:
         self._server: Optional[Any] = None
         self._running = False
         
-        self.stt: Optional[GeminiSTT] = None
+        self.stt: Optional[GeminiSTTProvider] = None
         self.vad: Optional[VADProcessor] = None
         self.noise_reducer: Optional[NoiseReducer] = None
         self.audio_capture: Optional[AudioCapture] = None
@@ -524,7 +524,7 @@ class SidecarServer:
 
     async def _start_audio_processing(self, api_key: str) -> None:
         """Initialize and start audio processing components."""
-        self.stt = GeminiSTT(api_key=api_key)
+        self.stt = GeminiSTTProvider(api_key=api_key)
         
         if not self.model_warmer.wait_for_ready(timeout=2.0):
              logger.warning("Models not ready after timeout")
@@ -618,7 +618,8 @@ class SidecarServer:
                 logger.error("STT component is None during speech processing")
                 return
 
-            text = await self.stt.transcribe(audio_for_stt)
+            result = await self.stt.transcribe(audio_for_stt)
+            text = result.text
             if not text:
                 return
         except Exception as e:

@@ -41,7 +41,7 @@ class TestServerRagIntegration:
     async def server(self):
         # We need to mock Audio things to prevent server startup failure or errors
         with patch('server.SpeakerRecognizer'), \
-             patch('server.GeminiSTT'), \
+             patch('server.GeminiSTTProvider'), \
              patch('server.VADProcessor'), \
              patch('server.AudioCapture'):
             s = SidecarServer()

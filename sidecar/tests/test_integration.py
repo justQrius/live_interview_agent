@@ -28,14 +28,50 @@ class TestBidirectionalMessaging:
     async def server(self):
         """Start the server for testing."""
         from server import SidecarServer
-        from unittest.mock import patch, MagicMock
-        
-        # Patch SpeakerRecognizer to avoid speechbrain issues and model downloads
-        with patch("server.SpeakerRecognizer") as MockRecognizer:
-            # Setup mock behavior
-            mock_instance = MockRecognizer.return_value
-            mock_instance.create_embedding = MagicMock(return_value=[0.1, 0.2, 0.3])
-            
+        from unittest.mock import patch, MagicMock, AsyncMock
+
+        # Patch all components to avoid real model loading and API calls
+        with patch("server.SpeakerRecognizer") as MockRecognizer, \
+             patch("server.GeminiSTTProvider") as MockSTT, \
+             patch("server.VADProcessor") as MockVAD, \
+             patch("server.AudioCapture") as MockCapture, \
+             patch("server.NoiseReducer") as MockNoiseReducer, \
+             patch("server.ModelWarmer") as MockWarmer:
+
+            # Setup mock SpeakerRecognizer
+            mock_recognizer = MockRecognizer.return_value
+            mock_recognizer.create_embedding = MagicMock(return_value=[0.1, 0.2, 0.3])
+
+            # Setup mock ModelWarmer - return not ready so mocks are used
+            mock_warmer = MockWarmer.get_instance.return_value
+            mock_warmer.wait_for_ready.return_value = False
+            mock_models = MagicMock()
+            mock_models.is_ready = False
+            mock_models.vad_processor = None
+            mock_models.speaker_recognizer = None
+            mock_warmer.get_models.return_value = mock_models
+
+            # Setup mock STT
+            mock_stt = MockSTT.return_value
+            mock_stt.transcribe = AsyncMock()
+
+            # Setup mock AudioCapture
+            mock_capture = MockCapture.return_value
+            mock_capture.start_capture = AsyncMock()
+            mock_capture.stop_capture = AsyncMock()
+
+            # Mock audio stream that produces nothing (idle)
+            async def mock_stream():
+                while True:
+                    await asyncio.sleep(0.5)
+                    yield b""  # Empty chunk
+            mock_capture.get_audio_stream = mock_stream
+
+            # Setup mock NoiseReducer
+            mock_noise = MockNoiseReducer.return_value
+            mock_noise.enabled = True
+            mock_noise.reduce_noise = MagicMock(side_effect=lambda x: x)
+
             srv = SidecarServer(host="127.0.0.1", port=8766)  # Different port for tests
             server_task = asyncio.create_task(srv.start())
 

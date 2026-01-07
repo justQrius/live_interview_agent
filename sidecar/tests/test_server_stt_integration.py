@@ -16,20 +16,37 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src"
 from server import SidecarServer, SessionStatus, Speaker
 from protocol import Message, MessageType
 from audio.vad import SpeechSegment
+from providers.base import TranscriptionResult
 
 @pytest.fixture
 def mock_components():
-    with patch("server.GeminiSTT") as mock_stt_cls, \
+    with patch("server.GeminiSTTProvider") as mock_stt_cls, \
          patch("server.VADProcessor") as mock_vad_cls, \
          patch("server.AudioCapture") as mock_capture_cls, \
-         patch("server.SpeakerRecognizer") as mock_recognizer_cls:
-        
+         patch("server.SpeakerRecognizer") as mock_recognizer_cls, \
+         patch("server.ModelWarmer") as mock_warmer_cls, \
+         patch("server.NoiseReducer") as mock_noise_reducer_cls:
+
         # Setup mocks
         mock_stt = mock_stt_cls.return_value
         mock_vad = mock_vad_cls.return_value
         mock_capture = mock_capture_cls.return_value
         mock_recognizer = mock_recognizer_cls.return_value
-        
+
+        # Configure ModelWarmer mock
+        mock_warmer = mock_warmer_cls.get_instance.return_value
+        mock_warmer.wait_for_ready.return_value = False
+        mock_models = MagicMock()
+        mock_models.is_ready = False
+        mock_models.vad_processor = None
+        mock_models.speaker_recognizer = None
+        mock_warmer.get_models.return_value = mock_models
+
+        # Configure NoiseReducer mock - pass through audio unchanged
+        mock_noise_reducer = mock_noise_reducer_cls.return_value
+        mock_noise_reducer.enabled = True
+        mock_noise_reducer.reduce_noise = MagicMock(side_effect=lambda audio: audio)
+
         # Configure AsyncMocks
         mock_capture.start_capture = AsyncMock()
         mock_capture.stop_capture = AsyncMock()
@@ -73,8 +90,8 @@ async def test_audio_loop_integration(mock_components):
         []          # Second chunk returns nothing
     ])
     
-    # Configure STT to return text
-    mock_components["stt"].transcribe = AsyncMock(return_value="Hello there")
+    # Configure STT to return TranscriptionResult
+    mock_components["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="Hello there"))
     
     # Start session (which starts audio loop)
     mock_socket = AsyncMock()
@@ -125,7 +142,7 @@ async def test_speaker_labeling(mock_components):
     mock_components["vad"].process_chunk = AsyncMock(return_value=[segment])
     
     # Configure STT
-    mock_components["stt"].transcribe = AsyncMock(return_value="Test")
+    mock_components["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="Test"))
     
     # Configure Speaker Recognizer - Match User
     mock_components["recognizer"].verify_speaker.return_value = True
