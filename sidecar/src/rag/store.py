@@ -1,4 +1,5 @@
 import chromadb
+from chromadb.config import Settings
 import pathlib
 import uuid
 import logging
@@ -26,8 +27,14 @@ class VectorStore:
         self.persist_path.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Initializing ChromaDB at {self.persist_path}")
-        
-        self.client = chromadb.PersistentClient(path=str(self.persist_path))
+
+        # Disable telemetry to prevent PostHog timeout blocking
+        settings = Settings(
+            persist_directory=str(self.persist_path),
+            anonymized_telemetry=False,
+            allow_reset=True
+        )
+        self.client = chromadb.PersistentClient(path=str(self.persist_path), settings=settings)
         
         self.embedding_function = GeminiEmbeddingFunction(api_key=api_key)
         

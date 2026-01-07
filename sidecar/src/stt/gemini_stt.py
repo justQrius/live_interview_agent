@@ -33,13 +33,13 @@ class GeminiSTT:
         text = await stt.transcribe(audio_bytes)
     """
 
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "gemini-3-flash-preview"):
         """
         Initialize Gemini STT client.
 
         Args:
             api_key: Google AI API key
-            model_name: Model to use (default: gemini-1.5-flash)
+            model_name: Model to use (default: gemini-3-flash-preview)
         """
         if not api_key:
             raise ValueError("API key is required")

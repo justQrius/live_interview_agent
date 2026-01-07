@@ -234,7 +234,17 @@ See CLAUDE.md for detailed conventions.
    mkdir -p _prism/planning
    mkdir -p _prism/architecture
    mkdir -p _prism/stories
+   mkdir -p _prism/learnings/skills
+   mkdir -p _prism/learnings/sessions
    ```
+
+2. Setup Learning Infrastructure:
+   ```bash
+   # Copy learning template
+   cp .claude/plugins/prism/templates/learnings-template.md _prism/learnings/project.md
+   ```
+   
+   If template not found locally, create empty structured file.
 
 2. Create initial status file:
    ```yaml
@@ -270,6 +280,158 @@ See CLAUDE.md for detailed conventions.
      npm install -g @beads/bd
      ```
    - Inform user: "Beads not installed. Using manual task tracking in _prism/tasks.md. For full tracking, install beads."
+
+---
+
+## Phase 4.3: SDLC Constitution Setup
+
+**Goal**: Ship the SDLC Best Practices document as the project's development constitution
+
+**Actions**:
+1. Create docs directory if not exists:
+   ```bash
+   mkdir -p docs
+   ```
+
+2. Copy SDLC_BEST_PRACTICES.md from plugin:
+   ```bash
+   cp .claude/plugins/prism/docs/SDLC_BEST_PRACTICES.md docs/
+   ```
+   
+   Or if plugin path not found, create from template content embedded in this command.
+
+3. Add reference to CLAUDE.md:
+   - If CLAUDE.md exists, add this line to references section:
+     ```markdown
+     **SDLC Constitution**: See [docs/SDLC_BEST_PRACTICES.md](docs/SDLC_BEST_PRACTICES.md) for development standards
+     ```
+
+4. Report: "✓ SDLC Best Practices constitution installed in docs/"
+
+---
+
+## Phase 4.4: Project Rules Setup (Claude Code)
+
+**Goal**: Install phase-specific rules for automatic context loading
+
+**Actions**:
+1. Create .claude/rules directory:
+   ```bash
+   mkdir -p .claude/rules
+   ```
+
+2. Copy phase rules from plugin templates:
+   ```bash
+   cp .claude/plugins/prism/templates/rules/*.md .claude/rules/
+   ```
+   
+   This copies:
+   - `planning.md` - Rules for _prism/planning/ files
+   - `architecture.md` - Rules for _prism/architecture/ files
+   - `implementation.md` - Rules for src/ code files
+   - `verification.md` - Rules for tests/ files
+
+3. Verify rules have correct frontmatter with `paths:` globs
+
+4. Report status:
+   - "✓ Project rules installed in .claude/rules/ (4 files)"
+   - "These rules auto-load based on file paths being edited"
+
+**Note for OpenCode users**: `.claude/rules/` is Claude Code-specific. OpenCode users should reference rules manually or use the jit-rules skill.
+
+---
+
+
+## Phase 4.5: Hook Setup (SDLC Enforcement)
+
+**Goal**: Automatically configure phase gate hooks for both Claude Code and Oh-My-OpenCode
+
+**Actions**:
+1. **Check for .claude directory**:
+   ```bash
+   mkdir -p .claude
+   ```
+
+2. **Create or merge settings.json with hooks**:
+   
+   If `.claude/settings.json` exists:
+   - Read existing content
+   - Merge Prism hooks into existing hooks section
+   - Preserve all other settings
+   
+   If `.claude/settings.json` does not exist:
+   - Create new settings.json with Prism hooks
+   
+   **Hook Configuration**:
+   ```json
+   {
+     "hooks": {
+       "UserPromptSubmit": [
+         {
+           "matcher": "*",
+           "hooks": [
+             {
+               "type": "command",
+               "command": "bash .claude/plugins/prism/hooks/scripts/prism-gate-hook.sh",
+               "timeout": 15
+             }
+           ]
+         }
+       ],
+       "Stop": [
+         {
+           "matcher": "*",
+           "hooks": [
+             {
+               "type": "prompt",
+               "prompt": "Verify task completion. Check: 1) Acceptance criteria met? 2) Tests run? 3) Session notes written? Return 'approve' if complete.",
+               "timeout": 30
+             }
+           ]
+         }
+       ],
+       "PreCompact": [
+         {
+           "matcher": "*",
+           "hooks": [
+             {
+               "type": "prompt",
+               "prompt": "Before compaction: 1) Export beads if available 2) Write session notes to _prism/session-notes.md. Return 'approve' with summary.",
+               "timeout": 30
+             }
+           ]
+         }
+       ],
+       "Stop": [
+         {
+           "matcher": "*",
+           "hooks": [
+             {
+               "type": "command",
+               "command": "bash .claude/plugins/prism/hooks/scripts/prism-reflect-hook.sh"
+             }
+           ]
+         }
+       ]
+     }
+   }
+   ```
+     }
+   }
+   ```
+
+3. **Verify hook scripts are accessible**:
+   - Check if plugin directory exists: `.claude/plugins/prism/`
+   - If not, inform user to install plugin first
+
+4. **Report hook status**:
+   - If hooks were added: "✓ Phase gate hooks configured for automatic enforcement"
+   - If hooks already existed: "✓ Hooks already configured"
+   - If plugin missing: "⚠ Run plugin installation first, then re-run /prism-init"
+
+**Compatibility**:
+- **Claude Code**: Uses hooks.json in plugin directory
+- **Oh-My-OpenCode**: Reads from .claude/settings.json automatically via `createClaudeCodeHooksHook`
 
 ---
 
@@ -393,5 +555,10 @@ bd init
 - [ ] _prism/ directory created
 - [ ] _prism/status.yaml initialized
 - [ ] Beads checked (or fallback created)
+- [ ] **docs/SDLC_BEST_PRACTICES.md** created (Constitution)
+- [ ] **.claude/rules/** contains 4 phase rules (Claude Code only)
+- [ ] **Hooks configured in .claude/settings.json** (Phase gate enforcement)
 - [ ] MCP recommendations presented
 - [ ] User informed of next steps
+
+

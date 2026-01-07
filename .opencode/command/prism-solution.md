@@ -70,24 +70,38 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 **Goal**: Understand existing patterns and integration points
 
 **Actions**:
-1. **Use 2-3 explorer subagents in parallel**, each with a different focus:
+1. **Spawn 2-3 isolated explorer subagents in parallel using Task tool**:
 
-   **Use the explorer subagent** to find similar features:
-   - Analyze the existing codebase to find features similar to [PRD feature]
-   - Trace entry points, execution flow, patterns, and conventions
-   - Return: entry points with file:line references, execution flow summary, key patterns, 5-10 essential files
+   ```
+   # Task 1: Similar Features (spawn immediately)
+   Use Task tool:
+   - Agent: explorer
+   - Prompt: "Find features similar to [PRD feature] in the codebase
+     Trace entry points, execution flow, patterns, and conventions
+     Return: entry points with file:line references, execution flow summary, 
+     key patterns, 5-10 essential files"
+   
+   # Task 2: Architecture Mapping (spawn immediately, don't wait for Task 1)
+   Use Task tool:
+   - Agent: explorer
+   - Prompt: "Map the architecture and abstractions for [relevant area from PRD]
+     Analyze abstraction layers, design patterns, interfaces, cross-cutting concerns
+     Return: architecture layer diagram, key components, integration points, 
+     5-10 essential files"
+   
+   # Task 3: Data Model (spawn immediately if applicable)
+   Use Task tool:
+   - Agent: explorer
+   - Prompt: "Analyze data model and storage patterns for [relevant area]
+     Investigate data structures, schemas, storage mechanisms, data flow, validation
+     Return: data model summary, storage patterns, validation approaches, 
+     5-10 essential files"
+   ```
+   
+   **Why parallel Task tools**: Each explorer runs in isolated context. Prevents 
+   exploration output from polluting main session. All 3 run simultaneously.
 
-   **Use another explorer subagent** to map architecture:
-   - Map the architecture and abstractions for [relevant area from PRD]
-   - Analyze abstraction layers, design patterns, interfaces, cross-cutting concerns
-   - Return: architecture layer diagram, key components, integration points, 5-10 essential files
-
-   **Use a third explorer subagent** to analyze data model (if applicable):
-   - Analyze data model and storage patterns for [relevant area]
-   - Investigate data structures, schemas, storage mechanisms, data flow, validation
-   - Return: data model summary, storage patterns, validation approaches, 5-10 essential files
-
-2. **Wait for all explorer subagents to complete**
+2. **Collect all explorer subagent results** when Tasks complete
 
 3. **Read all key files** identified by the subagents (typically 15-30 files total)
 
@@ -162,9 +176,9 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 
 ---
 
-## Phase 6: Update CLAUDE.md
+## Phase 6: Update CLAUDE.md and AGENTS.md
 
-**Goal**: Reflect architecture decisions in project CLAUDE.md
+**Goal**: Reflect architecture decisions in project documentation
 
 **Actions**:
 1. Read current CLAUDE.md (if exists)
@@ -179,6 +193,31 @@ See `templates/beads-check.md` for detailed fallback command mapping.
    ```
 4. Preserve existing user content
 
+5. **Update AGENTS.md** with discovered commands and conventions:
+   ```markdown
+   ## Setup Commands
+   
+   - Install dependencies: `[discovered install command]`
+   - Run tests: `[discovered test command]`
+   - Build: `[discovered build command]`
+   - Dev server: `[discovered dev command]`
+   
+   ## Code Style
+   
+   - [Key conventions from architecture]
+   - Follow conventions in CLAUDE.md
+   ```
+
+---
+
+## Phase 6.5: Capture Learnings
+
+Run `/prism-reflect` to capture architecture and design insights:
+- Tech stack choices and rationale?
+- Unexpected constraints discovered?
+- Design patterns selected for this project?
+- "Tenet" workflow insights?
+
 ---
 
 ## Phase 7: Summary
@@ -190,6 +229,7 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 2. Summarize:
    - Architecture location: `_prism/architecture/architecture.md`
    - CLAUDE.md updated with tech decisions
+   - AGENTS.md updated with commands
    - Stories created in beads
    - Ready for `/prism-implement` command
 3. Write session notes
@@ -202,7 +242,9 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 - [ ] Architecture document complete
 - [ ] User explicitly approved architecture
 - [ ] CLAUDE.md updated with tech stack and conventions
+- [ ] **AGENTS.md updated with commands**
 - [ ] Stories created with dependencies
 - [ ] Session notes written
 
 **Next Command**: `/prism-implement [story-id]` to start implementation
+

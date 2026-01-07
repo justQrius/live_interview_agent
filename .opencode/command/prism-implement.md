@@ -87,20 +87,32 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 
 **Goal**: Implement each acceptance criterion with tests first
 
-**Option A: Use developer subagent for entire story** (recommended for complex stories):
+**Option A: Use isolated developer subagent via Task tool** (recommended for complex stories):
 
-**Use the developer subagent** to implement story [story-id]: [story title]
+```
+Use Task tool to spawn isolated developer subagent:
+- Agent: developer
+- Prompt: "Implement story [story-id]: [story title]
 
-Provide the developer subagent with:
-- Acceptance Criteria: [AC-1, AC-2, AC-3 from story]
-- Architecture context: [relevant section from _prism/architecture/architecture.md]
-- Project conventions: Follow CLAUDE.md guidelines
+  Acceptance Criteria:
+  - AC-1: [criterion]
+  - AC-2: [criterion]
+  - AC-3: [criterion]
+  
+  Context:
+  - Architecture: [relevant section from _prism/architecture/architecture.md]
+  - Conventions: Follow CLAUDE.md guidelines
+  
+  Tasks:
+  - For EACH acceptance criterion, follow TDD: write failing test → implement → verify → refactor
+  - Run full test suite after ALL criteria are complete
+  - Update beads: bd update [story-id] --notes 'COMPLETED: [summary]'
+  
+  Return: implementation summary with files modified and tests added"
+```
 
-Tell the developer subagent to:
-- For EACH acceptance criterion, follow TDD: write failing test → implement → verify → refactor
-- Run full test suite after ALL criteria are complete
-- Update beads: `bd update [story-id] --notes "COMPLETED: [summary]"`
-- Return implementation summary with files modified and tests added
+**Why Task tool**: Developer runs in isolated context. Implementation details 
+don't pollute main orchestration session. Complex TDD loops contained.
 
 **Option B: Manual TDD loop** (for simpler stories or when you want more control):
 
@@ -149,15 +161,30 @@ bd update <story-id> --notes "COMPLETED: AC-1. IN PROGRESS: AC-2"
 **Goal**: Get thorough code review before completing
 
 **Actions**:
-1. **Use the reviewer subagent** to review the code changes for story [story-id]: [story title]
+1. **Spawn isolated reviewer subagent using Task tool**:
    
-   Provide the reviewer subagent with:
-   - Files modified: [file1.ts, file2.ts, test files]
+   ```
+   Use Task tool:
+   - Agent: reviewer
+   - Prompt: "Review code changes for story [story-id]: [story title]
+     
+     Files modified: [file1.ts, file2.ts, test files]
+     
+     Review for:
+     - Code quality, bugs, security
+     - Conventions compliance (CLAUDE.md)
+     - Test coverage
+     
+     Use confidence scoring (0-100), only report issues >= 80
+     Return: findings organized by severity (CRITICAL: 90-100, IMPORTANT: 80-89)"
+   ```
    
-   Tell the reviewer subagent to:
-   - Review for code quality, bugs, security, conventions compliance, and test coverage
-   - Use confidence scoring (0-100), only report issues with confidence >= 80
-   - Return findings organized by severity (CRITICAL: 90-100, IMPORTANT: 80-89)
+   **Why Task tool**: Reviewer runs in isolated context. Review findings 
+   consolidated cleanly without polluting main session.
+
+2. **Collect reviewer subagent results** when Task completes
+
+3. Address feedback:
    - For each issue include: file:line, description, suggested fix
 
 2. **Wait for reviewer agent to complete**
@@ -169,6 +196,16 @@ bd update <story-id> --notes "COMPLETED: AC-1. IN PROGRESS: AC-2"
 4. Re-run tests after fixes
 
 5. If significant changes were made, consider a second review pass
+
+---
+
+## Phase 5.5: Capture Learnings
+
+Run `/prism-reflect` to capture implementation insights:
+- Code patterns or idioms that worked well?
+- API gotchas or hidden behaviors?
+- Debugging lessons?
+- Testing strategies that were effective?
 
 ---
 

@@ -65,14 +65,47 @@
 
 ---
 
-## Non-Functional Requirements
+## Non-Functional Requirements (NFRs)
 
-| ID | Category | Requirement | Metric |
-|----|----------|-------------|--------|
-| NFR-1 | Performance | [Description] | [Target, e.g., <200ms p95] |
-| NFR-2 | Security | [Description] | [Standard, e.g., OWASP Top 10] |
-| NFR-3 | Scalability | [Description] | [Target, e.g., 10k concurrent users] |
-| NFR-4 | Accessibility | [Description] | [Standard, e.g., WCAG 2.1 AA] |
+> Per SDLC Best Practices, always specify these at minimum.
+
+| Category | Requirement | Target | Notes |
+|----------|-------------|--------|-------|
+| **Performance** | Response latency | p95 < ___ms, p99 < ___ms | Critical paths |
+| **Performance** | Throughput | ___ req/sec | Under load |
+| **Reliability** | Availability SLO | ___% uptime | Error budget |
+| **Reliability** | MTTR target | < ___ minutes | Incident recovery |
+| **Scalability** | Concurrent users | ___ users | Horizontal scaling? |
+| **Security** | AuthN/AuthZ | [Standard] | OWASP Top 10 |
+| **Security** | Data encryption | [At rest/In transit] | Compliance |
+| **Observability** | Logging level | [Structured/Trace IDs] | OpenTelemetry? |
+| **Observability** | Metrics | RED metrics | Rate/Error/Duration |
+| **Cost** | Estimated cost | $___/month | Per environment |
+
+---
+
+## Risk Assessment Matrix
+
+> Every HIGH-risk item must have an explicit mitigation and owner.
+
+| Component/Integration | Risk Level | Reason | Mitigation Strategy | Owner |
+|-----------------------|------------|--------|---------------------|-------|
+| [External API X] | HIGH | Unknown reliability | Spike + circuit breaker | [Name] |
+| [Async + DB] | HIGH | Event loop conflicts | Spike + executor isolation | [Name] |
+| [Standard CRUD] | LOW | Known pattern | Framework patterns | [Name] |
+
+---
+
+## Spike Plan
+
+> HIGH-risk integrations require technical validation before architecture.
+
+| Integration | Risk | Spike Required | Time Budget | Owner | Status |
+|-------------|------|----------------|-------------|-------|--------|
+| [Tech A + Tech B] | HIGH | Yes | 2 hours | [Name] | ☐ Pending |
+| [External Service] | MEDIUM | Optional | 1 hour | [Name] | ☐ Pending |
+
+**Spike Template:** See `templates/spike-template.md`
 
 ---
 
@@ -111,11 +144,16 @@
 
 ---
 
-## Risks & Mitigations
+## AI Usage Rules
 
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| [Risk description] | High/Med/Low | High/Med/Low | [How to address] |
+> How AI agents may assist with this feature.
+
+| Aspect | Policy |
+|--------|--------|
+| **Code generation** | AI may generate boilerplate; humans own correctness |
+| **Test generation** | AI may draft tests; humans verify assertions |
+| **Documentation** | AI may draft; humans review accuracy |
+| **Validation requirement** | All AI output must be tested, not just reviewed |
 
 ---
 
@@ -124,6 +162,17 @@
 - [ ] [Question 1 that needs answering]
 - [ ] [Question 2 that needs answering]
 - [ ] [Question 3 that needs answering]
+
+---
+
+## Gate Checklist (Planning → Solutioning)
+
+Before proceeding to architecture:
+- [ ] PRD reviewed and approved
+- [ ] NFRs section complete
+- [ ] Risk Matrix filled
+- [ ] HIGH-risk items have spike plans
+- [ ] Open questions resolved or deferred
 
 ---
 
@@ -138,4 +187,4 @@
 ### References
 
 - [Link to related documents]
-- [External research/sources]
+- [docs/SDLC_BEST_PRACTICES.md](../docs/SDLC_BEST_PRACTICES.md) - SDLC constitution

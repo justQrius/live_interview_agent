@@ -75,20 +75,29 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 **Goal**: Ensure comprehensive test coverage and passing tests
 
 **Actions**:
-1. **Use the tester subagent** to verify test coverage and quality for the completed implementation.
+1. **Spawn isolated tester subagent using Task tool**:
    
-   Provide the tester subagent with:
-   - Epic: [epic-id] - [epic title]
-   - Scope: All files modified in this implementation cycle
+   ```
+   Use the Task tool to spawn an isolated subagent session:
+   - Agent: tester
+   - Prompt: "Verify test coverage and quality for [epic-id]: [epic title]
+     
+     Scope: All files modified in this implementation cycle
+     
+     Tasks:
+     - Verify all acceptance criteria have corresponding tests
+     - Check edge cases (null inputs, boundary values, error conditions)
+     - Verify integration points are tested
+     - Run the full test suite and report coverage metrics
+     
+     Return: test results summary, coverage percentage, acceptance criteria 
+     test status, recommended additional tests"
+   ```
    
-   Tell the tester subagent to:
-   - Verify all acceptance criteria have corresponding tests
-   - Check edge cases (null inputs, boundary values, error conditions)
-   - Verify integration points are tested
-   - Run the full test suite and report coverage metrics
-   - Return: test results summary, coverage percentage, acceptance criteria test status, recommended additional tests
+   **Why Task tool**: Tester runs in isolated context, preventing test output 
+   from polluting main orchestration session.
 
-2. **Wait for tester subagent to complete**
+2. **Collect tester subagent results** when Task completes
 
 3. Review test results:
    - If all tests pass: proceed to Phase 3
@@ -102,28 +111,42 @@ See `templates/beads-check.md` for detailed fallback command mapping.
 
 **Goal**: Multi-aspect code review for production readiness
 
-**IMPORTANT**: Launch all 3 agents SIMULTANEOUSLY using parallel Task tool calls.
+**IMPORTANT**: Launch all 3 subagents SIMULTANEOUSLY using parallel Task tool calls.
 This is an elite orchestration pattern that reduces review time by 3x.
 
 **Actions**:
-1. **Use 3 reviewer subagents in parallel** - invoke ALL THREE simultaneously:
+1. **Spawn 3 isolated reviewer subagents in parallel using Task tool** - invoke ALL THREE simultaneously:
 
-   **Use the reviewer subagent** for quality and simplicity:
-   - Focus on: DRY, elegance, readability, maintainability
-   - Use confidence scoring (0-100), only report issues >= 80
-   - Return findings with file:line references and suggested improvements
+   ```
+   # Task 1: Quality Review (spawn immediately)
+   Use Task tool:
+   - Agent: reviewer
+   - Prompt: "Quality and simplicity review for [files]
+     Focus on: DRY, elegance, readability, maintainability
+     Use confidence scoring (0-100), only report issues >= 80
+     Return: findings with file:line references and suggested improvements"
+   
+   # Task 2: Security Review (spawn immediately, don't wait for Task 1)
+   Use Task tool:
+   - Agent: reviewer  
+   - Prompt: "Bugs and security review for [files]
+     Focus on: logic errors, null handling, error handling, security vulnerabilities
+     Use confidence scoring (0-100), only report issues >= 80
+     Return: findings with file:line references, severity, and fixes"
+   
+   # Task 3: Conventions Review (spawn immediately, don't wait for Task 1 or 2)
+   Use Task tool:
+   - Agent: reviewer
+   - Prompt: "Conventions and integration review for [files]  
+     Focus on: CLAUDE.md compliance, pattern consistency, clean integration, API contracts
+     Use confidence scoring (0-100), only report issues >= 80
+     Return: findings with file:line references and convention references"
+   ```
+   
+   **Why parallel Task tools**: Each reviewer runs in isolated context. Main session 
+   stays clean while all 3 reviews execute simultaneously.
 
-   **Use another reviewer subagent** for bugs and security:
-   - Focus on: logic errors, null handling, error handling, security vulnerabilities
-   - Use confidence scoring (0-100), only report issues >= 80
-   - Return findings with file:line references, severity, and fixes
-
-   **Use a third reviewer subagent** for conventions and integration:
-   - Focus on: CLAUDE.md compliance, pattern consistency, clean integration, API contracts
-   - Use confidence scoring (0-100), only report issues >= 80
-   - Return findings with file:line references and convention references
-
-2. **Wait for all 3 reviewer subagents to complete** (they run in parallel)
+2. **Collect all 3 subagent results** when Tasks complete (they run in parallel)
 
 3. Consolidate findings from all reviewers
 
@@ -135,9 +158,9 @@ This is an elite orchestration pattern that reduces review time by 3x.
 
 ---
 
-## Phase 4: Documentation & CLAUDE.md Update
+## Phase 4: Documentation & CLAUDE.md/AGENTS.md Update
 
-**Goal**: Ensure documentation is complete and CLAUDE.md reflects current state
+**Goal**: Ensure documentation is complete and both CLAUDE.md and AGENTS.md reflect current state
 
 **Actions**:
 1. **Use the documenter subagent** to update documentation for [epic-id]: [epic title]
@@ -162,9 +185,24 @@ This is an elite orchestration pattern that reduces review time by 3x.
    - Add new patterns to Conventions section
    - Add anti-patterns discovered during review to "Don't Do This" section
 
-4. Verify all documentation is accurate
+4. **Update AGENTS.md** with verified commands:
+   ```markdown
+   ## Setup Commands
+   
+   - Install dependencies: `[verified install command]`
+   - Run tests: `[verified test command]`
+   - Build: `[verified build command]`
+   - Dev server: `[verified dev command]`
+   
+   ## Testing Instructions
+   
+   - [Updated testing commands verified during verification]
+   - Coverage target: [verified percentage]
+   ```
 
-5. Test any code examples in documentation
+5. Verify all documentation is accurate
+
+6. Test any code examples in documentation
 
 ---
 
@@ -219,6 +257,17 @@ This prevents "documentation drift" where the original design no longer matches 
 
 ---
 
+---
+
+## Phase 5.5: Capture Learnings
+
+Run `/prism-reflect` to capture verification insights:
+- Testing patterns that caught bugs?
+- Documentation gaps found?
+- Validation techniques to reuse?
+
+---
+
 ## Phase 6: Completion
 
 **Goal**: Close out all tracking and document for future
@@ -248,6 +297,8 @@ This prevents "documentation drift" where the original design no longer matches 
 - [ ] All tests passing
 - [ ] All reviews completed
 - [ ] Documentation updated
+- [ ] **CLAUDE.md updated with new patterns/commands**
+- [ ] **AGENTS.md updated with verified commands**
 - [ ] User explicitly signed off
 - [ ] Beads issues closed
 - [ ] Beads synced to git
@@ -255,3 +306,4 @@ This prevents "documentation drift" where the original design no longer matches 
 **SDLC Complete** 🎉
 
 Ready to start new feature with `/prism-plan`
+

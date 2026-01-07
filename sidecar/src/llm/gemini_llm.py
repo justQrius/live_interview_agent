@@ -15,13 +15,13 @@ class GeminiLLM:
     LLM wrapper for Google's Gemini model.
     """
 
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "gemini-3-flash-preview"):
         """
         Initialize the Gemini LLM.
 
         Args:
             api_key: Google API key.
-            model_name: Model to use (default: gemini-1.5-flash).
+            model_name: Model to use (default: gemini-3-flash-preview).
         """
         if not api_key:
             raise ValueError("API key is required")

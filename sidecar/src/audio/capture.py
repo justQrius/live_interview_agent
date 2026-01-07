@@ -360,19 +360,41 @@ class AudioCapture:
             except OSError:
                 raise AudioCaptureError("WASAPI audio API not available")
 
-            # Get default loopback device
-            default_speakers = None
+            # Get default output device info to find its name
+            default_output_device = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+            default_output_name = default_output_device["name"]
+            
+            logger.info(f"Default output device: {default_output_name}")
+
+            # Find the corresponding loopback device
+            target_loopback_device = None
+            
             for i in range(p.get_device_count()):
                 device_info = p.get_device_info_by_index(i)
+                if device_info["hostApi"] != wasapi_info["index"]:
+                    continue
+                    
                 if device_info.get("isLoopbackDevice", False):
-                    if default_speakers is None:
-                        default_speakers = device_info
-                    # Prefer default speakers
-                    if device_info.get("index") == wasapi_info.get("defaultOutputDevice"):
-                        default_speakers = device_info
+                    # Check if this loopback device corresponds to our default output
+                    # Loopback devices usually have "[Loopback]" appended to the name
+                    # e.g. "Speakers (Realtek) [Loopback]" matches "Speakers (Realtek)"
+                    dev_name = device_info["name"]
+                    
+                    # Exact match (some drivers) or name inclusion
+                    if default_output_name in dev_name:
+                        target_loopback_device = device_info
+                        break
+            
+            # Fallback: Use the first available loopback device if no name match
+            if target_loopback_device is None:
+                logger.warning("Could not match loopback to default output, trying first available loopback")
+                for i in range(p.get_device_count()):
+                    device_info = p.get_device_info_by_index(i)
+                    if device_info["hostApi"] == wasapi_info["index"] and device_info.get("isLoopbackDevice", False):
+                        target_loopback_device = device_info
                         break
 
-            if default_speakers is None:
+            if target_loopback_device is None:
                 raise AudioCaptureError("No loopback audio device found")
 
             # Create audio callback
@@ -382,12 +404,12 @@ class AudioCapture:
                     samples = np.frombuffer(in_data, dtype=np.float32)
 
                     # Handle multi-channel: average channels to mono
-                    channels = int(default_speakers["maxInputChannels"])
+                    channels = int(target_loopback_device["maxInputChannels"])
                     if channels > 1:
                         samples = samples.reshape(-1, channels).mean(axis=1)
 
                     # Resample to 16kHz if needed
-                    device_rate = int(default_speakers["defaultSampleRate"])
+                    device_rate = int(target_loopback_device["defaultSampleRate"])
                     if device_rate != SAMPLE_RATE:
                         samples = self._resample(samples, device_rate, SAMPLE_RATE)
 
@@ -400,16 +422,16 @@ class AudioCapture:
             # Open stream
             self._stream = p.open(
                 format=pyaudio.paFloat32,
-                channels=int(default_speakers["maxInputChannels"]),
-                rate=int(default_speakers["defaultSampleRate"]),
+                channels=int(target_loopback_device["maxInputChannels"]),
+                rate=int(target_loopback_device["defaultSampleRate"]),
                 input=True,
-                input_device_index=int(default_speakers["index"]),
+                input_device_index=int(target_loopback_device["index"]),
                 stream_callback=audio_callback,
                 frames_per_buffer=1024
             )
 
             self._stream.start_stream()
-            logger.info(f"WASAPI loopback started: {default_speakers.get('name', 'Unknown')}")
+            logger.info(f"WASAPI loopback started: {target_loopback_device.get('name', 'Unknown')}")
 
         except AudioCaptureError:
             raise
