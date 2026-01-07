@@ -257,12 +257,13 @@ Created: 2026-01-05
   - Deliverable: Groq STT available as option
   - **Completed**: Implemented GroqSTTProvider with asyncio.to_thread for non-blocking API calls. Integrated groq package. Verified with unit tests mocking the API.
 
-- [ ] **Story 2.7**: Deepgram STT Provider (ID: STORY-027)
+- [x] **Story 2.7**: Deepgram STT Provider (ID: STORY-027) ✅ COMPLETED 2026-01-07
   - Create `providers/stt/deepgram.py`
   - Integrate `deepgram-sdk` Python package
   - Implement Nova-2 transcription
   - Dependencies: STORY-023
   - Deliverable: Deepgram STT available as option
+  - **Completed**: Implemented `DeepgramSTTProvider` with `deepgram-sdk`. Verified via unit tests.
 
 - [ ] **Story 2.8**: OpenAI Whisper STT Provider (ID: STORY-028)
   - Create `providers/stt/openai.py`
