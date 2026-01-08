@@ -30,9 +30,23 @@ fn get_entry(key_name: &str) -> Result<Entry, KeyringError> {
 /// * `Err(KeyringError)` if storing fails
 pub fn store_api_key(key_name: &str, key: &str) -> Result<(), KeyringError> {
     let entry = get_entry(key_name)?;
-    entry
-        .set_password(key)
-        .map_err(|e| KeyringError::StoreError(e.to_string()))
+    match entry.set_password(key) {
+        Ok(()) => {
+            match entry.get_password() {
+                Ok(_) => Ok(()),
+                Err(_) => {
+                    eprintln!("[Keyring] OS keyring not persisting, using fallback storage");
+                    crate::utils::storage_fallback::store_key(key_name, key)
+                        .map_err(|e| KeyringError::StoreError(e))
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[Keyring] OS keyring failed, using fallback storage: {}", e);
+            crate::utils::storage_fallback::store_key(key_name, key)
+                .map_err(|e| KeyringError::StoreError(e))
+        }
+    }
 }
 
 /// Retrieve an API key from the OS keychain.
@@ -48,8 +62,10 @@ pub fn retrieve_api_key(key_name: &str) -> Result<String, KeyringError> {
     let entry = get_entry(key_name)?;
     match entry.get_password() {
         Ok(password) => Ok(password),
-        Err(keyring::Error::NoEntry) => Err(KeyringError::NotFound),
-        Err(e) => Err(KeyringError::AccessError(e.to_string())),
+        Err(keyring::Error::NoEntry) | Err(_) => {
+            crate::utils::storage_fallback::retrieve_key(key_name)
+                .map_err(|_| KeyringError::NotFound)
+        }
     }
 }
 
@@ -79,7 +95,7 @@ pub fn delete_api_key(key_name: &str) -> Result<(), KeyringError> {
 /// * `true` if a key exists
 /// * `false` if no key is stored or access fails
 pub fn has_api_key(key_name: &str) -> bool {
-    retrieve_api_key(key_name).is_ok()
+    retrieve_api_key(key_name).is_ok() || crate::utils::storage_fallback::has_key(key_name)
 }
 
 #[cfg(test)]
