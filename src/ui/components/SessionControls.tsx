@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useSessionStore } from '../store/sessionStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -6,34 +7,86 @@ const SessionControls: React.FC = () => {
   const status = useSessionStore((state) => state.status);
   const setStatus = useSessionStore((state) => state.setStatus);
   const clearSession = useSessionStore((state) => state.clearSession);
-  const apiKey = useSessionStore((state) => state.apiKey);
+  const preferredSttProvider = useSessionStore((state) => state.preferredSttProvider);
   const setCurrentAnswer = useSessionStore((state) => state.setCurrentAnswer);
   const { sendMessage, isConnected } = useWebSocket();
 
   const [manualQuestion, setManualQuestion] = useState('');
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [hasPrimaryKey, setHasPrimaryKey] = useState<boolean | null>(null);
 
-  const handleStartSession = () => {
+  useEffect(() => {
+    let isMounted = true;
+    
+    const checkKey = () => {
+      const provider = preferredSttProvider === 'auto' ? 'gemini' : preferredSttProvider;
+      invoke<{ exists: boolean }>('has_api_key', { provider })
+        .then((status) => {
+          if (isMounted) {
+            setHasPrimaryKey(status.exists);
+          }
+        })
+        .catch((err) => {
+          console.error(`Failed to check API key for ${provider}:`, err);
+          if (isMounted) {
+            setHasPrimaryKey(false);
+          }
+        });
+    };
+
+    checkKey();
+
+    const handleApiKeyChange = () => {
+      checkKey();
+    };
+
+    window.addEventListener('apiKeyChanged', handleApiKeyChange);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('apiKeyChanged', handleApiKeyChange);
+    };
+  }, [preferredSttProvider]);
+
+  const handleStartSession = async () => {
     if (!isConnected) {
       console.error('Cannot start session: WebSocket not connected');
       return;
     }
-    if (!apiKey) {
-      console.error('Cannot start session: API key not configured');
+
+    if (hasPrimaryKey !== true) {
+      console.error('Cannot start session: API key missing for selected STT provider');
       return;
     }
 
-    // SECURITY: API key sent in plaintext - development only until STORY-004
-    // In production, this should use secure keychain storage via Tauri commands
-    if (import.meta.env.PROD) {
-      console.warn(
-        'SECURITY WARNING: API key transmission not using secure keychain. ' +
-          'See STORY-004 for production-ready implementation.'
-      );
+    setStatus('listening');
+
+    const providers = ['gemini', 'groq', 'deepgram', 'openai', 'anthropic'];
+    const apiKeys: Record<string, string> = {};
+
+    for (const provider of providers) {
+      try {
+        const key = await invoke<string>('get_api_key', { provider });
+        if (key) {
+          apiKeys[provider] = key;
+        }
+      } catch (err) {
+        console.debug(`No key for ${provider}`);
+      }
     }
 
-    sendMessage({ type: 'START_SESSION', data: { apiKey } });
-    setStatus('listening');
+    const prefs = {
+      sttProvider: useSessionStore.getState().preferredSttProvider,
+      llmProvider: useSessionStore.getState().preferredLlmProvider,
+    };
+
+    sendMessage({ 
+      type: 'START_SESSION', 
+      data: { 
+        apiKeys, 
+        preferences: prefs 
+      } 
+    });
   };
 
   const handleStopSession = () => {
@@ -120,10 +173,10 @@ const SessionControls: React.FC = () => {
       <div className="space-y-3">
         <button
           onClick={handleStartSession}
-          disabled={status !== 'idle' || !isConnected || !apiKey}
+          disabled={status !== 'idle' || !isConnected || hasPrimaryKey !== true}
           className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition duration-200"
         >
-          {!apiKey ? 'Configure API Key First' : 'Start Session'}
+          {hasPrimaryKey !== true ? 'Configure API Key First' : 'Start Session'}
         </button>
         <button
           onClick={handleStopSession}
