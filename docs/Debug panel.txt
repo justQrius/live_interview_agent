@@ -1,127 +1,87 @@
-Debug panel:
+[Rust] Checking if key exists: provider=gemini, key_name=gemini_api_key, exists=false
+[Fallback] retrieve_key called for: gemini_api_key
+[Fallback] Key NOT found in fallback storage. Available keys: []
 
-10:00:53 p.m.
+
+[ProviderSettings] groq key exists: false
+10:06:10 p.m.
 [ProviderSettings] deepgram key exists: false
-10:00:53 p.m.
+10:06:10 p.m.
 [ProviderSettings] openai key exists: false
-10:00:53 p.m.
+10:06:10 p.m.
 [ProviderSettings] anthropic key exists: false
-10:00:53 p.m.
+10:06:10 p.m.
 Could not load key for gemini: API key not found in keyring
-10:00:53 p.m.
+10:06:10 p.m.
+[SessionControls] Render state: {
+  "status": "idle",
+  "isConnected": false,
+  "hasPrimaryKey": false,
+  "preferredSttProvider": "gemini",
+  "buttonDisabled": true
+}
+10:06:10 p.m.
+Cannot update a component (`%s`) while rendering a different component (`%s`). To locate the bad setState() call inside `%s`, follow the stack trace as described in https://react.dev/link/setstate-in-render DebugPanel SessionControls SessionControls
+10:06:10 p.m.
+[SessionControls] Render state: {
+  "status": "idle",
+  "isConnected": false,
+  "hasPrimaryKey": false,
+  "preferredSttProvider": "gemini",
+  "buttonDisabled": true
+}
+10:06:10 p.m.
+[SessionControls] Render state: {
+  "status": "idle",
+  "isConnected": false,
+  "hasPrimaryKey": false,
+  "preferredSttProvider": "gemini",
+  "buttonDisabled": true
+}
+10:06:10 p.m.
+[SessionControls] Render state: {
+  "status": "idle",
+  "isConnected": false,
+  "hasPrimaryKey": false,
+  "preferredSttProvider": "gemini",
+  "buttonDisabled": true
+}
+10:06:10 p.m.
+[SessionControls] Render state: {
+  "status": "idle",
+  "isConnected": true,
+  "hasPrimaryKey": false,
+  "preferredSttProvider": "gemini",
+  "buttonDisabled": true
+}
+10:06:10 p.m.
+[SessionControls] Render state: {
+  "status": "idle",
+  "isConnected": true,
+  "hasPrimaryKey": false,
+  "preferredSttProvider": "gemini",
+  "buttonDisabled": true
+}
+10:06:32 p.m.
+[ProviderSettings] Saving API key for provider: gemini
+10:06:32 p.m.
+[ProviderSettings] Save successful, checking if key exists...
+10:06:32 p.m.
+[ProviderSettings] Verification check result: {
+  "exists": false
+}
+10:06:32 p.m.
+[ProviderSettings] Dispatching apiKeyChanged event for provider: gemini
+10:06:32 p.m.
+[SessionControls] Received apiKeyChanged event: {
+  "provider": "gemini"
+}
+10:06:32 p.m.
+[SessionControls] Checking API key for provider: gemini
+10:06:32 p.m.
 [SessionControls] API key check result: {
   "provider": "gemini",
   "exists": false
 }
-10:00:53 p.m.
-[ProviderSettings] gemini key exists: false
-10:00:53 p.m.
-[ProviderSettings] groq key exists: false
-10:00:53 p.m.
-[ProviderSettings] deepgram key exists: false
-10:00:53 p.m.
-[ProviderSettings] openai key exists: false
-10:00:53 p.m.
-[ProviderSettings] anthropic key exists: false
-10:00:53 p.m.
-[SessionControls] Render state: {
-  "status": "idle",
-  "isConnected": false,
-  "hasPrimaryKey": false,
-  "preferredSttProvider": "gemini",
-  "buttonDisabled": true
-}
-10:00:53 p.m.
-Cannot update a component (`%s`) while rendering a different component (`%s`). To locate the bad setState() call inside `%s`, follow the stack trace as described in https://react.dev/link/setstate-in-render DebugPanel SessionControls SessionControls
-10:00:53 p.m.
-[SessionControls] Render state: {
-  "status": "idle",
-  "isConnected": false,
-  "hasPrimaryKey": false,
-  "preferredSttProvider": "gemini",
-  "buttonDisabled": true
-}
-10:00:53 p.m.
-[SessionControls] Render state: {
-  "status": "idle",
-  "isConnected": false,
-  "hasPrimaryKey": false,
-  "preferredSttProvider": "gemini",
-  "buttonDisabled": true
-}
-10:00:53 p.m.
-[SessionControls] Render state: {
-  "status": "idle",
-  "isConnected": false,
-  "hasPrimaryKey": false,
-  "preferredSttProvider": "gemini",
-  "buttonDisabled": true
-}
-10:00:53 p.m.
+10:06:32 p.m.
 Could not load key for gemini: API key not found in keyring
-10:00:53 p.m.
-[SessionControls] Render state: {
-  "status": "idle",
-  "isConnected": true,
-  "hasPrimaryKey": false,
-  "preferredSttProvider": "gemini",
-  "buttonDisabled": true
-}
-10:00:53 p.m.
-[SessionControls] Render state: {
-  "status": "idle",
-  "isConnected": true,
-  "hasPrimaryKey": false,
-  "preferredSttProvider": "gemini",
-  "buttonDisabled": true
-}
-10:01:05 p.m.
-[ProviderSettings] Saving API key for provider: gemini
-10:01:05 p.m.
-[ProviderSettings] Save failed: Key stored but verification failed: API key not found in keyring
-
-Terminal:
-
- npm run tauri dev
-
-> live_interview_agent@1.0.0 tauri
-> tauri dev
-
-     Running BeforeDevCommand (`npm run dev`)
-
-> live_interview_agent@1.0.0 dev
-> vite
-
-
-  VITE v7.3.0  ready in 328 ms
-
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: use --host to expose
-     Running DevCommand (`cargo  run --no-default-features --color always --`)
-        Info Watching D:\Projects\live_interview_agent\src-tauri for changes...
-warning: function `delete_key` is never used
-  --> src\utils\storage_fallback.rs:62:8
-   |
-62 | pub fn delete_key(key_name: &str) -> Result<(), String> {
-   |        ^^^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: `live-interview-agent` (lib) generated 1 warning
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
-     Running `target\debug\live-interview-agent.exe`
-[Rust] Checking if key exists: provider=gemini, key_name=gemini_api_key, exists=false
-[Rust] Checking if key exists: provider=gemini, key_name=gemini_api_key, exists=false
-[Rust] Checking if key exists: provider=groq, key_name=groq_api_key, exists=false
-[Rust] Checking if key exists: provider=deepgram, key_name=deepgram_api_key, exists=false
-[Rust] Checking if key exists: provider=openai, key_name=openai_api_key, exists=false
-[Rust] Checking if key exists: provider=anthropic, key_name=anthropic_api_key, exists=false
-[Rust] Checking if key exists: provider=gemini, key_name=gemini_api_key, exists=false
-[Rust] Checking if key exists: provider=gemini, key_name=gemini_api_key, exists=false
-[Rust] Checking if key exists: provider=groq, key_name=groq_api_key, exists=false
-[Rust] Checking if key exists: provider=deepgram, key_name=deepgram_api_key, exists=false
-[Rust] Checking if key exists: provider=openai, key_name=openai_api_key, exists=false
-[Rust] Checking if key exists: provider=anthropic, key_name=anthropic_api_key, exists=false
-[Rust] Attempting to store key: service=live_interview_agent, key_name=gemini_api_key
-[Rust] Store reported success, verifying...
-[Rust] VERIFICATION FAILED: API key not found in keyring
