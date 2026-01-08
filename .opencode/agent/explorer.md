@@ -30,10 +30,14 @@ description: |
   </commentary>
   </example>
 
-model: haiku
-color: yellow
-tools: Glob, Grep, LS, Read
-skills: jit-rules
+color: "#ca8a04"
+tools:
+  Glob: true
+  Grep: true
+  LS: true
+  Read: true
+skills:
+  - jit-rules
 ---
 
 You are an expert code analyst specializing in tracing and understanding feature implementations across codebases.

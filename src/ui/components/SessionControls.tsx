@@ -15,13 +15,23 @@ const SessionControls: React.FC = () => {
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [hasPrimaryKey, setHasPrimaryKey] = useState<boolean | null>(null);
 
+  console.log('[SessionControls] Render state:', { 
+    status, 
+    isConnected, 
+    hasPrimaryKey, 
+    preferredSttProvider,
+    buttonDisabled: status !== 'idle' || !isConnected || hasPrimaryKey !== true 
+  });
+
   useEffect(() => {
     let isMounted = true;
     
     const checkKey = () => {
       const provider = preferredSttProvider === 'auto' ? 'gemini' : preferredSttProvider;
+      console.log('[SessionControls] Checking API key for provider:', provider);
       invoke<{ exists: boolean }>('has_api_key', { provider })
         .then((status) => {
+          console.log('[SessionControls] API key check result:', { provider, exists: status.exists });
           if (isMounted) {
             setHasPrimaryKey(status.exists);
           }
@@ -36,15 +46,16 @@ const SessionControls: React.FC = () => {
 
     checkKey();
 
-    const handleApiKeyChange = () => {
+    const handleApiKeyChange = (event: Event) => {
+      console.log('[SessionControls] Received apiKeyChanged event:', (event as CustomEvent).detail);
       checkKey();
     };
 
-    window.addEventListener('apiKeyChanged', handleApiKeyChange);
+    window.addEventListener('apiKeyChanged', handleApiKeyChange as EventListener);
 
     return () => {
       isMounted = false;
-      window.removeEventListener('apiKeyChanged', handleApiKeyChange);
+      window.removeEventListener('apiKeyChanged', handleApiKeyChange as EventListener);
     };
   }, [preferredSttProvider]);
 
@@ -159,15 +170,21 @@ const SessionControls: React.FC = () => {
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold mb-4">Session Controls</h2>
 
-      <div className="mb-4 flex items-center gap-2">
-        <span
-          className={`inline-block w-3 h-3 rounded-full ${
-            isConnected ? 'bg-green-500' : 'bg-red-500'
-          }`}
-        />
-        <span className="text-sm text-gray-600">
-          {isConnected ? 'Connected to sidecar' : 'Disconnected'}
-        </span>
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-block w-3 h-3 rounded-full ${
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            }`}
+          />
+          <span className="text-sm text-gray-600">
+            {isConnected ? 'Connected to sidecar' : 'Disconnected'}
+          </span>
+        </div>
+        <div className="mt-2 text-xs text-gray-500">
+          API Key Status: {hasPrimaryKey === null ? 'Checking...' : hasPrimaryKey ? '✅ Found' : '❌ Not configured'}
+          {' '}(Provider: {preferredSttProvider === 'auto' ? 'gemini (auto)' : preferredSttProvider})
+        </div>
       </div>
 
       <div className="space-y-3">

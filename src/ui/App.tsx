@@ -3,6 +3,7 @@ import AnswerDisplay from './components/AnswerDisplay';
 import ContextLoader from './components/ContextLoader';
 import CalibrationModal from './components/CalibrationModal';
 import SettingsPanel from './components/SettingsPanel';
+import { DebugPanel } from './components/DebugPanel';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
       </main>
 
       <CalibrationModal />
+      <DebugPanel />
     </div>
   );
 }

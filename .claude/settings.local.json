@@ -21,7 +21,13 @@
       "Bash(./venv/Scripts/pytest tests/ -v --tb=short)",
       "Bash(./venv/Scripts/python:*)",
       "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Skill(prism:dev-story)",
+      "Bash(./venv/Scripts/pytest tests/test_gemini_llm_provider.py -v)",
+      "Bash(./venv/Scripts/pytest:*)"
     ]
+  },
+  "enabledPlugins": {
+    "prism@prism-marketplace": true
   }
 }

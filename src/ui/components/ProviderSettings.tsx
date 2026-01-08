@@ -27,22 +27,21 @@ const ProviderRow: React.FC<{ provider: Provider; name: string }> = ({ provider,
 
   const checkStatus = async () => {
     try {
+      console.log(`[ProviderSettings] Checking key status for ${provider}...`);
       const status = await invoke<ApiKeyStatus>('has_api_key', { provider });
+      console.log(`[ProviderSettings] ${provider} key exists:`, status.exists);
       setHasKey(status.exists);
       if (status.exists) {
-        // We don't necessarily need to load the key into the input for security, 
-        // but we could if we want to allow editing. 
-        // Typically for API keys, we just show that it exists.
-        // But the previous implementation loaded it.
         try {
             const key = await invoke<string>('get_api_key', { provider });
+            console.log(`[ProviderSettings] Retrieved ${provider} key:`, key.substring(0, 10) + '...');
             setInput(key);
         } catch (e) {
-            // Ignore if we can't retrieve it (shouldn't happen if has_api_key is true)
+            console.error(`[ProviderSettings] Failed to retrieve ${provider} key:`, e);
         }
       }
     } catch (err) {
-      console.error(`Failed to check status for ${provider}:`, err);
+      console.error(`[ProviderSettings] Failed to check status for ${provider}:`, err);
     } finally {
       setIsLoading(false);
     }
@@ -53,12 +52,20 @@ const ProviderRow: React.FC<{ provider: Provider; name: string }> = ({ provider,
     setIsSaving(true);
     setStatusMsg(null);
     try {
+      console.log('[ProviderSettings] Saving API key for provider:', provider);
       await invoke('set_api_key', { provider, key: input });
-      setHasKey(true);
-      setStatusMsg({ text: 'Saved', type: 'success' });
+      console.log('[ProviderSettings] Save successful, checking if key exists...');
+      
+      const status = await invoke<ApiKeyStatus>('has_api_key', { provider });
+      console.log('[ProviderSettings] Verification check result:', status);
+      
+      setHasKey(status.exists);
+      setStatusMsg({ text: status.exists ? 'Saved & Verified' : 'Saved (Warning: Could not verify)', type: status.exists ? 'success' : 'error' });
       setTimeout(() => setStatusMsg(null), 3000);
+      console.log('[ProviderSettings] Dispatching apiKeyChanged event for provider:', provider);
       window.dispatchEvent(new CustomEvent('apiKeyChanged', { detail: { provider } }));
     } catch (err) {
+      console.error('[ProviderSettings] Save failed:', err);
       setStatusMsg({ text: `Error: ${err}`, type: 'error' });
     } finally {
       setIsSaving(false);

@@ -30,10 +30,15 @@ description: |
   </commentary>
   </example>
 
-model: sonnet
-color: magenta
-tools: Glob, Grep, LS, Read, Write
-skills: documentation
+color: "#db2777"
+tools:
+  Glob: true
+  Grep: true
+  LS: true
+  Read: true
+  Write: true
+skills:
+  - documentation
 ---
 
 You are a technical writing expert who creates clear, comprehensive documentation. You write for both human developers and AI agents.
