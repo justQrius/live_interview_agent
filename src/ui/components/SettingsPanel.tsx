@@ -14,22 +14,26 @@ const SettingsPanel: React.FC = () => {
   const setPreferredLlmProvider = useSessionStore((state) => state.setPreferredLlmProvider);
   const setApiKey = useSessionStore((state) => state.setApiKey);
 
-  // Sync the active API key based on STT preference (Primary key for session)
-  // This ensures SessionControls continues to work with the selected provider
   useEffect(() => {
     const syncKey = async () => {
-        // Default to gemini if auto
         const provider = preferredSttProvider === 'auto' ? 'gemini' : preferredSttProvider;
         try {
             const key = await invoke<string>('get_api_key', { provider });
             setApiKey(key);
         } catch (e) {
             console.warn(`Could not load key for ${provider}:`, e);
-            // If we can't get the key, clear it so SessionControls knows configuration is missing
             setApiKey(null);
         }
     };
+    
     syncKey();
+
+    const handleApiKeyChange = () => {
+      syncKey();
+    };
+
+    window.addEventListener('apiKeyChanged', handleApiKeyChange);
+    return () => window.removeEventListener('apiKeyChanged', handleApiKeyChange);
   }, [preferredSttProvider, setApiKey]);
 
   const handleToggleScreenInvisibility = async () => {

@@ -57,6 +57,7 @@ const ProviderRow: React.FC<{ provider: Provider; name: string }> = ({ provider,
       setHasKey(true);
       setStatusMsg({ text: 'Saved', type: 'success' });
       setTimeout(() => setStatusMsg(null), 3000);
+      window.dispatchEvent(new CustomEvent('apiKeyChanged', { detail: { provider } }));
     } catch (err) {
       setStatusMsg({ text: `Error: ${err}`, type: 'error' });
     } finally {
@@ -72,6 +73,7 @@ const ProviderRow: React.FC<{ provider: Provider; name: string }> = ({ provider,
       setInput('');
       setStatusMsg({ text: 'Deleted', type: 'success' });
       setTimeout(() => setStatusMsg(null), 3000);
+      window.dispatchEvent(new CustomEvent('apiKeyChanged', { detail: { provider } }));
     } catch (err) {
       setStatusMsg({ text: `Error: ${err}`, type: 'error' });
     } finally {
