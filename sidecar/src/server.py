@@ -31,8 +31,9 @@ from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
 from audio.vad import VADProcessor, SpeechSegment
 from audio.noise_reduction import NoiseReducer
-from providers.stt.gemini import GeminiSTTProvider, GeminiSTTProviderError
-from providers.llm.gemini import GeminiLLMProvider, GeminiLLMProviderError
+from providers.base import STTProvider, LLMProvider
+from providers.factory import ProviderFactory
+from providers.config import ProviderConfig
 from context.manager import ContextManager
 from rag.store import VectorStore
 from rag.engine import RAGEngine
@@ -78,13 +79,14 @@ class SidecarServer:
         self._server: Optional[Any] = None
         self._running = False
         
-        self.stt: Optional[GeminiSTTProvider] = None
+        self.provider_factory: Optional[ProviderFactory] = None
+        self.stt: Optional[STTProvider] = None
         self.vad: Optional[VADProcessor] = None
         self.noise_reducer: Optional[NoiseReducer] = None
         self.audio_capture: Optional[AudioCapture] = None
         self._audio_task: Optional[asyncio.Task] = None
         
-        self.llm: Optional[GeminiLLMProvider] = None
+        self.llm: Optional[LLMProvider] = None
         
         self.context_manager = ContextManager()
         self.vector_store: Optional[VectorStore] = None
@@ -208,21 +210,40 @@ class SidecarServer:
     ) -> None:
         """Handle START_SESSION message."""
         data = message.data or {}
-        api_key = data.get("apiKey")
+        
+        if "apiKeys" not in data and "apiKey" in data:
+            data = {
+                "apiKeys": {"gemini": data["apiKey"]},
+                "preferences": {}
+            }
+            
+        try:
+            config = ProviderConfig.from_dict(data)
+            self.provider_factory = ProviderFactory(config)
+            
+            self.stt = self.provider_factory.get_stt_provider()
+            
+            try:
+                self.llm = self.provider_factory.get_llm_provider()
+            except Exception as e:
+                logger.warning(f"No LLM provider available: {e}")
+                self.llm = None
 
-        if not api_key:
+        except Exception as e:
+            logger.error(f"Failed to initialize providers: {e}")
             error_msg = create_error_message(
-                "API key is required",
-                code="ERR_NO_API_KEY"
+                f"Failed to initialize providers: {e}",
+                code="ERR_PROVIDER_INIT"
             )
             await websocket.send(error_msg.to_json())
             return
 
-        self.session_state.api_key = api_key
+        self.session_state.api_key = "multi-provider-active" 
         self.session_state.status = SessionStatus.LISTENING
         
         try:
-            self.vector_store = VectorStore(api_key=api_key)
+            rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
+            self.vector_store = VectorStore(api_key=rag_key)
             self.rag_engine = RAGEngine(self.vector_store)
             
             pre_loaded_chunks = self.context_manager.get_all_chunks()
@@ -239,12 +260,7 @@ class SidecarServer:
             logger.error(f"Failed to initialize vector store: {e}")
             
         try:
-            self.llm = GeminiLLMProvider(api_key=api_key)
-        except Exception as e:
-            logger.error(f"Failed to initialize LLM: {e}")
-            
-        try:
-            await self._start_audio_processing(api_key)
+            await self._start_audio_processing()
         except Exception as e:
             logger.error(f"Failed to start audio processing: {e}")
             error_msg = create_error_message(
@@ -476,7 +492,8 @@ class SidecarServer:
 
         if self.llm:
             try:
-                async for chunk in self.llm.generate_answer(question, context_chunks):
+                context_str = "\n\n".join(context_chunks)
+                async for chunk in self.llm.generate_response(question, context_str, []):
                     answer_msg = create_answer_chunk_message(
                         chunk=chunk,
                         complete=False
@@ -522,9 +539,12 @@ class SidecarServer:
             return_exceptions=True
         )
 
-    async def _start_audio_processing(self, api_key: str) -> None:
+    async def _start_audio_processing(self) -> None:
         """Initialize and start audio processing components."""
-        self.stt = GeminiSTTProvider(api_key=api_key)
+        # STT is already initialized in _handle_start_session via factory
+        if not self.stt:
+             logger.error("STT provider not initialized")
+             raise RuntimeError("STT provider not initialized")
         
         if not self.model_warmer.wait_for_ready(timeout=2.0):
              logger.warning("Models not ready after timeout")
@@ -667,7 +687,8 @@ class SidecarServer:
             return
             
         try:
-            async for chunk in self.llm.generate_answer(question, context_chunks):
+            context_str = "\n\n".join(context_chunks)
+            async for chunk in self.llm.generate_response(question, context_str, []):
                 answer_msg = create_answer_chunk_message(chunk=chunk, complete=False)
                 await self.broadcast(answer_msg)
             

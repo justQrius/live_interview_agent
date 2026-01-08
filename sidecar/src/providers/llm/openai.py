@@ -5,7 +5,7 @@ try:
 except ImportError:
     AsyncOpenAI = None
 
-from sidecar.src.providers.base import LLMProvider
+from ..base import LLMProvider
 
 logger = logging.getLogger(__name__)
 

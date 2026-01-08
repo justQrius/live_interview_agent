@@ -1,5 +1,9 @@
 from typing import List, Dict, AsyncGenerator
-from anthropic import AsyncAnthropic
+try:
+    from anthropic import AsyncAnthropic
+except ImportError:
+    AsyncAnthropic = None
+
 from ..base import LLMProvider
 
 class AnthropicLLMProvider(LLMProvider):
@@ -8,6 +12,9 @@ class AnthropicLLMProvider(LLMProvider):
     """
     
     def __init__(self, api_key: str):
+        if AsyncAnthropic is None:
+            raise ImportError("anthropic package is not installed")
+            
         self.client = AsyncAnthropic(api_key=api_key)
         self.model = "claude-3-5-sonnet-20240620"
         
