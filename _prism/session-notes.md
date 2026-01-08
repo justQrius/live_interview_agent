@@ -11,13 +11,16 @@
 - Commit: `07d1ffe` - "fix: start button now enables immediately after API key save/delete"
 
 **Bug Fix #2: Windows Credential Manager not persisting API keys** ⭐ CRITICAL
-- Root cause: `keyring` crate reports success but Windows doesn't actually store credentials
+- Root cause: `keyring` crate reports success but Windows Credential Manager is intermittent
 - Discovered via debug panel showing `exists: false` immediately after `Save successful`
-- Implemented automatic fallback to local JSON storage when OS keyring fails
+- Terminal logs showed: "OS keyring verification successful!" but then retrieve failed
+- **Final solution**: Store to fallback FIRST (guaranteed), then OS keyring (best-effort)
 - Storage location: `%APPDATA%\live_interview_agent\api_keys.json`
 - Commits:
   - `768540e` - Added debug panel and comprehensive logging
   - `aa359e5` - Implemented fallback storage mechanism
+  - `ff3542d`, `6d2c7b0` - Enhanced logging to diagnose the issue
+  - `81b455b` - **FIX**: Fallback-first strategy (reliable storage)
 
 ### TECHNICAL DETAILS
 
