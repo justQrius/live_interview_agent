@@ -38,25 +38,9 @@ pub fn set_api_key(provider: String, key: String) -> Result<(), String> {
     
     eprintln!("[Rust] Attempting to store key: service={}, key_name={}", "live_interview_agent", key_name);
     
-    match keyring::store_api_key(&key_name, &key) {
-        Ok(()) => {
-            eprintln!("[Rust] Store reported success, verifying...");
-            match keyring::retrieve_api_key(&key_name) {
-                Ok(retrieved) => {
-                    eprintln!("[Rust] Verification successful, key retrieved: {}...", &retrieved[..10.min(retrieved.len())]);
-                    Ok(())
-                }
-                Err(e) => {
-                    eprintln!("[Rust] VERIFICATION FAILED: {}", e);
-                    Err(format!("Key stored but verification failed: {}", e))
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("[Rust] Store failed: {}", e);
-            Err(e.to_string())
-        }
-    }
+    keyring::store_api_key(&key_name, &key).map_err(|e| e.to_string())?;
+    eprintln!("[Rust] Key stored successfully (using OS keyring or fallback)");
+    Ok(())
 }
 
 /// Delete the API key from the OS keychain for a specific provider.

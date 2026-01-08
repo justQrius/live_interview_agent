@@ -45,18 +45,31 @@ fn save_storage(storage: &KeyStorage) -> Result<(), String> {
 }
 
 pub fn store_key(key_name: &str, key: &str) -> Result<(), String> {
+    eprintln!("[Fallback] store_key called for: {}", key_name);
+    let path = get_storage_path()?;
+    eprintln!("[Fallback] Storage path: {:?}", path);
+    
     let mut storage = load_storage()?;
     storage.keys.insert(key_name.to_string(), key.to_string());
     save_storage(&storage)?;
-    eprintln!("[Fallback] Stored key: {}", key_name);
+    
+    eprintln!("[Fallback] Key stored successfully. Total keys: {}", storage.keys.len());
     Ok(())
 }
 
 pub fn retrieve_key(key_name: &str) -> Result<String, String> {
+    eprintln!("[Fallback] retrieve_key called for: {}", key_name);
     let storage = load_storage()?;
-    storage.keys.get(key_name)
-        .cloned()
-        .ok_or_else(|| "Key not found".to_string())
+    match storage.keys.get(key_name) {
+        Some(key) => {
+            eprintln!("[Fallback] Key found in fallback storage");
+            Ok(key.clone())
+        }
+        None => {
+            eprintln!("[Fallback] Key NOT found in fallback storage. Available keys: {:?}", storage.keys.keys().collect::<Vec<_>>());
+            Err("Key not found".to_string())
+        }
+    }
 }
 
 pub fn delete_key(key_name: &str) -> Result<(), String> {
@@ -68,8 +81,11 @@ pub fn delete_key(key_name: &str) -> Result<(), String> {
 }
 
 pub fn has_key(key_name: &str) -> bool {
-    load_storage()
+    eprintln!("[Fallback] has_key called for: {}", key_name);
+    let result = load_storage()
         .ok()
         .and_then(|s| s.keys.get(key_name).cloned())
-        .is_some()
+        .is_some();
+    eprintln!("[Fallback] has_key result: {}", result);
+    result
 }
