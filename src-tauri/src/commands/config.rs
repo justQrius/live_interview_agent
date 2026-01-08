@@ -35,7 +35,28 @@ pub fn set_api_key(provider: String, key: String) -> Result<(), String> {
         return Err("API key cannot be empty".to_string());
     }
     let key_name = get_key_name(&provider);
-    keyring::store_api_key(&key_name, &key).map_err(|e| e.to_string())
+    
+    eprintln!("[Rust] Attempting to store key: service={}, key_name={}", "live_interview_agent", key_name);
+    
+    match keyring::store_api_key(&key_name, &key) {
+        Ok(()) => {
+            eprintln!("[Rust] Store reported success, verifying...");
+            match keyring::retrieve_api_key(&key_name) {
+                Ok(retrieved) => {
+                    eprintln!("[Rust] Verification successful, key retrieved: {}...", &retrieved[..10.min(retrieved.len())]);
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("[Rust] VERIFICATION FAILED: {}", e);
+                    Err(format!("Key stored but verification failed: {}", e))
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[Rust] Store failed: {}", e);
+            Err(e.to_string())
+        }
+    }
 }
 
 /// Delete the API key from the OS keychain for a specific provider.
@@ -53,9 +74,9 @@ pub fn delete_api_key(provider: String) -> Result<(), String> {
 #[command]
 pub fn has_api_key(provider: String) -> ApiKeyStatus {
     let key_name = get_key_name(&provider);
-    ApiKeyStatus {
-        exists: keyring::has_api_key(&key_name),
-    }
+    let exists = keyring::has_api_key(&key_name);
+    eprintln!("[Rust] Checking if key exists: provider={}, key_name={}, exists={}", provider, key_name, exists);
+    ApiKeyStatus { exists }
 }
 
 #[cfg(test)]
