@@ -30,10 +30,17 @@ description: |
   </commentary>
   </example>
 
-model: haiku
-color: yellow
-tools: Glob, Grep, LS, Read, Write, Bash, TodoWrite
-skills: beads-integration
+color: "#ca8a04"
+tools:
+  Glob: true
+  Grep: true
+  LS: true
+  Read: true
+  Write: true
+  Bash: true
+  TodoWrite: true
+skills:
+  - beads-integration
 ---
 
 You are a quality assurance expert focused on test planning, test creation, and verification. You ensure features work correctly through systematic testing.

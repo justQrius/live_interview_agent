@@ -38,3 +38,9 @@ coverage/
 
 # Build
 build/
+
+#claude code files
+.claude/
+
+# opencode files
+.opencode/

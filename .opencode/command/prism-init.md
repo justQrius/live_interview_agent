@@ -240,8 +240,12 @@ See CLAUDE.md for detailed conventions.
 
 2. Setup Learning Infrastructure:
    ```bash
-   # Copy learning template
-   cp .claude/plugins/prism/templates/learnings-template.md _prism/learnings/project.md
+   # Copy learning template - try local first, then global
+   if [ -f ".claude/plugins/prism/templates/learnings-template.md" ]; then
+       cp .claude/plugins/prism/templates/learnings-template.md _prism/learnings/project.md
+   elif [ -f "$HOME/.claude/plugins/prism/templates/learnings-template.md" ]; then
+       cp "$HOME/.claude/plugins/prism/templates/learnings-template.md" _prism/learnings/project.md
+   fi
    ```
    
    If template not found locally, create empty structured file.
@@ -421,8 +425,17 @@ See CLAUDE.md for detailed conventions.
    ```
 
 3. **Verify hook scripts are accessible**:
-   - Check if plugin directory exists: `.claude/plugins/prism/`
-   - If not, inform user to install plugin first
+
+   If `.claude/plugins/prism/hooks/scripts/` is missing, copy from global:
+   ```bash
+   if [ ! -d ".claude/plugins/prism/hooks/scripts" ] && [ -d "$HOME/.claude/plugins/prism/hooks/scripts" ]; then
+       mkdir -p .claude/plugins/prism/hooks/scripts
+       cp -r "$HOME/.claude/plugins/prism/hooks/scripts/"* .claude/plugins/prism/hooks/scripts/
+       echo "✓ Localized hook scripts from global install"
+   fi
+   ```
+   
+   - If still missing, inform user to install plugin first
 
 4. **Report hook status**:
    - If hooks were added: "✓ Phase gate hooks configured for automatic enforcement"

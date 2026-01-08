@@ -1,5 +1,32 @@
 # Session Notes - Live Interview Agent
 
+## Session: 2026-01-08 - Bug Fix: Start Button State Sync
+
+### COMPLETED TODAY
+
+**Bug Fix: Start button disabled after API key configuration**
+- Root cause: API key state not syncing when keys saved/deleted in ProviderSettings
+- Implemented event-based synchronization using `apiKeyChanged` custom event
+- Fixed SessionControls to use `hasPrimaryKey` instead of undefined `apiKey` variable
+- Start button now enables immediately after saving API keys
+- Commit: `07d1ffe` - "fix: start button now enables immediately after API key save/delete"
+
+### TECHNICAL DETAILS
+
+**Event Flow:**
+1. User saves/deletes API key in ProviderSettings
+2. `window.dispatchEvent(new CustomEvent('apiKeyChanged', { detail: { provider } }))`
+3. SettingsPanel listens → re-syncs API key to store
+4. SessionControls listens → re-checks `hasPrimaryKey` state
+5. Button enables/disables correctly ✅
+
+**Files Changed:**
+- `src/ui/components/ProviderSettings.tsx` - Dispatch events on save/delete
+- `src/ui/components/SettingsPanel.tsx` - Listen and re-sync API key
+- `src/ui/components/SessionControls.tsx` - Listen and re-check key existence + fix button logic
+
+---
+
 ## Session: 2026-01-07 - Stories 026/027/029/030/031 Complete
 
 ### COMPLETED TODAY

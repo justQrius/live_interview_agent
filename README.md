@@ -45,7 +45,7 @@ A cross-platform desktop application that provides real-time AI assistance durin
     python -m venv venv
     
     # Activate virtual environment
-    # Windows: venv\Scripts\activate
+    # Windows: venv\Scripts\activate #source venv/Scripts/activate (if bash)
     # macOS/Linux: source venv/bin/activate
 
     pip install -r requirements.txt
@@ -54,11 +54,23 @@ A cross-platform desktop application that provides real-time AI assistance durin
 
 ### Running the Application
 
-```bash
-# Development mode
-npm run tauri dev
+In development, you need to run both the Tauri frontend/backend and the Python sidecar process.
 
-# Production build
+1. **Start the Python Sidecar** (in a separate terminal):
+    ```bash
+    cd sidecar
+    # Activate virtual environment first (see installation steps above)
+    python src/server.py
+    ```
+
+2. **Start the Tauri App**:
+    ```bash
+    npm run tauri dev
+    ```
+
+To build the application for production (which bundles the sidecar):
+
+```bash
 npm run tauri build
 ```
 

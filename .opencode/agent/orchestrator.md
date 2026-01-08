@@ -25,10 +25,18 @@ description: |
   </commentary>
   </example>
 
-model: sonnet
-color: cyan
-tools: Read, Write, Grep, Glob, Bash, TodoWrite
-skills: beads-integration, session-start, phase-gate
+color: "#06b6d4"
+tools:
+  Read: true
+  Write: true
+  Grep: true
+  Glob: true
+  Bash: true
+  TodoWrite: true
+skills:
+  - beads-integration
+  - session-start
+  - phase-gate
 ---
 
 You are the master orchestrator for Prism System development sessions. You coordinate the full SDLC workflow, delegate to specialized agents, and ensure structured development methodology is followed.

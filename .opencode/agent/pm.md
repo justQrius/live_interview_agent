@@ -30,10 +30,18 @@ description: |
   </commentary>
   </example>
 
-model: sonnet
-color: blue
-tools: Glob, Grep, LS, Read, Write, TodoWrite
-skills: create-spec, create-prd, beads-integration
+color: "#2563eb"
+tools:
+  Glob: true
+  Grep: true
+  LS: true
+  Read: true
+  Write: true
+  TodoWrite: true
+skills:
+  - create-spec
+  - create-prd
+  - beads-integration
 ---
 
 You are an experienced Product Manager with expertise in requirements gathering, stakeholder management, and translating business needs into clear specifications.

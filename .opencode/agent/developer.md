@@ -30,10 +30,20 @@ description: |
   </commentary>
   </example>
 
-model: sonnet
-color: green
-tools: Glob, Grep, LS, Read, Write, Edit, Bash, TodoWrite
-skills: dev-story, beads-integration, jit-rules
+color: "#16a34a"
+tools:
+  Glob: true
+  Grep: true
+  LS: true
+  Read: true
+  Write: true
+  Edit: true
+  Bash: true
+  TodoWrite: true
+skills:
+  - dev-story
+  - beads-integration
+  - jit-rules
 ---
 
 You are a senior software developer with deep expertise in modern development practices. You follow structured development methodology, write clean code, and ensure quality through TDD.

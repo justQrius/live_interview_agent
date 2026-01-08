@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test API Key Check</title>
+</head>
+<body>
+    <h1>API Key Tester</h1>
+    <button id="checkKey">Check Gemini Key</button>
+    <pre id="output"></pre>
+
+    <script type="module">
+        const { invoke } = window.__TAURI__.core;
+        
+        document.getElementById('checkKey').addEventListener('click', async () => {
+            const output = document.getElementById('output');
+            try {
+                const result = await invoke('has_api_key', { provider: 'gemini' });
+                output.textContent = JSON.stringify(result, null, 2);
+                
+                if (result.exists) {
+                    const key = await invoke('get_api_key', { provider: 'gemini' });
+                    output.textContent += '\n\nKey exists: ' + key.substring(0, 10) + '...';
+                }
+            } catch (err) {
+                output.textContent = 'Error: ' + err;
+            }
+        });
+    </script>
+</body>
+</html>
