@@ -49,14 +49,17 @@ cd src-tauri && cargo test
 
 # Python tests
 cd sidecar && pytest
+
+# End-to-End Latency Benchmark (requires server running)
+cd sidecar && python scripts/benchmark_latency.py
 ```
 
 ## Code Style
 
 ### TypeScript/React
 - Functional components with hooks
-- Zustand for state management (not Redux)
-- Tailwind CSS for styling (no CSS modules)
+- Zustand for state management
+- Tailwind CSS for styling
 - Named exports for components
 - Strict TypeScript (`strict: true`)
 
@@ -69,8 +72,8 @@ cd sidecar && pytest
 ### Python (Sidecar)
 - Python 3.11+ with type hints
 - Async/await for WebSocket server
-- One module per concern (audio, stt, rag, llm)
-- Docstrings for public functions
+- **Provider Pattern**: Implement `STTProvider` or `LLMProvider` interfaces for new AI services
+- **Factory Pattern**: Use `ProviderFactory` for instantiation
 - Black formatter, isort for imports
 
 ## Testing Instructions
@@ -78,19 +81,19 @@ cd sidecar && pytest
 - All tests must pass before committing
 - Use TDD: write failing test first, then implement
 - Test coverage targets:
-  - Python: >80% for core modules (audio, stt, rag, llm)
+  - Python: >80% for core modules
   - TypeScript: >70% for components
-  - Rust: Unit tests for all commands
+  - Rust: Unit tests for commands
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────┐    WebSocket    ┌─────────────────────┐
 │  Tauri (Rust + UI)  │◄───────────────►│   Python Sidecar    │
-│  - React frontend   │  localhost:8765 │  - Audio capture    │
-│  - Window manager   │                 │  - Silero VAD       │
-│  - Keyring (API key)│                 │  - Gemini STT/LLM   │
-└─────────────────────┘                 │  - ChromaDB RAG     │
+│  - React frontend   │  localhost:8765 │  - Provider Factory │
+│  - Browser VAD      │                 │  - Groq/OpenAI/etc  │
+│  - Keyring (Keys)   │                 │  - RAG Engine       │
+└─────────────────────┘                 │  - Pre-warmed Models│
                                         └─────────────────────┘
 ```
 
@@ -100,23 +103,23 @@ cd sidecar && pytest
 live_interview_agent/
 ├── src/                    # React UI (TypeScript)
 │   └── ui/
-│       ├── App.tsx
-│       ├── components/     # SessionControls, AnswerDisplay, etc.
-│       ├── store/          # Zustand sessionStore.ts
-│       └── hooks/          # useWebSocket.ts
+│       ├── hooks/          # useWebSocket.ts, useVADFilter.ts
+│       ├── components/     # SessionControls, ProviderSettings, etc.
+│       └── store/          # sessionStore.ts
 ├── src-tauri/             # Tauri backend (Rust)
 │   └── src/
-│       ├── main.rs
-│       ├── commands/       # config.rs, window.rs, sidecar.rs
-│       └── utils/          # keyring.rs, platform.rs
+│       ├── commands/       # config.rs (Multi-key support)
+│       └── utils/          # keyring.rs
 ├── sidecar/               # Python sidecar
 │   └── src/
 │       ├── server.py       # WebSocket server
-│       ├── audio/          # capture.py, vad.py, diarization.py
-│       ├── stt/            # gemini_stt.py
-│       ├── context/        # manager.py
-│       ├── rag/            # engine.py
-│       └── llm/            # gemini_llm.py
+│       ├── warmup.py       # Model pre-warming
+│       ├── providers/      # AI Provider implementations
+│       │   ├── stt/        # Groq, Deepgram, OpenAI, Gemini
+│       │   ├── llm/        # OpenAI, Anthropic, Gemini
+│       │   └── factory.py  # Provider instantiation logic
+│       ├── audio/          # capture.py, vad.py
+│       └── rag/            # engine.py
 └── _prism/                # SDLC artifacts
 ```
 
@@ -126,70 +129,20 @@ Port: `localhost:8765`
 
 ### Client → Server Messages
 ```json
-{"type": "START_SESSION", "apiKey": "..."}
-{"type": "STOP_SESSION"}
-{"type": "UPLOAD_CONTEXT", "files": [...]}
-{"type": "CALIBRATE_VOICE", "audioData": "base64..."}
-{"type": "MANUAL_QUESTION", "question": "..."}
+{
+  "type": "START_SESSION",
+  "data": {
+    "apiKeys": { "gemini": "...", "groq": "...", "openai": "..." },
+    "preferences": { "sttProvider": "groq", "llmProvider": "openai" }
+  }
+}
 ```
 
 ### Server → Client Messages
 ```json
 {"type": "TRANSCRIPTION", "speaker": "Interviewer", "text": "..."}
 {"type": "ANSWER_CHUNK", "chunk": "...", "complete": false}
-{"type": "ANSWER_CHUNK", "chunk": "...", "complete": true, "confidence": "high"}
-{"type": "ERROR", "message": "..."}
-{"type": "STATUS", "state": "listening|processing|idle"}
 ```
-
-## Key Dependencies
-
-### Frontend (package.json)
-- `react`: ^18.3.0
-- `typescript`: ^5.3.0
-- `@tauri-apps/api`: ^1.5.0
-- `zustand`: ^4.5.0
-- `tailwindcss`: ^3.4.0
-
-### Rust (Cargo.toml)
-- `tauri`: 1.5+
-- `keyring`: 2.2+
-- `tokio`: 1.35+
-
-### Python (requirements.txt)
-- `websockets`: >=12.0
-- `google-generativeai`: >=0.3.2
-- `chromadb`: >=0.4.22
-- `silero-vad`: >=4.0
-- `speechbrain`: (for ECAPA-TDNN)
-- `pyaudiowpatch`: >=0.2.12 (Windows)
-- `sounddevice`: >=0.4.6 (macOS/Linux)
-- `pypdf`: >=3.17
-- `python-docx`: >=1.1.0
-
-## Don't Do This
-
-- **Don't embed Python in Rust via PyO3** - Use sidecar pattern
-- **Don't use Electron** - Tauri is lighter and faster
-- **Don't log transcripts/answers to disk** - Privacy requirement
-- **Don't skip voice calibration** - Diarization accuracy drops significantly
-- **Don't expose WebSocket to network** - localhost only (127.0.0.1)
-- **Don't store API keys in plaintext** - Use OS keychain
-- **Don't use Redux** - Zustand is simpler for this use case
-- **Don't use CSS modules** - Tailwind CSS only
-
-## NFR Targets
-
-| Requirement | Target |
-|-------------|--------|
-| End-to-end latency | <5 seconds (P95) |
-| RAM usage | <500MB |
-| CPU (idle) | <10% |
-| CPU (active) | <30% |
-| Session stability | 2 hours, zero crashes |
-| Setup time | <5 minutes |
-| STT accuracy | >90% WER (clear English) |
-| Diarization accuracy | >85% |
 
 ## Prism SDLC
 
@@ -199,16 +152,10 @@ This project uses the Prism SDLC framework.
 |-------|---------|--------|
 | Planning | `/prism-plan` | Complete (Phase 1 + 2) |
 | Solution | `/prism-solution` | Complete (Phase 1 + 2) |
-| Implementation | `/prism-implement` | Phase 1: 19/20, Phase 2: 0/13 |
-| Verification | `/prism-verify` | Pending |
+| Implementation | `/prism-implement` | Complete (33/33) |
+| Verification | `/prism-verify` | Ready for Manual |
 
 ### Key Documents
-- Phase 1 PRD: `_prism/planning/prd.md`
-- Phase 1 Architecture: `_prism/architecture/architecture.md`
 - Phase 2 PRD: `_prism/planning/prd-phase2.md`
 - Phase 2 Architecture: `_prism/architecture/architecture-phase2.md`
-- Tasks: `_prism/tasks.md`
-
-### Next Steps
-- **Complete Phase 1**: `/prism-implement STORY-020` (End-to-End Testing)
-- **Start Phase 2**: `/prism-implement STORY-021` (Model Pre-warming Infrastructure)
+- Verification Report: `_prism/verification/e2e_report.md`
