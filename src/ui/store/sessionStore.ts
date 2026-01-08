@@ -25,6 +25,8 @@ export interface ContextFile {
   preview: string; // First 200 chars
 }
 
+export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic';
+
 export interface SessionState {
   // Session status
   status: 'idle' | 'calibrating' | 'listening' | 'processing';
@@ -41,6 +43,10 @@ export interface SessionState {
    */
   apiKey: string | null;
 
+  // Preferences
+  preferredSttProvider: Provider | 'auto';
+  preferredLlmProvider: Provider | 'auto';
+
   // Current data
   currentTranscription: Transcription | null;
   currentAnswer: Answer | null;
@@ -56,6 +62,8 @@ export interface SessionState {
   setScreenInvisibility: (enabled: boolean) => void;
   setVoiceProfileActive: (active: boolean) => void;
   setApiKey: (key: string | null) => void;
+  setPreferredSttProvider: (provider: Provider | 'auto') => void;
+  setPreferredLlmProvider: (provider: Provider | 'auto') => void;
   setCurrentTranscription: (transcription: Transcription | null) => void;
   setCurrentAnswer: (answer: Answer | null) => void;
   setLastError: (error: string | null) => void;
@@ -73,6 +81,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   isScreenInvisible: false,
   voiceProfileActive: false,
   apiKey: null,
+
+  // Preferences
+  preferredSttProvider: (localStorage.getItem('preferredSttProvider') as Provider | 'auto') || 'auto',
+  preferredLlmProvider: (localStorage.getItem('preferredLlmProvider') as Provider | 'auto') || 'auto',
+
   currentTranscription: null,
   currentAnswer: null,
   lastError: null,
@@ -89,7 +102,18 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setApiKey: (key) => set({ apiKey: key }),
 
+  setPreferredSttProvider: (provider) => {
+    localStorage.setItem('preferredSttProvider', provider);
+    set({ preferredSttProvider: provider });
+  },
+
+  setPreferredLlmProvider: (provider) => {
+    localStorage.setItem('preferredLlmProvider', provider);
+    set({ preferredLlmProvider: provider });
+  },
+
   setCurrentTranscription: (transcription) => set({ currentTranscription: transcription }),
+
 
   setCurrentAnswer: (answer) => set({ currentAnswer: answer }),
 

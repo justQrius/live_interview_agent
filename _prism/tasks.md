@@ -302,13 +302,14 @@ Created: 2026-01-05
   - Deliverable: Browser filters silence, 60%+ WebSocket reduction
   - **Completed**: Implemented `useVADFilter` hook, updated CSP, bundled assets. (WebSocket modification pending Story 033 integration).
 
-- [ ] **Story 2.12**: Provider Configuration UI (ID: STORY-032)
+- [x] **Story 2.12**: Provider Configuration UI (ID: STORY-032) ✅ COMPLETED 2026-01-07
   - Create `src/ui/components/ProviderSettings.tsx`
   - Add multi-provider API key inputs to SettingsPanel
   - Store keys per-provider in OS keychain
   - Add provider preference dropdowns (STT/LLM)
   - Dependencies: STORY-023 through STORY-030
   - Deliverable: Users can configure and select providers
+  - **Completed**: Implemented `ProviderSettings` UI, updated Rust backend for multi-key support, preserved legacy key compatibility. Verified with Rust and React tests.
 
 ### Phase 2.6: Integration
 

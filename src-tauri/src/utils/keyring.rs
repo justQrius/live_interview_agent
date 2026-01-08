@@ -2,7 +2,6 @@ use keyring::Entry;
 use thiserror::Error;
 
 const SERVICE_NAME: &str = "live_interview_agent";
-const API_KEY_USERNAME: &str = "gemini_api_key";
 
 #[derive(Error, Debug)]
 pub enum KeyringError {
@@ -16,33 +15,37 @@ pub enum KeyringError {
     DeleteError(String),
 }
 
-fn get_entry() -> Result<Entry, KeyringError> {
-    Entry::new(SERVICE_NAME, API_KEY_USERNAME).map_err(|e| KeyringError::AccessError(e.to_string()))
+fn get_entry(key_name: &str) -> Result<Entry, KeyringError> {
+    Entry::new(SERVICE_NAME, key_name).map_err(|e| KeyringError::AccessError(e.to_string()))
 }
 
-/// Store the Gemini API key securely in the OS keychain.
+/// Store an API key securely in the OS keychain.
 ///
 /// # Arguments
+/// * `key_name` - The name of the key to store (e.g., "gemini_api_key")
 /// * `key` - The API key to store
 ///
 /// # Returns
 /// * `Ok(())` if successful
 /// * `Err(KeyringError)` if storing fails
-pub fn store_api_key(key: &str) -> Result<(), KeyringError> {
-    let entry = get_entry()?;
+pub fn store_api_key(key_name: &str, key: &str) -> Result<(), KeyringError> {
+    let entry = get_entry(key_name)?;
     entry
         .set_password(key)
         .map_err(|e| KeyringError::StoreError(e.to_string()))
 }
 
-/// Retrieve the Gemini API key from the OS keychain.
+/// Retrieve an API key from the OS keychain.
+///
+/// # Arguments
+/// * `key_name` - The name of the key to retrieve
 ///
 /// # Returns
 /// * `Ok(String)` with the API key if found
 /// * `Err(KeyringError::NotFound)` if no key is stored
 /// * `Err(KeyringError::AccessError)` if keychain access fails
-pub fn retrieve_api_key() -> Result<String, KeyringError> {
-    let entry = get_entry()?;
+pub fn retrieve_api_key(key_name: &str) -> Result<String, KeyringError> {
+    let entry = get_entry(key_name)?;
     match entry.get_password() {
         Ok(password) => Ok(password),
         Err(keyring::Error::NoEntry) => Err(KeyringError::NotFound),
@@ -50,13 +53,16 @@ pub fn retrieve_api_key() -> Result<String, KeyringError> {
     }
 }
 
-/// Delete the Gemini API key from the OS keychain.
+/// Delete an API key from the OS keychain.
+///
+/// # Arguments
+/// * `key_name` - The name of the key to delete
 ///
 /// # Returns
 /// * `Ok(())` if successful or if key was not found
 /// * `Err(KeyringError)` if deletion fails
-pub fn delete_api_key() -> Result<(), KeyringError> {
-    let entry = get_entry()?;
+pub fn delete_api_key(key_name: &str) -> Result<(), KeyringError> {
+    let entry = get_entry(key_name)?;
     match entry.delete_credential() {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()), // Already deleted, that's fine
@@ -66,11 +72,14 @@ pub fn delete_api_key() -> Result<(), KeyringError> {
 
 /// Check if an API key is stored in the keychain.
 ///
+/// # Arguments
+/// * `key_name` - The name of the key to check
+///
 /// # Returns
 /// * `true` if a key exists
 /// * `false` if no key is stored or access fails
-pub fn has_api_key() -> bool {
-    retrieve_api_key().is_ok()
+pub fn has_api_key(key_name: &str) -> bool {
+    retrieve_api_key(key_name).is_ok()
 }
 
 #[cfg(test)]
@@ -79,9 +88,10 @@ mod tests {
     use serial_test::serial;
 
     const TEST_KEY: &str = "test_api_key_12345";
+    const TEST_KEY_NAME: &str = "test_key_name";
 
     fn cleanup() {
-        let _ = delete_api_key();
+        let _ = delete_api_key(TEST_KEY_NAME);
     }
 
     #[test]
@@ -89,7 +99,7 @@ mod tests {
     fn test_store_and_retrieve_api_key() {
         cleanup();
 
-        let store_result = store_api_key(TEST_KEY);
+        let store_result = store_api_key(TEST_KEY_NAME, TEST_KEY);
         if store_result.is_err() {
             eprintln!(
                 "Skipping test: keyring storage not available: {:?}",
@@ -98,7 +108,7 @@ mod tests {
             return;
         }
 
-        let retrieve_result = retrieve_api_key();
+        let retrieve_result = retrieve_api_key(TEST_KEY_NAME);
         if let Err(e) = &retrieve_result {
             eprintln!("Skipping test: keyring retrieval failed: {:?}", e);
             cleanup();
@@ -114,23 +124,23 @@ mod tests {
     fn test_retrieve_nonexistent_key() {
         cleanup();
 
-        let result = retrieve_api_key();
+        let result = retrieve_api_key(TEST_KEY_NAME);
         assert!(matches!(result, Err(KeyringError::NotFound)));
     }
 
     #[test]
     #[serial]
     fn test_delete_api_key() {
-        let store_result = store_api_key(TEST_KEY);
+        let store_result = store_api_key(TEST_KEY_NAME, TEST_KEY);
         if store_result.is_err() {
             eprintln!("Skipping test: keyring storage not available");
             return;
         }
 
-        let delete_result = delete_api_key();
+        let delete_result = delete_api_key(TEST_KEY_NAME);
         assert!(delete_result.is_ok());
 
-        let retrieve_result = retrieve_api_key();
+        let retrieve_result = retrieve_api_key(TEST_KEY_NAME);
         assert!(matches!(retrieve_result, Err(KeyringError::NotFound)));
     }
 
@@ -139,7 +149,7 @@ mod tests {
     fn test_delete_nonexistent_key() {
         cleanup();
 
-        let result = delete_api_key();
+        let result = delete_api_key(TEST_KEY_NAME);
         assert!(result.is_ok());
     }
 
@@ -147,15 +157,15 @@ mod tests {
     #[serial]
     fn test_has_api_key() {
         cleanup();
-        assert!(!has_api_key());
+        assert!(!has_api_key(TEST_KEY_NAME));
 
-        let store_result = store_api_key(TEST_KEY);
+        let store_result = store_api_key(TEST_KEY_NAME, TEST_KEY);
         if store_result.is_err() {
             eprintln!("Skipping test: keyring storage not available");
             return;
         }
 
-        if !has_api_key() {
+        if !has_api_key(TEST_KEY_NAME) {
             eprintln!("Skipping test: keyring may not persist in this environment");
             cleanup();
             return;
@@ -169,16 +179,16 @@ mod tests {
     fn test_overwrite_api_key() {
         cleanup();
 
-        let initial_store = store_api_key("initial_key");
+        let initial_store = store_api_key(TEST_KEY_NAME, "initial_key");
         if initial_store.is_err() {
             eprintln!("Skipping test: keyring storage not available");
             return;
         }
 
-        let store_result = store_api_key("new_key");
+        let store_result = store_api_key(TEST_KEY_NAME, "new_key");
         assert!(store_result.is_ok());
 
-        let retrieve_result = retrieve_api_key();
+        let retrieve_result = retrieve_api_key(TEST_KEY_NAME);
         if retrieve_result.is_err() {
             eprintln!("Skipping test: keyring retrieval failed");
             cleanup();
