@@ -32,11 +32,14 @@ class TestBidirectionalMessaging:
 
         # Patch all components to avoid real model loading and API calls
         with patch("server.SpeakerRecognizer") as MockRecognizer, \
-             patch("server.GeminiSTTProvider") as MockSTT, \
+             patch("server.ProviderFactory") as MockFactory, \
              patch("server.VADProcessor") as MockVAD, \
              patch("server.AudioCapture") as MockCapture, \
              patch("server.NoiseReducer") as MockNoiseReducer, \
-             patch("server.ModelWarmer") as MockWarmer:
+             patch("server.ModelWarmer") as MockWarmer, \
+             patch("server.VectorStore") as MockVectorStore, \
+             patch("server.RAGEngine") as MockRAGEngine, \
+             patch("server.ContextManager") as MockContextManager:
 
             # Setup mock SpeakerRecognizer
             mock_recognizer = MockRecognizer.return_value
@@ -51,9 +54,21 @@ class TestBidirectionalMessaging:
             mock_models.speaker_recognizer = None
             mock_warmer.get_models.return_value = mock_models
 
-            # Setup mock STT
-            mock_stt = MockSTT.return_value
+            # Setup mock Factory and Providers
+            mock_factory = MockFactory.return_value
+            mock_stt = MagicMock()
             mock_stt.transcribe = AsyncMock()
+            mock_stt.is_available.return_value = True
+            mock_factory.get_stt_provider.return_value = mock_stt
+            
+            mock_llm = MagicMock()
+            mock_llm.is_available.return_value = True
+            # Mock generate_response (standard interface)
+            async def mock_gen_resp(prompt, context, history):
+                yield "This is a "
+                yield "mock answer."
+            mock_llm.generate_response = mock_gen_resp
+            mock_factory.get_llm_provider.return_value = mock_llm
 
             # Setup mock AudioCapture
             mock_capture = MockCapture.return_value
@@ -71,6 +86,12 @@ class TestBidirectionalMessaging:
             mock_noise = MockNoiseReducer.return_value
             mock_noise.enabled = True
             mock_noise.reduce_noise = MagicMock(side_effect=lambda x: x)
+            
+            # Setup mock RAG/Context
+            mock_vector_store = MockVectorStore.return_value
+            mock_rag = MockRAGEngine.return_value
+            mock_ctx = MockContextManager.return_value
+            mock_ctx.get_all_chunks.return_value = []
 
             srv = SidecarServer(host="127.0.0.1", port=8766)  # Different port for tests
             server_task = asyncio.create_task(srv.start())
@@ -85,6 +106,44 @@ class TestBidirectionalMessaging:
                 await server_task
             except asyncio.CancelledError:
                 pass
+
+    @pytest.mark.asyncio
+    async def test_full_session_lifecycle_new_payload(self, server):
+        """Test complete session lifecycle with new payload format."""
+        import websockets
+
+        async with websockets.connect("ws://127.0.0.1:8766") as ws:
+            # 1. Start session with full config
+            start_msg = Message(
+                type=MessageType.START_SESSION,
+                data={
+                    "apiKeys": {
+                        "gemini": "test-gemini-key",
+                        "groq": "test-groq-key"
+                    },
+                    "preferences": {
+                        "sttProvider": "groq",
+                        "llmProvider": "gemini"
+                    }
+                }
+            )
+            await ws.send(start_msg.to_json())
+
+            # Should receive STATUS: listening
+            response = await asyncio.wait_for(ws.recv(), timeout=1.0)
+            status_msg = Message.from_json(response)
+            assert status_msg.type == MessageType.STATUS
+            assert status_msg.data["state"] == "listening"
+
+            # 2. Stop session
+            stop_msg = Message(type=MessageType.STOP_SESSION)
+            await ws.send(stop_msg.to_json())
+
+            # Should receive STATUS: idle
+            response = await asyncio.wait_for(ws.recv(), timeout=1.0)
+            status_msg = Message.from_json(response)
+            assert status_msg.type == MessageType.STATUS
+            assert status_msg.data["state"] == "idle"
 
     @pytest.mark.asyncio
     async def test_full_session_lifecycle(self, server):
@@ -119,69 +178,88 @@ class TestBidirectionalMessaging:
     async def test_manual_question_flow(self, server):
         """Test sending a manual question and receiving a response."""
         import websockets
-        from unittest.mock import patch, AsyncMock
-
-        # Mock the LLM to prevent real API calls
-        async def mock_generate_answer(question, context_chunks=None):
-            yield "This is a "
-            yield "mock answer."
-
-        with patch("server.GeminiLLMProvider") as MockLLM:
-            mock_llm_instance = MockLLM.return_value
-            mock_llm_instance.generate_answer = mock_generate_answer
-            
-            async with websockets.connect("ws://127.0.0.1:8766") as ws:
-                # Start session first
-                start_msg = Message(
-                    type=MessageType.START_SESSION,
-                    data={"apiKey": "test-api-key"}
-                )
-                await ws.send(start_msg.to_json())
-                await ws.recv()  # Consume status response
-
-                # Send manual question
-                question_msg = Message(
-                    type=MessageType.MANUAL_QUESTION,
-                    data={"question": "What is Python?"}
-                )
-                await ws.send(question_msg.to_json())
-
-                # Should receive:
-                # 1. STATUS: processing
-                # 2. ANSWER_CHUNK (possibly multiple)
-                # 3. STATUS: listening
-
-                responses = []
-                for _ in range(5):  # Expect status + 2 chunks + completion + status
-                    try:
-                        response = await asyncio.wait_for(ws.recv(), timeout=2.0)
-                        responses.append(Message.from_json(response))
-                    except asyncio.TimeoutError:
-                        break
-
-                # Verify we got at least a status update and an answer
-                message_types = [r.type for r in responses]
-                assert MessageType.STATUS in message_types
-                assert MessageType.ANSWER_CHUNK in message_types
-
-    @pytest.mark.asyncio
-    async def test_start_session_without_api_key(self, server):
-        """Test that starting session without API key returns error."""
-        import websockets
-
+        
         async with websockets.connect("ws://127.0.0.1:8766") as ws:
-            # Try to start session without API key
+            # Start session first
             start_msg = Message(
                 type=MessageType.START_SESSION,
-                data={}
+                data={"apiKey": "test-api-key"}
             )
             await ws.send(start_msg.to_json())
+            await ws.recv()  # Consume status response
 
-            # Should receive ERROR
-            response = await asyncio.wait_for(ws.recv(), timeout=1.0)
-            error_msg = Message.from_json(response)
-            assert error_msg.type == MessageType.ERROR
-            assert "API key" in error_msg.data["message"]
+            # Send manual question
+            question_msg = Message(
+                type=MessageType.MANUAL_QUESTION,
+                data={"question": "What is Python?"}
+            )
+            await ws.send(question_msg.to_json())
+
+            # Should receive:
+            # 1. STATUS: processing
+            # 2. ANSWER_CHUNK (possibly multiple)
+            # 3. STATUS: listening
+
+            responses = []
+            for _ in range(5):  # Expect status + 2 chunks + completion + status
+                try:
+                    response = await asyncio.wait_for(ws.recv(), timeout=2.0)
+                    responses.append(Message.from_json(response))
+                except asyncio.TimeoutError:
+                    break
+
+            # Verify we got at least a status update and an answer
+            message_types = [r.type for r in responses]
+            assert MessageType.STATUS in message_types
+            assert MessageType.ANSWER_CHUNK in message_types
+
+    @pytest.mark.asyncio
+    async def test_start_session_without_api_key(self):
+        """Test that starting session without API key returns error."""
+        import websockets
+        from server import SidecarServer
+        from unittest.mock import patch, MagicMock, AsyncMock
+        
+        # Patch dependencies but ensure Factory raises error
+        with patch("server.SpeakerRecognizer"), \
+             patch("server.ProviderFactory") as MockFactory, \
+             patch("server.VADProcessor"), \
+             patch("server.AudioCapture"), \
+             patch("server.NoiseReducer"), \
+             patch("server.ModelWarmer"), \
+             patch("server.VectorStore"), \
+             patch("server.RAGEngine"), \
+             patch("server.ContextManager"):
+             
+             # Configure factory to raise error
+             mock_factory = MockFactory.return_value
+             mock_factory.get_stt_provider.side_effect = Exception("No STT available")
+             
+             srv = SidecarServer(host="127.0.0.1", port=8767)
+             server_task = asyncio.create_task(srv.start())
+             await asyncio.sleep(0.1)
+             
+             try:
+                async with websockets.connect("ws://127.0.0.1:8767") as ws:
+                    # Try to start session without API key
+                    start_msg = Message(
+                        type=MessageType.START_SESSION,
+                        data={}
+                    )
+                    await ws.send(start_msg.to_json())
+
+                    # Should receive ERROR
+                    response = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                    error_msg = Message.from_json(response)
+                    assert error_msg.type == MessageType.ERROR
+                    assert "initialize providers" in error_msg.data["message"]
+             finally:
+                await srv.stop()
+                server_task.cancel()
+                try:
+                    await server_task
+                except asyncio.CancelledError:
+                    pass
 
     @pytest.mark.asyncio
     async def test_calibration_flow(self, server):

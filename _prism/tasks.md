@@ -313,13 +313,14 @@ Created: 2026-01-05
 
 ### Phase 2.6: Integration
 
-- [ ] **Story 2.13**: Server Integration + E2E Testing (ID: STORY-033)
+- [x] **Story 2.13**: Server Integration + E2E Testing (ID: STORY-033) ✅ COMPLETED 2026-01-07
   - Update `server.py` to use ProviderFactory
   - Update `protocol.py` with provider config messages
   - Integration tests for all providers
   - Latency benchmarking (target: P50 <1.5s)
   - Dependencies: All above
   - Deliverable: Full Phase 2 integration, all tests passing
+  - **Completed**: Updated `server.py` to use `ProviderFactory`, updated `useWebSocket.ts` to send full config, passed integration tests. All Phase 2 stories complete!
 
 ---
 
