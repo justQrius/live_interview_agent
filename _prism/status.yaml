@@ -28,10 +28,10 @@ implementation:
   phase1_stories_complete: 19
   phase1_stories_total: 20
   phase1_remaining: STORY-020
-  phase2_stories_complete: 10
+  phase2_stories_complete: 11
   phase2_stories_total: 13
-  phase2_next_story: STORY-032
-  last_completed: STORY-031
+  phase2_next_story: STORY-033
+  last_completed: STORY-032
 
 verification:
   status: pending
