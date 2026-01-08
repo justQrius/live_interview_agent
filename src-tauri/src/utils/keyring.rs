@@ -29,20 +29,36 @@ fn get_entry(key_name: &str) -> Result<Entry, KeyringError> {
 /// * `Ok(())` if successful
 /// * `Err(KeyringError)` if storing fails
 pub fn store_api_key(key_name: &str, key: &str) -> Result<(), KeyringError> {
+    eprintln!("[Keyring] store_api_key called for: {}", key_name);
     let entry = get_entry(key_name)?;
+    
     match entry.set_password(key) {
         Ok(()) => {
+            eprintln!("[Keyring] OS keyring set_password returned Ok, verifying...");
+            
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            
             match entry.get_password() {
-                Ok(_) => Ok(()),
-                Err(_) => {
-                    eprintln!("[Keyring] OS keyring not persisting, using fallback storage");
+                Ok(retrieved) => {
+                    eprintln!("[Keyring] OS keyring get_password returned Ok, checking if it matches...");
+                    if retrieved == key {
+                        eprintln!("[Keyring] OS keyring verification successful!");
+                        Ok(())
+                    } else {
+                        eprintln!("[Keyring] OS keyring returned different value, using fallback");
+                        crate::utils::storage_fallback::store_key(key_name, key)
+                            .map_err(|e| KeyringError::StoreError(e))
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[Keyring] OS keyring get_password failed: {}, using fallback storage", e);
                     crate::utils::storage_fallback::store_key(key_name, key)
                         .map_err(|e| KeyringError::StoreError(e))
                 }
             }
         }
         Err(e) => {
-            eprintln!("[Keyring] OS keyring failed, using fallback storage: {}", e);
+            eprintln!("[Keyring] OS keyring set_password failed: {}, using fallback storage", e);
             crate::utils::storage_fallback::store_key(key_name, key)
                 .map_err(|e| KeyringError::StoreError(e))
         }
