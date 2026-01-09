@@ -1,3 +1,10 @@
+"""
+OpenAI LLM Provider.
+
+Implements LLMProvider interface using OpenAI's GPT models
+for generating high-quality interview answers.
+"""
+
 import logging
 from typing import Any, AsyncGenerator, Dict, List, cast
 
@@ -7,16 +14,24 @@ except ImportError:
     AsyncOpenAI = None
 
 from ..base import LLMProvider
+from .prompts import build_system_prompt, format_context_for_prompt
 
 logger = logging.getLogger(__name__)
-
 
 
 class OpenAILLMProvider(LLMProvider):
     """
     OpenAI implementation of the LLMProvider interface.
-    Uses GPT-4o for response generation.
+    
+    Uses GPT-4o for response generation with enhanced prompting
+    for high-quality, conversational interview answers.
     """
+
+    # Optimized parameters based on research
+    DEFAULT_TEMPERATURE = 0.45  # Balanced: natural variation + consistency
+    DEFAULT_FREQUENCY_PENALTY = 0.55  # Stronger penalty to prevent repetition
+    DEFAULT_PRESENCE_PENALTY = 0.25  # Encourage topic diversity
+    DEFAULT_TOP_P = 0.9  # Nucleus sampling for quality
     
     def __init__(self, api_key: str, model: str = "gpt-4o"):
         """
@@ -47,9 +62,12 @@ class OpenAILLMProvider(LLMProvider):
         """
         Generate a streaming response from OpenAI.
         
+        Uses dynamic prompt construction based on question type
+        for optimal response quality.
+        
         Args:
-            prompt: The user query
-            context: Retrieved context
+            prompt: The user query (interview question)
+            context: Retrieved context from RAG
             history: Conversation history
             
         Yields:
@@ -62,9 +80,10 @@ class OpenAILLMProvider(LLMProvider):
                 model=self.model,
                 messages=cast(Any, messages),
                 stream=True,
-                temperature=0.3,
-                frequency_penalty=0.4,
-                presence_penalty=0.1,
+                temperature=self.DEFAULT_TEMPERATURE,
+                frequency_penalty=self.DEFAULT_FREQUENCY_PENALTY,
+                presence_penalty=self.DEFAULT_PRESENCE_PENALTY,
+                top_p=self.DEFAULT_TOP_P,
             )
             
             async for chunk in stream:
@@ -79,54 +98,54 @@ class OpenAILLMProvider(LLMProvider):
         self, prompt: str, context: str, history: List[Dict]
     ) -> List[Dict[str, str]]:
         """
-        Construct message list for the API.
+        Construct message list for the API with enhanced prompting.
+        
+        Uses dynamic system prompt based on question classification
+        (behavioral, intro, technical, etc.) for optimal responses.
         
         Args:
-            prompt: The user query
-            context: Retrieved context
+            prompt: The user query (interview question)
+            context: Retrieved context from RAG
             history: Conversation history
             
         Returns:
-            List of message dictionaries
+            List of message dictionaries for OpenAI API
         """
-        # System prompt
-        system_content = (
-            "You are a helpful interview assistant for a job candidate. "
-            "Respond in first person as the candidate (use 'I'). "
-            "Prefer facts that are supported by the provided context; do not invent schools, titles, companies, dates, or metrics. "
-            "If a detail isn't in the context, either omit it or say 'I can share details if helpful.' "
-            "Write in a clean, user-friendly format: 1 short headline sentence, then 3-5 bullet points, then a 1-line close. "
-            "Hard constraints: no repeated sentences/phrases; no duplicated paragraphs; keep it ~6-10 lines total. "
-            "For intro questions (e.g., 'Tell me about yourself', 'Who are you?', 'Walk me through your background'), use: "
-            "Headline (role + focus) → Education (1 line) → Experience highlights (2-3 bullets) → Current focus + why it fits (1 line)."
-        )
+        # Build dynamic system prompt based on question type
+        system_content, question_type = build_system_prompt(prompt)
         
-        messages: List[Dict[str, str]] = [{"role": "system", "content": system_content}]
+        # Format context based on question type
+        formatted_context = format_context_for_prompt(context, question_type)
         
-        # History (limit to last 10 messages to avoid context overflow)
-        # Assuming history format matches OpenAI's expected format (role/content)
-        # If history comes from our internal storage, it might need mapping
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": system_content}
+        ]
+        
+        # Add conversation history (limit to last 10 to avoid context overflow)
         for msg in history[-10:]:
             role = msg.get("role", "user")
-            # Map 'interviewer' to 'user' and 'assistant' to 'assistant'
+            content = str(msg.get("content", ""))
+            
+            if not content:
+                continue
+                
+            # Map internal roles to OpenAI roles
             if role == "interviewer":
                 role = "user"
-            elif role == "user": # In our app, 'user' usually means the candidate, but here we treat it as assistant/user interaction
-                 role = "user"
-                 
+            elif role not in ("user", "assistant", "system"):
+                role = "user"
+                
             messages.append({
                 "role": role,
-                "content": str(msg.get("content", "")),
+                "content": content,
             })
             
-        # Current input with context injection
-        user_content = f"""
-Context:
-{context}
+        # Current input with formatted context
+        user_content = f"""{formatted_context}
 
 Question:
-{prompt}
-"""
+{prompt}"""
+        
         messages.append({"role": "user", "content": user_content})
         
         return messages
