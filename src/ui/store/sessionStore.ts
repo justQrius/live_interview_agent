@@ -67,6 +67,7 @@ export interface SessionState {
   setCurrentTranscription: (transcription: Transcription | null) => void;
   setCurrentAnswer: (answer: Answer | null) => void;
   setLastError: (error: string | null) => void;
+  startAnswer: (question: string, timestamp?: number) => void;
   appendAnswerText: (text: string) => void;
   completeAnswer: (confidence: 'high' | 'medium' | 'low') => void;
   addContextFile: (file: ContextFile) => void;
@@ -119,26 +120,70 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setLastError: (error) => set({ lastError: error }),
 
+  startAnswer: (question, timestamp) =>
+    set({
+      currentAnswer: {
+        question,
+        answerText: '',
+        confidence: 'medium',
+        timestamp: timestamp ?? Date.now(),
+        isComplete: false,
+      },
+    }),
+
   appendAnswerText: (text) =>
     set((state) => {
+      const trimOverlap = (existingText: string, incomingText: string) => {
+        if (!existingText || !incomingText) return incomingText;
+
+        // If provider streams cumulative content from the start, keep only the delta.
+        if (incomingText.startsWith(existingText)) {
+          return incomingText.slice(existingText.length);
+        }
+
+        // If provider re-sends a prefix of what we already have, ignore it.
+        if (existingText.startsWith(incomingText)) {
+          return '';
+        }
+
+        const maxOverlap = Math.min(existingText.length, incomingText.length);
+        for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+          if (existingText.endsWith(incomingText.slice(0, overlap))) {
+            return incomingText.slice(overlap);
+          }
+        }
+
+        return incomingText;
+      };
+
+
       if (!state.currentAnswer) {
         return {
           currentAnswer: {
             question: '',
             answerText: text,
-            confidence: 'high',
+            confidence: 'medium',
             timestamp: Date.now(),
             isComplete: false,
           },
         };
       }
+
+      const deduped = trimOverlap(state.currentAnswer.answerText, text);
+
+      const candidate = deduped.trim();
+      if (candidate.length >= 40 && state.currentAnswer.answerText.includes(candidate)) {
+        return state;
+      }
+
       return {
         currentAnswer: {
           ...state.currentAnswer,
-          answerText: state.currentAnswer.answerText + text,
+          answerText: state.currentAnswer.answerText + deduped,
         },
       };
     }),
+
 
   completeAnswer: (confidence) =>
     set((state) => {

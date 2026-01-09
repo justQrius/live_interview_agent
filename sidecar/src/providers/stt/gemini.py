@@ -8,7 +8,7 @@ for speech-to-text transcription.
 import io
 import logging
 import wave
-from typing import Optional
+from typing import Any, Optional, cast
 
 import google.generativeai as genai
 
@@ -64,8 +64,9 @@ class GeminiSTTProvider(STTProvider):
         self._model = None
 
         try:
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(self._model_name)
+            genai_any = cast(Any, genai)
+            genai_any.configure(api_key=api_key)
+            self._model = genai_any.GenerativeModel(self._model_name)
             self._available = True
         except Exception as e:
             raise GeminiSTTProviderError(f"Failed to initialize Gemini client: {e}")
@@ -132,14 +133,18 @@ class GeminiSTTProvider(STTProvider):
                 "Just the text."
             )
 
+            if not self._model:
+                raise GeminiSTTProviderError("Gemini model is not initialized")
+
             # Generate content asynchronously
-            response = await self._model.generate_content_async(
+            model = cast(Any, self._model)
+            response = await model.generate_content_async(
                 [
                     prompt,
                     {
                         "mime_type": "audio/wav",
-                        "data": wav_data
-                    }
+                        "data": wav_data,
+                    },
                 ]
             )
 

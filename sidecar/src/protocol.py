@@ -23,6 +23,7 @@ class MessageType(str, Enum):
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
+    ANSWER_START = "ANSWER_START"
     ANSWER_CHUNK = "ANSWER_CHUNK"
     ERROR = "ERROR"
     STATUS = "STATUS"
@@ -57,12 +58,12 @@ class Message:
     """Base message structure."""
 
     type: MessageType
-    data: Optional[dict] = None
+    data: Optional[dict[str, Any]] = None
 
     def to_json(self) -> str:
         """Serialize message to JSON string."""
-        payload = {"type": self.type.value}
-        if self.data:
+        payload: dict[str, Any] = {"type": self.type.value}
+        if self.data is not None:
             payload["data"] = self.data
         return json.dumps(payload)
 

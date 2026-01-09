@@ -1,5 +1,6 @@
 import logging
-from typing import List, Dict, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Dict, List, cast
+
 try:
     from openai import AsyncOpenAI
 except ImportError:
@@ -8,6 +9,8 @@ except ImportError:
 from ..base import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+
 
 class OpenAILLMProvider(LLMProvider):
     """
@@ -57,9 +60,11 @@ class OpenAILLMProvider(LLMProvider):
         try:
             stream = await self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,
+                messages=cast(Any, messages),
                 stream=True,
-                temperature=0.7
+                temperature=0.3,
+                frequency_penalty=0.4,
+                presence_penalty=0.1,
             )
             
             async for chunk in stream:
@@ -70,7 +75,9 @@ class OpenAILLMProvider(LLMProvider):
             logger.error(f"Error generating response from OpenAI: {e}")
             raise
 
-    def _construct_messages(self, prompt: str, context: str, history: List[Dict]) -> List[Dict]:
+    def _construct_messages(
+        self, prompt: str, context: str, history: List[Dict]
+    ) -> List[Dict[str, str]]:
         """
         Construct message list for the API.
         
@@ -84,15 +91,17 @@ class OpenAILLMProvider(LLMProvider):
         """
         # System prompt
         system_content = (
-            "You are a helpful interview assistant. "
-            "Your goal is to provide concise, relevant, and accurate answers "
-            "to interview questions based on the provided context. "
-            "If the context doesn't contain the answer, use your general knowledge "
-            "but mention that it's not in the context. "
-            "Keep answers professional and to the point."
+            "You are a helpful interview assistant for a job candidate. "
+            "Respond in first person as the candidate (use 'I'). "
+            "Prefer facts that are supported by the provided context; do not invent schools, titles, companies, dates, or metrics. "
+            "If a detail isn't in the context, either omit it or say 'I can share details if helpful.' "
+            "Write in a clean, user-friendly format: 1 short headline sentence, then 3-5 bullet points, then a 1-line close. "
+            "Hard constraints: no repeated sentences/phrases; no duplicated paragraphs; keep it ~6-10 lines total. "
+            "For intro questions (e.g., 'Tell me about yourself', 'Who are you?', 'Walk me through your background'), use: "
+            "Headline (role + focus) → Education (1 line) → Experience highlights (2-3 bullets) → Current focus + why it fits (1 line)."
         )
         
-        messages = [{"role": "system", "content": system_content}]
+        messages: List[Dict[str, str]] = [{"role": "system", "content": system_content}]
         
         # History (limit to last 10 messages to avoid context overflow)
         # Assuming history format matches OpenAI's expected format (role/content)
@@ -107,7 +116,7 @@ class OpenAILLMProvider(LLMProvider):
                  
             messages.append({
                 "role": role,
-                "content": msg.get("content", "")
+                "content": str(msg.get("content", "")),
             })
             
         # Current input with context injection

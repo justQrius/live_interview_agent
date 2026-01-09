@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act } from '@testing-library/react';
 
 // Mock WebSocket for testing
+import { useSessionStore } from '../store/sessionStore';
+
 class MockWebSocket {
   static CONNECTING = 0;
   static OPEN = 1;
   static CLOSING = 2;
   static CLOSED = 3;
+
+  static instances = 0;
+  static lastInstance: MockWebSocket | null = null;
 
   readyState = MockWebSocket.CONNECTING;
   onopen: ((event: Event) => void) | null = null;
@@ -16,6 +22,9 @@ class MockWebSocket {
   private sentMessages: string[] = [];
 
   constructor(public url: string) {
+    MockWebSocket.instances += 1;
+    MockWebSocket.lastInstance = this;
+
     // Simulate async connection
     setTimeout(() => {
       this.readyState = MockWebSocket.OPEN;
@@ -61,6 +70,7 @@ const originalWebSocket = globalThis.WebSocket;
 
 describe('WebSocket Message Protocol', () => {
   beforeEach(() => {
+    MockWebSocket.instances = 0;
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   });
 
@@ -99,14 +109,17 @@ describe('WebSocket Message Protocol', () => {
     it('should create valid START_SESSION message with API key', () => {
       const message = {
         type: 'START_SESSION',
-        data: { apiKey: 'test-api-key' },
+        data: {
+          apiKeys: { gemini: 'test-api-key' },
+          preferences: { sttProvider: 'gemini', llmProvider: 'gemini' },
+        },
       };
 
       const json = JSON.stringify(message);
       const parsed = JSON.parse(json);
 
       expect(parsed.type).toBe('START_SESSION');
-      expect(parsed.data.apiKey).toBe('test-api-key');
+      expect(parsed.data.apiKeys.gemini).toBe('test-api-key');
     });
 
     it('should create valid STOP_SESSION message', () => {
@@ -245,6 +258,79 @@ describe('WebSocket Message Protocol', () => {
 
       expect(parsed.type).toBe('STATUS');
       expect(parsed.data.state).toBe('listening');
+    });
+  });
+
+  describe('useWebSocket hook', () => {
+    it('should use a single shared WebSocket across multiple hook consumers', async () => {
+      const { render } = await import('@testing-library/react');
+      const React = await import('react');
+      const { useWebSocket } = await import('./useWebSocket');
+
+      const HookUser: React.FC = () => {
+        useWebSocket();
+        return null;
+      };
+
+      render(
+        React.createElement(
+          React.Fragment,
+          null,
+          React.createElement(HookUser, null),
+          React.createElement(HookUser, null),
+          React.createElement(HookUser, null)
+        )
+      );
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      expect(MockWebSocket.instances).toBe(1);
+    });
+
+    it('should start a fresh answer when an interviewer transcription arrives', async () => {
+      const { render } = await import('@testing-library/react');
+      const React = await import('react');
+      const { useWebSocket } = await import('./useWebSocket');
+
+      useSessionStore.setState({
+        status: 'idle',
+        currentTranscription: null,
+        currentAnswer: null,
+        transcriptionHistory: [],
+        answerHistory: [],
+      });
+
+      const HookUser: React.FC = () => {
+        useWebSocket();
+        return null;
+      };
+
+      render(React.createElement(HookUser, null));
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+
+      await act(async () => {
+        MockWebSocket.lastInstance?.simulateMessage({
+          type: 'TRANSCRIPTION',
+          data: {
+            speaker: 'Interviewer',
+            text: 'Who are you?',
+            timestamp: 111,
+            confidence: 0.9,
+          },
+        });
+      });
+
+      const state = useSessionStore.getState();
+      expect(state.currentTranscription?.text).toBe('Who are you?');
+      expect(state.currentAnswer?.question).toBe('Who are you?');
+      expect(state.currentAnswer?.timestamp).toBe(111);
+      expect(state.currentAnswer?.answerText).toBe('');
+      expect(state.currentAnswer?.isComplete).toBe(false);
     });
   });
 

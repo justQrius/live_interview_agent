@@ -15,29 +15,18 @@ const SessionControls: React.FC = () => {
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [hasPrimaryKey, setHasPrimaryKey] = useState<boolean | null>(null);
 
-  console.log('[SessionControls] Render state:', { 
-    status, 
-    isConnected, 
-    hasPrimaryKey, 
-    preferredSttProvider,
-    buttonDisabled: status !== 'idle' || !isConnected || hasPrimaryKey !== true 
-  });
-
   useEffect(() => {
     let isMounted = true;
     
     const checkKey = () => {
       const provider = preferredSttProvider === 'auto' ? 'gemini' : preferredSttProvider;
-      console.log('[SessionControls] Checking API key for provider:', provider);
       invoke<{ exists: boolean }>('has_api_key', { provider })
         .then((status) => {
-          console.log('[SessionControls] API key check result:', { provider, exists: status.exists });
           if (isMounted) {
             setHasPrimaryKey(status.exists);
           }
         })
-        .catch((err) => {
-          console.error(`Failed to check API key for ${provider}:`, err);
+        .catch(() => {
           if (isMounted) {
             setHasPrimaryKey(false);
           }
@@ -46,8 +35,7 @@ const SessionControls: React.FC = () => {
 
     checkKey();
 
-    const handleApiKeyChange = (event: Event) => {
-      console.log('[SessionControls] Received apiKeyChanged event:', (event as CustomEvent).detail);
+    const handleApiKeyChange = () => {
       checkKey();
     };
 
@@ -82,7 +70,7 @@ const SessionControls: React.FC = () => {
           apiKeys[provider] = key;
         }
       } catch (err) {
-        console.debug(`No key for ${provider}`);
+        // Ignore missing keys
       }
     }
 
