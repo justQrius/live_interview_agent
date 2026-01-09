@@ -3,14 +3,18 @@ import { useSessionStore } from './sessionStore';
 
 describe('sessionStore', () => {
   beforeEach(() => {
-    // Reset store to initial state before each test
+    // Reset store to a predictable baseline before each test.
     useSessionStore.setState({
       status: 'idle',
       isScreenInvisible: false,
       voiceProfileActive: false,
       apiKey: null,
+      preferredSttProvider: 'auto',
+      preferredLlmProvider: 'auto',
       currentTranscription: null,
       currentAnswer: null,
+      lastError: null,
+      transcriptionHistory: [],
       answerHistory: [],
       loadedContextFiles: [],
     });
@@ -18,8 +22,7 @@ describe('sessionStore', () => {
 
   describe('status', () => {
     it('should start with idle status', () => {
-      const { status } = useSessionStore.getState();
-      expect(status).toBe('idle');
+      expect(useSessionStore.getState().status).toBe('idle');
     });
 
     it('should update status', () => {
@@ -46,8 +49,7 @@ describe('sessionStore', () => {
 
   describe('apiKey', () => {
     it('should start with null apiKey', () => {
-      const { apiKey } = useSessionStore.getState();
-      expect(apiKey).toBeNull();
+      expect(useSessionStore.getState().apiKey).toBeNull();
     });
 
     it('should set and retrieve API key', () => {
@@ -66,8 +68,7 @@ describe('sessionStore', () => {
 
   describe('transcription', () => {
     it('should start with null transcription', () => {
-      const { currentTranscription } = useSessionStore.getState();
-      expect(currentTranscription).toBeNull();
+      expect(useSessionStore.getState().currentTranscription).toBeNull();
     });
 
     it('should set transcription', () => {
@@ -78,26 +79,82 @@ describe('sessionStore', () => {
         timestamp: Date.now(),
         confidence: 0.95,
       };
+
       setCurrentTranscription(transcription);
       expect(useSessionStore.getState().currentTranscription).toEqual(transcription);
+    });
+
+    it('should add transcription to history', () => {
+      const { addTranscription } = useSessionStore.getState();
+
+      addTranscription({ speaker: 'Interviewer', text: 'Q1', timestamp: 1, confidence: 0.9 });
+      addTranscription({ speaker: 'User', text: 'A1', timestamp: 2, confidence: 0.8 });
+
+      const state = useSessionStore.getState();
+      expect(state.transcriptionHistory).toHaveLength(2);
+      expect(state.currentTranscription?.text).toBe('A1');
     });
   });
 
   describe('answer', () => {
     it('should start with null answer', () => {
-      const { currentAnswer } = useSessionStore.getState();
-      expect(currentAnswer).toBeNull();
+      expect(useSessionStore.getState().currentAnswer).toBeNull();
     });
 
-    it('should append answer text', () => {
-      const { appendAnswerText } = useSessionStore.getState();
+    it('should append answer text (delta chunks)', () => {
+      const { startAnswer, appendAnswerText } = useSessionStore.getState();
+
+      startAnswer('Q', 1);
       appendAnswerText('Hello');
       appendAnswerText(' World');
+
       expect(useSessionStore.getState().currentAnswer?.answerText).toBe('Hello World');
     });
 
+    it('should avoid duplicated overlap when appending cumulative chunks', () => {
+      const { startAnswer, appendAnswerText } = useSessionStore.getState();
+
+      startAnswer('Q', 1);
+      appendAnswerText('I build systems that bridge business and engineering.');
+      appendAnswerText('I build systems that bridge business and engineering. Currently, I focus on agentic AI.');
+
+      expect(useSessionStore.getState().currentAnswer?.answerText).toBe(
+        'I build systems that bridge business and engineering. Currently, I focus on agentic AI.'
+      );
+    });
+
+    it('should avoid duplicated overlap when appending suffix-overlapping chunks', () => {
+      const { startAnswer, appendAnswerText } = useSessionStore.getState();
+
+      startAnswer('Q', 1);
+      appendAnswerText('I build systems that bridge business and engineering.');
+      appendAnswerText('engineering. Currently, I focus on agentic AI.');
+
+      expect(useSessionStore.getState().currentAnswer?.answerText).toBe(
+        'I build systems that bridge business and engineering. Currently, I focus on agentic AI.'
+      );
+    });
+
+    it('should start a fresh answer when a new question begins', () => {
+      const { startAnswer, appendAnswerText } = useSessionStore.getState();
+
+      startAnswer('Q1', 111);
+      appendAnswerText('A1');
+
+      startAnswer('Q2', 222);
+      appendAnswerText('A2');
+
+      const state = useSessionStore.getState();
+      expect(state.currentAnswer?.question).toBe('Q2');
+      expect(state.currentAnswer?.timestamp).toBe(222);
+      expect(state.currentAnswer?.answerText).toBe('A2');
+      expect(state.currentAnswer?.isComplete).toBe(false);
+    });
+
     it('should complete answer and add to history', () => {
-      const { appendAnswerText, completeAnswer } = useSessionStore.getState();
+      const { startAnswer, appendAnswerText, completeAnswer } = useSessionStore.getState();
+
+      startAnswer('Q', 1);
       appendAnswerText('Test answer');
       completeAnswer('high');
 
@@ -112,30 +169,32 @@ describe('sessionStore', () => {
   describe('context files', () => {
     it('should add context file', () => {
       const { addContextFile } = useSessionStore.getState();
-      const file = {
+
+      addContextFile({
         id: '123',
         name: 'resume.pdf',
-        type: 'resume' as const,
+        type: 'resume',
         size: 1024,
         uploadDate: Date.now(),
         preview: 'Lorem ipsum...',
-      };
-      addContextFile(file);
+      });
+
       expect(useSessionStore.getState().loadedContextFiles).toHaveLength(1);
       expect(useSessionStore.getState().loadedContextFiles[0].name).toBe('resume.pdf');
     });
 
     it('should remove context file', () => {
       const { addContextFile, removeContextFile } = useSessionStore.getState();
-      const file = {
+
+      addContextFile({
         id: '123',
         name: 'resume.pdf',
-        type: 'resume' as const,
+        type: 'resume',
         size: 1024,
         uploadDate: Date.now(),
         preview: 'Lorem ipsum...',
-      };
-      addContextFile(file);
+      });
+
       removeContextFile('123');
       expect(useSessionStore.getState().loadedContextFiles).toHaveLength(0);
     });
@@ -143,11 +202,11 @@ describe('sessionStore', () => {
 
   describe('clearSession', () => {
     it('should clear session data but keep context files', () => {
-      const { setStatus, appendAnswerText, completeAnswer, addContextFile, clearSession } =
+      const { setStatus, startAnswer, appendAnswerText, completeAnswer, addContextFile, clearSession } =
         useSessionStore.getState();
 
-      // Setup some state
       setStatus('listening');
+      startAnswer('Q', 1);
       appendAnswerText('Test answer');
       completeAnswer('high');
       addContextFile({
@@ -159,7 +218,6 @@ describe('sessionStore', () => {
         preview: 'Lorem ipsum...',
       });
 
-      // Clear session
       clearSession();
 
       const state = useSessionStore.getState();
@@ -167,6 +225,9 @@ describe('sessionStore', () => {
       expect(state.currentTranscription).toBeNull();
       expect(state.currentAnswer).toBeNull();
       expect(state.answerHistory).toHaveLength(0);
+      expect(state.transcriptionHistory).toHaveLength(0);
+      expect(state.lastError).toBeNull();
+
       // Context files should be preserved
       expect(state.loadedContextFiles).toHaveLength(1);
     });

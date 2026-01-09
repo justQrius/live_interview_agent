@@ -1,5 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSessionStore } from '../store/sessionStore';
+
+type CombinedHistoryItem =
+  | {
+      type: 'transcription';
+      timestamp: number;
+      speaker: 'User' | 'Interviewer';
+      text: string;
+    }
+  | {
+      type: 'answer';
+      timestamp: number;
+      speaker: 'AI Assistant';
+      text: string;
+      question: string;
+      confidence: 'high' | 'medium' | 'low';
+    };
 
 const AnswerDisplay: React.FC = () => {
   const currentTranscription = useSessionStore((state) => state.currentTranscription);
@@ -34,6 +50,26 @@ const AnswerDisplay: React.FC = () => {
     });
   };
 
+  const combinedHistory = useMemo<CombinedHistoryItem[]>(() => {
+    const transcriptions: CombinedHistoryItem[] = transcriptionHistory.map((t) => ({
+      type: 'transcription',
+      timestamp: t.timestamp,
+      speaker: t.speaker,
+      text: t.text,
+    }));
+
+    const answers: CombinedHistoryItem[] = answerHistory.map((a) => ({
+      type: 'answer',
+      timestamp: a.timestamp,
+      speaker: 'AI Assistant',
+      text: a.answerText,
+      question: a.question,
+      confidence: a.confidence,
+    }));
+
+    return [...transcriptions, ...answers].sort((a, b) => a.timestamp - b.timestamp);
+  }, [transcriptionHistory, answerHistory]);
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 h-full min-h-[600px] flex flex-col">
       <div className="flex items-center justify-between mb-4">
@@ -53,21 +89,37 @@ const AnswerDisplay: React.FC = () => {
         <div className="mb-4 p-4 bg-gray-50 rounded-lg max-h-[300px] overflow-y-auto border border-gray-200">
           <h3 className="font-medium text-sm text-gray-700 mb-3">Session History</h3>
           <div className="space-y-3">
-            {transcriptionHistory.map((t, idx) => (
-              <div key={`trans-${idx}`} className="text-sm">
+            {combinedHistory.map((item, idx) => (
+              <div
+                key={`${item.type}-${idx}`}
+                className="text-sm border-b border-gray-100 last:border-0 pb-3 mb-3"
+              >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-gray-400 text-xs">{formatTime(t.timestamp)}</span>
+                  <span className="text-gray-400 text-xs">{formatTime(item.timestamp)}</span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      t.speaker === 'Interviewer'
-                        ? 'bg-purple-100 text-purple-700'
-                        : 'bg-gray-100 text-gray-700'
+                    className={`text-xs px-2 py-0.5 rounded font-medium ${
+                      item.type === 'answer'
+                        ? 'bg-green-100 text-green-700'
+                        : item.speaker === 'Interviewer'
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-gray-100 text-gray-700'
                     }`}
                   >
-                    {t.speaker}
+                    {item.speaker}
                   </span>
                 </div>
-                <p className="text-gray-700">{t.text}</p>
+                {item.type === 'answer' && item.question && (
+                  <div className="text-xs text-gray-500 mb-1 italic pl-2 border-l-2 border-green-100">
+                    Q: {item.question}
+                  </div>
+                )}
+                <p
+                  className={`text-gray-800 whitespace-pre-wrap ${
+                    item.type === 'answer' ? 'pl-2 border-l-2 border-green-200 mt-1' : ''
+                  }`}
+                >
+                  {item.text}
+                </p>
               </div>
             ))}
           </div>
@@ -97,7 +149,7 @@ const AnswerDisplay: React.FC = () => {
 
         <div className="p-4 bg-green-50 rounded-lg min-h-[300px]">
           <h3 className="font-medium text-sm text-gray-600 mb-2">Answer:</h3>
-          <p className="text-gray-800 whitespace-pre-wrap">
+          <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
             {currentAnswer?.answerText || 'AI-generated answer will stream here...'}
           </p>
           {currentAnswer && !currentAnswer.isComplete && (
@@ -107,15 +159,26 @@ const AnswerDisplay: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-between text-sm mt-auto pt-4 border-t border-gray-100">
-          <div className="text-gray-500">
-            <span className="font-medium">Confidence:</span>{' '}
+          <div className="flex items-center group relative cursor-help">
+            <span className="font-medium text-gray-500 mr-2">Confidence:</span>
             {currentAnswer ? (
-              <span
-                className={`px-2 py-1 rounded ${getConfidenceColor(currentAnswer.confidence)}`}
-              >
-                {currentAnswer.confidence.charAt(0).toUpperCase() +
-                  currentAnswer.confidence.slice(1)}
-              </span>
+              <>
+                <span
+                  className={`px-2 py-1 rounded ${getConfidenceColor(currentAnswer.confidence)}`}
+                >
+                  {currentAnswer.confidence.charAt(0).toUpperCase() +
+                    currentAnswer.confidence.slice(1)}
+                </span>
+                <div className="absolute bottom-full left-0 mb-2 w-64 p-2 bg-gray-800 text-white text-xs rounded shadow-lg hidden group-hover:block z-50">
+                  {currentAnswer.confidence === 'high' &&
+                    'High confidence: Answer is well-supported by your resume/context.'}
+                  {currentAnswer.confidence === 'medium' &&
+                    'Medium confidence: Standard answer, verify specific details.'}
+                  {currentAnswer.confidence === 'low' &&
+                    'Low confidence: Generic response, use with caution.'}
+                  <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-800 transform rotate-45"></div>
+                </div>
+              </>
             ) : (
               <span className="text-gray-400">--</span>
             )}

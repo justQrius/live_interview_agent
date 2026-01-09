@@ -11,17 +11,17 @@ from rag.retrieval import RetrievalResult, confidence_from_distance
 from protocol import ConfidenceLevel
 
 def test_confidence_from_distance():
-    # Test High confidence (< 0.3)
+    # Test High confidence (< 0.35)
     assert confidence_from_distance(0.1) == ConfidenceLevel.HIGH
-    assert confidence_from_distance(0.29) == ConfidenceLevel.HIGH
-    
-    # Test Medium confidence (< 0.5)
-    assert confidence_from_distance(0.3) == ConfidenceLevel.MEDIUM
-    assert confidence_from_distance(0.4) == ConfidenceLevel.MEDIUM
-    assert confidence_from_distance(0.49) == ConfidenceLevel.MEDIUM
-    
-    # Test Low confidence (>= 0.5)
-    assert confidence_from_distance(0.5) == ConfidenceLevel.LOW
+    assert confidence_from_distance(0.34) == ConfidenceLevel.HIGH
+
+    # Test Medium confidence (< 0.65)
+    assert confidence_from_distance(0.35) == ConfidenceLevel.MEDIUM
+    assert confidence_from_distance(0.5) == ConfidenceLevel.MEDIUM
+    assert confidence_from_distance(0.64) == ConfidenceLevel.MEDIUM
+
+    # Test Low confidence (>= 0.65)
+    assert confidence_from_distance(0.65) == ConfidenceLevel.LOW
     assert confidence_from_distance(0.8) == ConfidenceLevel.LOW
     assert confidence_from_distance(1.5) == ConfidenceLevel.LOW
 

@@ -479,12 +479,19 @@ class SidecarServer:
         status_msg = create_status_message(SessionStatus.PROCESSING)
         await websocket.send(status_msg.to_json())
 
+        retrieval_results = []
         context_chunks = []
+        rag_confidence = ConfidenceLevel.LOW
+
         if self.rag_engine:
             try:
                 retrieval_results = self.rag_engine.retrieve(question, limit=5)
                 logger.info(f"Retrieved {len(retrieval_results)} chunks for question")
                 context_chunks = [r.text for r in retrieval_results]
+
+                if retrieval_results:
+                    rag_confidence = self._confidence_from_string(retrieval_results[0].confidence)
+
                 for i, r in enumerate(retrieval_results):
                     logger.debug(f"Chunk {i}: {r.confidence} ({r.distance:.2f}) - {r.text[:50]}...")
             except Exception as e:
@@ -492,6 +499,9 @@ class SidecarServer:
 
         if self.llm:
             try:
+                # Signal start of answer
+                await self.broadcast(Message(type=MessageType.ANSWER_START))
+                
                 context_str = "\n\n".join(context_chunks)
                 async for chunk in self.llm.generate_response(question, context_str, []):
                     answer_msg = create_answer_chunk_message(
@@ -499,11 +509,11 @@ class SidecarServer:
                         complete=False
                     )
                     await websocket.send(answer_msg.to_json())
-                
+
                 await websocket.send(create_answer_chunk_message(
                     chunk="",
                     complete=True,
-                    confidence=ConfidenceLevel.HIGH
+                    confidence=rag_confidence
                 ).to_json())
                 
             except Exception as e:

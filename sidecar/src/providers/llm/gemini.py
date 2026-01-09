@@ -6,7 +6,7 @@ for generating contextual answers in interviews.
 """
 
 import logging
-from typing import List, Dict, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 
 import google.generativeai as genai
 
@@ -61,8 +61,9 @@ class GeminiLLMProvider(LLMProvider):
         self._model = None
 
         try:
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(self._model_name)
+            genai_any = cast(Any, genai)
+            genai_any.configure(api_key=api_key)
+            self._model = genai_any.GenerativeModel(self._model_name)
             self._available = True
         except Exception as e:
             raise GeminiLLMProviderError(f"Failed to initialize Gemini client: {e}")
@@ -97,10 +98,15 @@ class GeminiLLMProvider(LLMProvider):
 
         # System instruction
         parts.append(
-            "You are an expert technical interview assistant. "
-            "Your goal is to help the candidate answer the interviewer's question "
-            "using the provided context."
+            "You are a helpful interview assistant for a job candidate. "
+            "Respond in first person as the candidate (use 'I'). "
+            "Prefer facts supported by the provided context; do not invent schools, titles, companies, dates, or metrics. "
+            "If a detail is not supported by the context, omit it or say it's not in the context. "
+            "Do not repeat sentences or paragraphs; if you start repeating, stop and continue with new information. "
+            "For introductory questions (e.g., 'Who are you?', 'Tell me about yourself', 'What have you studied?', 'What's your experience?'), "
+            "answer as a 30–60 second pitch: one-line headline (role + focus); one line education; 2–3 experience bullets; one-line current focus + relevance."
         )
+
 
         # Add context if provided
         if context:
@@ -152,10 +158,11 @@ class GeminiLLMProvider(LLMProvider):
         full_prompt = self._build_prompt(prompt, context, history)
 
         try:
-            response = await self._model.generate_content_async(
-                full_prompt,
-                stream=True
-            )
+            if not self._model:
+                raise GeminiLLMProviderError("Gemini model is not initialized")
+
+            model = cast(Any, self._model)
+            response = await model.generate_content_async(full_prompt, stream=True)
 
             async for chunk in response:
                 if chunk.text:

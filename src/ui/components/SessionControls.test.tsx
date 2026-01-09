@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SessionControls from './SessionControls';
 import { useSessionStore } from '../store/sessionStore';
 
-// Mock useWebSocket hook
+const mockInvoke = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
 const mockSendMessage = vi.fn();
 vi.mock('../hooks/useWebSocket', () => ({
   useWebSocket: () => ({
@@ -13,14 +17,41 @@ vi.mock('../hooks/useWebSocket', () => ({
   }),
 }));
 
+const renderSessionControls = async () => {
+  render(<SessionControls />);
+
+  // SessionControls runs an async key check in an effect. Await it so React
+  // state updates happen within RTL's internal act() handling.
+  // We wait for the invoke to be called, which means the effect ran.
+  await waitFor(() => {
+    expect(mockInvoke).toHaveBeenCalledWith('has_api_key', expect.any(Object));
+  });
+};
+
 describe('SessionControls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    mockInvoke.mockImplementation((command: string, payload?: Record<string, unknown>) => {
+      if (command === 'has_api_key') {
+        return Promise.resolve({ exists: true });
+      }
+
+      if (command === 'get_api_key') {
+        const provider = String(payload?.provider ?? '');
+        return Promise.resolve(provider ? `key-${provider}` : '');
+      }
+
+      return Promise.reject(new Error(`Unexpected invoke: ${command}`));
+    });
+
     useSessionStore.setState({
       status: 'idle',
       isScreenInvisible: false,
       voiceProfileActive: false,
-      apiKey: 'test-api-key',
+      apiKey: null,
+      preferredSttProvider: 'auto',
+      preferredLlmProvider: 'auto',
       currentTranscription: null,
       currentAnswer: null,
       transcriptionHistory: [],
@@ -35,23 +66,23 @@ describe('SessionControls', () => {
   });
 
   describe('initial render', () => {
-    it('should render session controls header', () => {
-      render(<SessionControls />);
+    it('should render session controls header', async () => {
+      await renderSessionControls();
       expect(screen.getByText('Session Controls')).toBeInTheDocument();
     });
 
-    it('should show connected status when connected', () => {
-      render(<SessionControls />);
+    it('should show connected status when connected', async () => {
+      await renderSessionControls();
       expect(screen.getByText('Connected to sidecar')).toBeInTheDocument();
     });
 
-    it('should show idle status initially', () => {
-      render(<SessionControls />);
+    it('should show idle status initially', async () => {
+      await renderSessionControls();
       expect(screen.getByText('Idle')).toBeInTheDocument();
     });
 
-    it('should show all control buttons', () => {
-      render(<SessionControls />);
+    it('should show all control buttons', async () => {
+      await renderSessionControls();
       expect(screen.getByRole('button', { name: /start session/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /stop session/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /calibrate voice/i })).toBeInTheDocument();
@@ -59,42 +90,61 @@ describe('SessionControls', () => {
   });
 
   describe('start session', () => {
-    it('should enable start button when idle with API key', () => {
-      render(<SessionControls />);
-      expect(screen.getByRole('button', { name: /start session/i })).not.toBeDisabled();
+    it('should enable start button once API key check resolves', async () => {
+      await renderSessionControls();
+
+      const startButton = screen.getByRole('button', { name: /start session/i });
+      await waitFor(() => expect(startButton).not.toBeDisabled());
     });
 
-    it('should disable start button when no API key', () => {
-      useSessionStore.setState({ apiKey: null });
-      render(<SessionControls />);
-      expect(screen.getByRole('button', { name: /configure api key first/i })).toBeDisabled();
+    it('should disable start button when no primary API key exists', async () => {
+      mockInvoke.mockImplementation((command: string) => {
+        if (command === 'has_api_key') return Promise.resolve({ exists: false });
+        return Promise.reject(new Error(`Unexpected invoke: ${command}`));
+      });
+
+      await renderSessionControls();
+
+      const startButton = await screen.findByRole('button', { name: /configure api key first/i });
+      await waitFor(() => expect(startButton).toBeDisabled());
     });
 
     it('should send START_SESSION message on click', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
-      await user.click(screen.getByRole('button', { name: /start session/i }));
+      const startButton = screen.getByRole('button', { name: /start session/i });
+      await waitFor(() => expect(startButton).not.toBeDisabled());
+
+      await user.click(startButton);
 
       expect(mockSendMessage).toHaveBeenCalledWith({
         type: 'START_SESSION',
-        data: { apiKey: 'test-api-key' },
+        data: {
+          apiKeys: expect.any(Object),
+          preferences: { sttProvider: 'auto', llmProvider: 'auto' },
+        },
       });
     });
 
     it('should update status to listening after start', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
-      await user.click(screen.getByRole('button', { name: /start session/i }));
+      const startButton = screen.getByRole('button', { name: /start session/i });
+      await waitFor(() => expect(startButton).not.toBeDisabled());
+
+      await user.click(startButton);
 
       expect(useSessionStore.getState().status).toBe('listening');
     });
 
-    it('should disable start button when not idle', () => {
+    it('should disable start button when not idle', async () => {
       useSessionStore.setState({ status: 'listening' });
-      render(<SessionControls />);
-      expect(screen.getByRole('button', { name: /start session/i })).toBeDisabled();
+      await renderSessionControls();
+
+      const startButton = await screen.findByRole('button', { name: /start session/i });
+      expect(startButton).toBeDisabled();
     });
   });
 
@@ -103,20 +153,20 @@ describe('SessionControls', () => {
       useSessionStore.setState({ status: 'listening' });
     });
 
-    it('should enable stop button when session is active', () => {
-      render(<SessionControls />);
+    it('should enable stop button when session is active', async () => {
+      await renderSessionControls();
       expect(screen.getByRole('button', { name: /stop session/i })).not.toBeDisabled();
     });
 
-    it('should disable stop button when idle', () => {
+    it('should disable stop button when idle', async () => {
       useSessionStore.setState({ status: 'idle' });
-      render(<SessionControls />);
+      await renderSessionControls();
       expect(screen.getByRole('button', { name: /stop session/i })).toBeDisabled();
     });
 
     it('should show confirmation modal when stop clicked', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       await user.click(screen.getByRole('button', { name: /stop session/i }));
 
@@ -126,7 +176,7 @@ describe('SessionControls', () => {
 
     it('should close modal when cancel clicked', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       await user.click(screen.getByRole('button', { name: /stop session/i }));
       await user.click(screen.getByRole('button', { name: /cancel/i }));
@@ -138,17 +188,22 @@ describe('SessionControls', () => {
       const user = userEvent.setup();
       useSessionStore.setState({
         status: 'listening',
-        transcriptionHistory: [
-          { speaker: 'Interviewer', text: 'Test', timestamp: Date.now(), confidence: 0.9 },
-        ],
+        transcriptionHistory: [{ speaker: 'Interviewer', text: 'Test', timestamp: Date.now(), confidence: 0.9 }],
         answerHistory: [
-          { question: 'Q', answerText: 'A', confidence: 'high', timestamp: Date.now(), isComplete: true },
+          {
+            question: 'Q',
+            answerText: 'A',
+            confidence: 'high',
+            timestamp: Date.now(),
+            isComplete: true,
+          },
         ],
       });
-      render(<SessionControls />);
+
+      await renderSessionControls();
 
       await user.click(screen.getByRole('button', { name: /stop session/i }));
-      await user.click(screen.getAllByRole('button', { name: /stop session/i })[1]); // Confirm button
+      await user.click(screen.getAllByRole('button', { name: /stop session/i })[1]);
 
       expect(mockSendMessage).toHaveBeenCalledWith({ type: 'STOP_SESSION' });
       expect(useSessionStore.getState().status).toBe('idle');
@@ -158,20 +213,20 @@ describe('SessionControls', () => {
   });
 
   describe('calibrate voice', () => {
-    it('should enable calibrate button when idle and connected', () => {
-      render(<SessionControls />);
+    it('should enable calibrate button when idle and connected', async () => {
+      await renderSessionControls();
       expect(screen.getByRole('button', { name: /calibrate voice/i })).not.toBeDisabled();
     });
 
-    it('should disable calibrate button when not idle', () => {
+    it('should disable calibrate button when not idle', async () => {
       useSessionStore.setState({ status: 'listening' });
-      render(<SessionControls />);
+      await renderSessionControls();
       expect(screen.getByRole('button', { name: /calibrate voice/i })).toBeDisabled();
     });
 
     it('should set status to calibrating on click', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       await user.click(screen.getByRole('button', { name: /calibrate voice/i }));
 
@@ -184,27 +239,27 @@ describe('SessionControls', () => {
       useSessionStore.setState({ status: 'listening' });
     });
 
-    it('should show manual question input when listening', () => {
-      render(<SessionControls />);
+    it('should show manual question input when listening', async () => {
+      await renderSessionControls();
       expect(screen.getByLabelText(/ask a question manually/i)).toBeInTheDocument();
       expect(screen.getByPlaceholderText(/type a question/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /send question/i })).toBeInTheDocument();
     });
 
-    it('should hide manual question input when not listening', () => {
+    it('should hide manual question input when not listening', async () => {
       useSessionStore.setState({ status: 'idle' });
-      render(<SessionControls />);
+      await renderSessionControls();
       expect(screen.queryByLabelText(/ask a question manually/i)).not.toBeInTheDocument();
     });
 
-    it('should disable send button when input is empty', () => {
-      render(<SessionControls />);
+    it('should disable send button when input is empty', async () => {
+      await renderSessionControls();
       expect(screen.getByRole('button', { name: /send question/i })).toBeDisabled();
     });
 
     it('should enable send button when input has text', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       await user.type(screen.getByPlaceholderText(/type a question/i), 'Test question');
 
@@ -213,7 +268,7 @@ describe('SessionControls', () => {
 
     it('should send MANUAL_QUESTION message on click', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       await user.type(screen.getByPlaceholderText(/type a question/i), 'What is React?');
       await user.click(screen.getByRole('button', { name: /send question/i }));
@@ -226,7 +281,7 @@ describe('SessionControls', () => {
 
     it('should clear input after sending', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       const input = screen.getByPlaceholderText(/type a question/i);
       await user.type(input, 'Test question');
@@ -237,7 +292,7 @@ describe('SessionControls', () => {
 
     it('should send message on Enter key', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       const input = screen.getByPlaceholderText(/type a question/i);
       await user.type(input, 'Enter test{Enter}');
@@ -250,7 +305,7 @@ describe('SessionControls', () => {
 
     it('should not send on Shift+Enter', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       const input = screen.getByPlaceholderText(/type a question/i);
       await user.type(input, 'Test{Shift>}{Enter}{/Shift}more text');
@@ -260,7 +315,7 @@ describe('SessionControls', () => {
 
     it('should not send whitespace-only input', async () => {
       const user = userEvent.setup();
-      render(<SessionControls />);
+      await renderSessionControls();
 
       await user.type(screen.getByPlaceholderText(/type a question/i), '   ');
       await user.click(screen.getByRole('button', { name: /send question/i }));
@@ -280,7 +335,8 @@ describe('SessionControls', () => {
           isComplete: true,
         },
       });
-      render(<SessionControls />);
+
+      await renderSessionControls();
 
       await user.type(screen.getByPlaceholderText(/type a question/i), 'New question');
       await user.click(screen.getByRole('button', { name: /send question/i }));
@@ -290,23 +346,22 @@ describe('SessionControls', () => {
   });
 
   describe('status display', () => {
-    it('should show listening status with green color', () => {
+    it('should show listening status', async () => {
       useSessionStore.setState({ status: 'listening' });
-      render(<SessionControls />);
+      await renderSessionControls();
       expect(screen.getByText('Listening...')).toBeInTheDocument();
     });
 
-    it('should show processing status with blue color', () => {
+    it('should show processing status', async () => {
       useSessionStore.setState({ status: 'processing' });
-      render(<SessionControls />);
+      await renderSessionControls();
       expect(screen.getByText('Processing...')).toBeInTheDocument();
     });
 
-    it('should show calibrating status with yellow color', () => {
+    it('should show calibrating status', async () => {
       useSessionStore.setState({ status: 'calibrating' });
-      render(<SessionControls />);
+      await renderSessionControls();
       expect(screen.getByText('Calibrating...')).toBeInTheDocument();
     });
   });
 });
-

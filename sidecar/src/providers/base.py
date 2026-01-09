@@ -58,7 +58,7 @@ class LLMProvider(ABC):
         return True
 
     @abstractmethod
-    async def generate_response(self, prompt: str, context: str, history: List[Dict]) -> AsyncGenerator[str, None]:
+    def generate_response(self, prompt: str, context: str, history: List[Dict]) -> AsyncGenerator[str, None]:
         """
         Generate a streaming response from the LLM.
         
