@@ -40,7 +40,7 @@ class GeminiLLMProvider(LLMProvider):
             print(chunk, end="")
     """
 
-    DEFAULT_MODEL = "gemini-2.0-flash"
+    DEFAULT_MODEL = "gemini-3-pro-preview"
     
     # Gemini generation config - optimized for natural responses
     GENERATION_CONFIG = {
