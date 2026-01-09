@@ -2,7 +2,7 @@
 Gemini LLM Provider.
 
 Implements LLMProvider interface using Google's Gemini model
-for generating contextual answers in interviews.
+for generating high-quality interview answers.
 """
 
 import logging
@@ -11,6 +11,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 import google.generativeai as genai
 
 from ..base import LLMProvider
+from .prompts import build_system_prompt, format_context_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class GeminiLLMProvider(LLMProvider):
     LLM provider using Google Gemini.
 
     Implements the LLMProvider interface for the provider factory system.
+    Uses enhanced prompting for high-quality, conversational interview answers.
     Also provides backwards-compatible generate_answer() method for
     existing server.py integration.
 
@@ -38,7 +40,14 @@ class GeminiLLMProvider(LLMProvider):
             print(chunk, end="")
     """
 
-    DEFAULT_MODEL = "gemini-3-flash-preview"
+    DEFAULT_MODEL = "gemini-2.0-flash"
+    
+    # Gemini generation config - optimized for natural responses
+    GENERATION_CONFIG = {
+        "temperature": 0.45,  # Balanced: natural variation + consistency
+        "top_p": 0.9,  # Nucleus sampling for quality
+        "top_k": 40,  # Reasonable diversity
+    }
 
     def __init__(self, api_key: str, model_name: Optional[str] = None):
         """
@@ -46,7 +55,7 @@ class GeminiLLMProvider(LLMProvider):
 
         Args:
             api_key: Google AI API key
-            model_name: Model to use (default: gemini-3-flash-preview)
+            model_name: Model to use (default: gemini-2.0-flash)
 
         Raises:
             ValueError: If API key is empty
@@ -63,7 +72,10 @@ class GeminiLLMProvider(LLMProvider):
         try:
             genai_any = cast(Any, genai)
             genai_any.configure(api_key=api_key)
-            self._model = genai_any.GenerativeModel(self._model_name)
+            self._model = genai_any.GenerativeModel(
+                self._model_name,
+                generation_config=self.GENERATION_CONFIG
+            )
             self._available = True
         except Exception as e:
             raise GeminiLLMProviderError(f"Failed to initialize Gemini client: {e}")
@@ -84,7 +96,10 @@ class GeminiLLMProvider(LLMProvider):
         history: List[Dict]
     ) -> str:
         """
-        Build the full prompt including context and history.
+        Build the full prompt including system instructions, context, and history.
+
+        Uses dynamic prompt construction based on question classification
+        (behavioral, intro, technical, etc.) for optimal responses.
 
         Args:
             prompt: The user's question/prompt
@@ -94,42 +109,31 @@ class GeminiLLMProvider(LLMProvider):
         Returns:
             Formatted prompt string
         """
-        parts = []
+        # Build dynamic system prompt based on question type
+        system_content, question_type = build_system_prompt(prompt)
+        
+        # Format context based on question type  
+        formatted_context = format_context_for_prompt(context, question_type)
+        
+        parts = [system_content]
 
-        # System instruction
-        parts.append(
-            "You are a helpful interview assistant for a job candidate. "
-            "Respond in first person as the candidate (use 'I'). "
-            "Prefer facts supported by the provided context; do not invent schools, titles, companies, dates, or metrics. "
-            "If a detail is not supported by the context, omit it or say it's not in the context. "
-            "Do not repeat sentences or paragraphs; if you start repeating, stop and continue with new information. "
-            "For introductory questions (e.g., 'Who are you?', 'Tell me about yourself', 'What have you studied?', 'What's your experience?'), "
-            "answer as a 30–60 second pitch: one-line headline (role + focus); one line education; 2–3 experience bullets; one-line current focus + relevance."
-        )
-
-
-        # Add context if provided
-        if context:
-            parts.append(f"\nContext:\n{context}")
+        # Add formatted context if provided
+        if formatted_context:
+            parts.append(f"\n{formatted_context}")
 
         # Add conversation history if provided
         if history:
-            parts.append("\nConversation history:")
-            for msg in history:
+            parts.append("\n## Conversation History:")
+            for msg in history[-10:]:  # Limit to last 10
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
-                parts.append(f"{role.capitalize()}: {content}")
+                if content:
+                    # Map roles for clarity
+                    display_role = "Interviewer" if role in ("user", "interviewer") else "You (Candidate)"
+                    parts.append(f"{display_role}: {content}")
 
         # Add the current question
-        parts.append(f"\nQuestion:\n{prompt}")
-
-        # Add instruction for response style
-        parts.append(
-            "\nAnswer the question clearly and concisely based on the context provided. "
-            "If the context is not relevant, answer based on your general knowledge "
-            "but mention that the context didn't help. "
-            "Keep the answer conversational but professional."
-        )
+        parts.append(f"\n## Current Question:\n{prompt}")
 
         return "\n".join(parts)
 
@@ -142,7 +146,8 @@ class GeminiLLMProvider(LLMProvider):
         """
         Generate a streaming response from the LLM.
 
-        Implements the LLMProvider interface.
+        Implements the LLMProvider interface with enhanced prompting
+        for high-quality interview answers.
 
         Args:
             prompt: The user query or current prompt
