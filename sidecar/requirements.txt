@@ -35,7 +35,7 @@ groq>=0.4.0
 deepgram-sdk>=3.0.0
 
 # Vector database
-chromadb>=0.4.22
+chromadb==0.4.24
 
 # Document processing
 pypdf>=3.17.0
@@ -43,7 +43,7 @@ python-docx>=1.1.0
 beautifulsoup4>=4.12.0
 
 # Audio processing
-numpy>=1.26.0
+numpy>=1.26.0,<2.0.0
 scipy>=1.11.0
 noisereduce>=3.0.0
 
