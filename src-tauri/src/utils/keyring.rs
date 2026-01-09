@@ -85,6 +85,14 @@ pub fn retrieve_api_key(key_name: &str) -> Result<String, KeyringError> {
 /// * `Ok(())` if successful or if key was not found
 /// * `Err(KeyringError)` if deletion fails
 pub fn delete_api_key(key_name: &str) -> Result<(), KeyringError> {
+    eprintln!("[Keyring] delete_api_key called for: {}", key_name);
+    
+    // Delete from fallback storage as well
+    if let Err(e) = crate::utils::storage_fallback::delete_key(key_name) {
+        eprintln!("[Keyring] Warning: Failed to delete from fallback storage: {}", e);
+        // We continue to try deleting from OS keyring even if fallback fails
+    }
+
     let entry = get_entry(key_name)?;
     match entry.delete_credential() {
         Ok(()) => Ok(()),
