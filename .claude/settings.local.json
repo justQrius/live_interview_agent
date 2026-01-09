@@ -24,7 +24,9 @@
       "WebFetch(domain:github.com)",
       "Skill(prism:dev-story)",
       "Bash(./venv/Scripts/pytest tests/test_gemini_llm_provider.py -v)",
-      "Bash(./venv/Scripts/pytest:*)"
+      "Bash(./venv/Scripts/pytest:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)"
     ]
   },
   "enabledPlugins": {
