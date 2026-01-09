@@ -26,11 +26,26 @@ logger = logging.getLogger(__name__)
 
 # VAD configuration constants
 DEFAULT_VAD_THRESHOLD: float = 0.5
-DEFAULT_VAD_WINDOW_SIZE: int = 1024  # 1024 samples = 64ms at 16kHz
+DEFAULT_VAD_WINDOW_SIZE: int = 512  # 512 samples = 32ms at 16kHz
+
+SUPPORTED_SAMPLE_RATES = (8000, 16000)
+
+
+def _expected_window_size(sample_rate: int) -> int:
+    if sample_rate == 16000:
+        return 512
+    if sample_rate == 8000:
+        return 256
+
+    raise ValueError(
+        f"Unsupported sample rate {sample_rate} (supported values: {SUPPORTED_SAMPLE_RATES})"
+    )
+
 
 # Smoothing configuration - require consecutive frames for speech start/end
-SPEECH_START_FRAMES: int = 5   # Approx 320ms to confirm speech start (5 * 64ms)
-SPEECH_END_FRAMES: int = 25    # Approx 1.6s silence to confirm speech end (25 * 64ms)
+# These represent number of consecutive windows (32ms each at 16kHz/8kHz defaults).
+SPEECH_START_FRAMES: int = 5   # Approx 160ms to confirm speech start
+SPEECH_END_FRAMES: int = 25    # Approx 800ms silence to confirm speech end
 
 
 class VADModelError(Exception):
@@ -73,6 +88,7 @@ class VADProcessor:
         self,
         threshold: float = DEFAULT_VAD_THRESHOLD,
         window_size: int = DEFAULT_VAD_WINDOW_SIZE,
+        sample_rate: int = SAMPLE_RATE,
     ):
         """
         Initialize VAD processor.
@@ -89,9 +105,16 @@ class VADProcessor:
         if threshold < 0.0 or threshold > 1.0:
             raise ValueError(f"threshold must be between 0 and 1, got {threshold}")
 
+        expected_window_size = _expected_window_size(sample_rate)
+        if window_size != expected_window_size:
+            raise ValueError(
+                f"Provided number of samples is {window_size} "
+                f"(Supported values: {expected_window_size} for {sample_rate} sample rate)"
+            )
+
         self._threshold = threshold
         self._window_size = window_size
-        self._sample_rate = SAMPLE_RATE
+        self._sample_rate = sample_rate
 
         # State for smoothing
         self._consecutive_speech_frames = 0
@@ -120,7 +143,7 @@ class VADProcessor:
 
     @property
     def sample_rate(self) -> int:
-        """Return the expected sample rate (16kHz)."""
+        """Return the configured sample rate."""
         return self._sample_rate
 
     def _load_model(self) -> None:

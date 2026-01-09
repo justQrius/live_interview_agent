@@ -8,6 +8,7 @@ export type MessageType =
   | 'UPLOAD_CONTEXT'
   | 'CALIBRATE_VOICE'
   | 'MANUAL_QUESTION'
+  | 'AUDIO_CHUNK'
   | 'TRANSCRIPTION'
   | 'ANSWER_CHUNK'
   | 'ERROR'
@@ -161,8 +162,19 @@ export const useWebSocket = () => {
     }
   };
 
+  const sendAudio = (audioData: string) => {
+    sendMessage({
+      type: 'AUDIO_CHUNK',
+      data: {
+        audioData,
+        timestamp: Date.now(),
+      },
+    });
+  };
+
   return {
     sendMessage,
+    sendAudio,
     isConnected,
   };
 };
