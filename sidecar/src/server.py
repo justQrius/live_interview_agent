@@ -10,7 +10,7 @@ import json
 import logging
 import base64
 from dataclasses import dataclass, field
-from typing import Any, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, cast
 import numpy as np
 
 import websockets
@@ -55,6 +55,8 @@ class SessionState:
     api_key: Optional[str] = None
     voice_calibrated: bool = False
     user_embedding: Optional[np.ndarray] = field(default=None, repr=False)
+    # Conversation history for LLM context (list of {"role": "user"|"assistant", "content": str})
+    conversation_history: List[Dict[str, str]] = field(default_factory=list)
 
 
 class SidecarServer:
@@ -284,6 +286,8 @@ class SidecarServer:
         """Handle STOP_SESSION message."""
         self.session_state.status = SessionStatus.IDLE
         self.session_state.api_key = None
+        # Clear conversation history for fresh start on next session
+        self.session_state.conversation_history.clear()
         
         if self.vector_store:
             try:
@@ -503,7 +507,13 @@ class SidecarServer:
                 await self.broadcast(Message(type=MessageType.ANSWER_START))
                 
                 context_str = "\n\n".join(context_chunks)
-                async for chunk in self.llm.generate_response(question, context_str, []):
+                # Collect full answer for history
+                full_answer_parts: List[str] = []
+                
+                async for chunk in self.llm.generate_response(
+                    question, context_str, self.session_state.conversation_history
+                ):
+                    full_answer_parts.append(chunk)
                     answer_msg = create_answer_chunk_message(
                         chunk=chunk,
                         complete=False
@@ -515,6 +525,18 @@ class SidecarServer:
                     complete=True,
                     confidence=rag_confidence
                 ).to_json())
+                
+                # Append Q&A to conversation history for future context
+                full_answer = "".join(full_answer_parts)
+                self.session_state.conversation_history.append({
+                    "role": "user",
+                    "content": question
+                })
+                self.session_state.conversation_history.append({
+                    "role": "assistant",
+                    "content": full_answer
+                })
+                logger.debug(f"Added manual Q&A to history. Total exchanges: {len(self.session_state.conversation_history) // 2}")
                 
             except Exception as e:
                 logger.error(f"LLM generation failed: {e}")
@@ -698,7 +720,13 @@ class SidecarServer:
             
         try:
             context_str = "\n\n".join(context_chunks)
-            async for chunk in self.llm.generate_response(question, context_str, []):
+            # Collect full answer for history
+            full_answer_parts: List[str] = []
+            
+            async for chunk in self.llm.generate_response(
+                question, context_str, self.session_state.conversation_history
+            ):
+                full_answer_parts.append(chunk)
                 answer_msg = create_answer_chunk_message(chunk=chunk, complete=False)
                 await self.broadcast(answer_msg)
             
@@ -711,6 +739,18 @@ class SidecarServer:
                 confidence=rag_confidence
             )
             await self.broadcast(final_msg)
+            
+            # Append Q&A to conversation history for future context
+            full_answer = "".join(full_answer_parts)
+            self.session_state.conversation_history.append({
+                "role": "user",
+                "content": question
+            })
+            self.session_state.conversation_history.append({
+                "role": "assistant", 
+                "content": full_answer
+            })
+            logger.debug(f"Added Q&A to history. Total exchanges: {len(self.session_state.conversation_history) // 2}")
             
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
