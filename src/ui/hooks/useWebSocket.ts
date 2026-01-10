@@ -64,6 +64,12 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         confidence: number;
       };
 
+      // When interviewer asks a new question, start a fresh answer buffer
+      // This clears the previous answer and associates the new question text
+      if (data.speaker === 'Interviewer') {
+        store.startAnswer(data.text, data.timestamp);
+      }
+
       store.addTranscription(data);
       break;
     }
