@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useSessionStore } from '../store/sessionStore';
 
 // WebSocket message types (as per architecture)
@@ -356,12 +357,32 @@ export const useWebSocket = () => {
     });
   };
 
-  const requestPreparation = () => {
+  const requestPreparation = async () => {
     const store = useSessionStore.getState();
     store.setPreparationStatus('preparing');
+
+    const apiKeys: Record<string, string> = {};
+    const providers = ['gemini', 'groq', 'openai', 'anthropic', 'deepgram'];
+
+    for (const provider of providers) {
+      try {
+        const key = await invoke<string>('get_api_key', { provider });
+        if (key) {
+          apiKeys[provider] = key;
+        }
+      } catch {
+        // Ignore missing keys
+      }
+    }
+
+    const prefs = {
+      sttProvider: store.preferredSttProvider,
+      llmProvider: store.preferredLlmProvider,
+    };
+
     sendMessage({
       type: 'PREPARE_INTERVIEW',
-      data: {},
+      data: { apiKeys, preferences: prefs },
     });
   };
 

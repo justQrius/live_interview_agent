@@ -281,10 +281,25 @@ class QuestionDetector:
             text = turn.get("text", "")
             
             if "interviewer" in speaker and text:
-                # Check if it looks like a question
                 if "?" in text or any(q in text.lower() for q in ["tell me", "describe", "explain", "what", "how", "why"]):
                     return True
         return False
+
+    def _normalize_stt_text(self, text: str) -> str:
+        """Clean STT artifacts like trailing ellipsis and filler dots."""
+        text = text.strip()
+        text = re.sub(r'\.{2,}$', '', text).strip()
+        text = re.sub(r'\?\.+$', '?', text)
+        return text
+
+    def _extract_question_sentence(self, text: str) -> str:
+        """Extract the question-bearing sentence from multi-sentence input."""
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        if len(sentences) > 1:
+            for sent in reversed(sentences):
+                if '?' in sent or re.search(r'^(what|how|why|who|when|where|tell|describe|explain|can|could|would|have|do)\b', sent.strip(), re.IGNORECASE):
+                    return sent.strip()
+        return text
 
     def _rule_based_classification(self, text: Optional[str]) -> ClassificationResult:
         """
@@ -292,49 +307,42 @@ class QuestionDetector:
         
         Target: <2ms P99 latency, 65-75% accuracy.
         """
-        # Handle edge cases
         if not text:
             return (False, 0.30, "statement")
         
-        # Normalize text
-        text = text.strip()
+        text = self._normalize_stt_text(text)
         if not text:
             return (False, 0.30, "statement")
         
-        # Check for fillers first (fastest path)
+        question_text = self._extract_question_sentence(text)
+        
         for pattern in self._filler_patterns:
             if pattern.match(text):
                 return (False, 0.40, "statement")
         
-        # Check acknowledgments (very common, check early)
+        for pattern, confidence in self._small_talk_patterns:
+            if pattern.search(question_text):
+                return (False, confidence, "small_talk")
+        
+        for pattern, confidence in self._clarification_patterns:
+            if pattern.search(question_text):
+                return (True, confidence, "clarification")
+        
+        for pattern, confidence in self._follow_up_patterns:
+            if pattern.search(question_text):
+                return (True, confidence, "follow_up")
+        
+        for pattern, confidence in self._interview_patterns:
+            if pattern.search(question_text):
+                return (True, confidence, "interview_question")
+        
         for pattern, confidence in self._acknowledgment_patterns:
             if pattern.search(text):
                 return (False, confidence, "acknowledgment")
         
-        # Check small talk
-        for pattern, confidence in self._small_talk_patterns:
-            if pattern.search(text):
-                return (False, confidence, "small_talk")
-        
-        # Check statements (interviewer declarations)
         for pattern, confidence in self._statement_patterns:
             if pattern.search(text):
                 return (False, confidence, "statement")
-        
-        # Check clarification requests (these ARE actionable)
-        for pattern, confidence in self._clarification_patterns:
-            if pattern.search(text):
-                return (True, confidence, "clarification")
-        
-        # Check follow-up questions (these ARE actionable)
-        for pattern, confidence in self._follow_up_patterns:
-            if pattern.search(text):
-                return (True, confidence, "follow_up")
-        
-        # Check interview questions (main positive case)
-        for pattern, confidence in self._interview_patterns:
-            if pattern.search(text):
-                return (True, confidence, "interview_question")
         
         # Default: If nothing matched, likely a statement
         # Lower confidence indicates uncertainty
