@@ -38,6 +38,8 @@ from context.manager import ContextManager
 from rag.store import VectorStore
 from rag.engine import RAGEngine
 from warmup import ModelWarmer
+from classification.question_detector import QuestionDetector
+from storage.session_store import SessionHistoryStore
 
 # Configure logging
 logging.basicConfig(
@@ -57,6 +59,8 @@ class SessionState:
     user_embedding: Optional[np.ndarray] = field(default=None, repr=False)
     # Conversation history for LLM context (list of {"role": "user"|"assistant", "content": str})
     conversation_history: List[Dict[str, str]] = field(default_factory=list)
+    # Phase 3: Persistent session ID for history storage
+    persistent_session_id: Optional[str] = None
 
 
 class SidecarServer:
@@ -98,6 +102,15 @@ class SidecarServer:
         self.model_warmer.start_warming()
         
         self.speaker_recognizer = None 
+        
+        # Phase 3: Intelligent Question Detection
+        self.question_detector = QuestionDetector()
+        self.question_detection_enabled = True  # Feature flag for rollout
+        self.question_confidence_threshold = 0.7  # Configurable threshold
+        
+        # Phase 3: Session History Persistence
+        self.session_store = SessionHistoryStore()
+        self.session_persistence_enabled = True  # Feature flag for rollout 
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -262,6 +275,18 @@ class SidecarServer:
         status_msg = create_status_message(self.session_state.status)
         await websocket.send(status_msg.to_json())
         
+        # Phase 3: Create persistent session for history storage
+        if self.session_persistence_enabled:
+            try:
+                context_files = [f.get("name", "") for f in data.get("files", [])]
+                self.session_state.persistent_session_id = self.session_store.create_session(
+                    context_files=context_files
+                )
+                logger.info(f"Created persistent session: {self.session_state.persistent_session_id}")
+            except Exception as e:
+                logger.warning(f"Failed to create persistent session: {e}")
+                # Continue without persistence - don't break main flow
+        
         # Initialize RAG in background - don't block audio processing
         # Session works even if RAG fails (graceful degradation)
         rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
@@ -273,10 +298,19 @@ class SidecarServer:
         message: Message
     ) -> None:
         """Handle STOP_SESSION message."""
+        # Phase 3: End persistent session before clearing state
+        if self.session_persistence_enabled and self.session_state.persistent_session_id:
+            try:
+                self.session_store.end_session(self.session_state.persistent_session_id)
+                logger.info(f"Ended persistent session: {self.session_state.persistent_session_id}")
+            except Exception as e:
+                logger.warning(f"Failed to end persistent session: {e}")
+        
         self.session_state.status = SessionStatus.IDLE
         self.session_state.api_key = None
         # Clear conversation history for fresh start on next session
         self.session_state.conversation_history.clear()
+        self.session_state.persistent_session_id = None
         
         if self.vector_store:
             try:
@@ -718,8 +752,35 @@ class SidecarServer:
         await self.broadcast(transcription_msg)
         logger.info(f"Transcribed ({speaker.value}): {text[:50]}...")
         
+        # Phase 3: Persist transcription to session history
+        if self.session_persistence_enabled and self.session_state.persistent_session_id:
+            try:
+                self.session_store.add_transcription(
+                    session_id=self.session_state.persistent_session_id,
+                    speaker=speaker.value,
+                    text=text,
+                    timestamp=segment.start_time,
+                    confidence=segment.confidence
+                )
+            except Exception as e:
+                logger.warning(f"Failed to persist transcription: {e}")
+        
         if speaker == Speaker.INTERVIEWER:
-            await self._generate_answer_for_question(text, pipeline_start)
+            # Phase 3: Question detection before answer generation
+            if self.question_detection_enabled:
+                is_question, confidence, q_type = self.question_detector.is_actionable_question(
+                    text,
+                    self.session_state.conversation_history
+                )
+                logger.info(f"Question detection: {q_type} (confidence={confidence:.2f})")
+                
+                if is_question and confidence >= self.question_confidence_threshold:
+                    await self._generate_answer_for_question(text, pipeline_start)
+                else:
+                    logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
+            else:
+                # Feature flag disabled - original behavior
+                await self._generate_answer_for_question(text, pipeline_start)
 
     def _identify_speaker(self, audio: bytes) -> Speaker:
         """Identify speaker as User or Interviewer based on voice calibration."""
@@ -782,6 +843,20 @@ class SidecarServer:
                 "content": full_answer
             })
             logger.debug(f"Added Q&A to history. Total exchanges: {len(self.session_state.conversation_history) // 2}")
+            
+            # Phase 3: Persist answer to session history
+            if self.session_persistence_enabled and self.session_state.persistent_session_id:
+                try:
+                    self.session_store.add_answer(
+                        session_id=self.session_state.persistent_session_id,
+                        question=question,
+                        answer=full_answer,
+                        confidence=rag_confidence.value,
+                        rag_chunks=context_chunks[:3] if context_chunks else None,  # Top 3 chunks
+                        latency_ms=int(latency * 1000)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to persist answer: {e}")
             
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
