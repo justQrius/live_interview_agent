@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSessionStore } from './store/sessionStore';
 import SessionControls from './components/SessionControls';
 import AnswerDisplay from './components/AnswerDisplay';
 import ContextLoader from './components/ContextLoader';
@@ -6,9 +7,16 @@ import CalibrationModal from './components/CalibrationModal';
 import SettingsPanel from './components/SettingsPanel';
 import { DebugPanel } from './components/DebugPanel';
 import { HistoryPanel } from './components/HistoryPanel';
+import { PreparationButton } from './components/PreparationButton';
+import { PreparationSummary } from './components/PreparationSummary';
 
 function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  
+  const preparationSummary = useSessionStore((state) => state.preparationSummary);
+  const isPreparationExpanded = useSessionStore((state) => state.isPreparationExpanded);
+  const setPreparationExpanded = useSessionStore((state) => state.setPreparationExpanded);
+  const loadedContextFiles = useSessionStore((state) => state.loadedContextFiles);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
@@ -30,10 +38,24 @@ function App() {
         <div className="space-y-4">
           <SessionControls />
           <ContextLoader />
+          
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h2 className="text-lg font-semibold mb-3">Interview Preparation</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Generate a custom interview preparation guide based on your loaded context files.
+            </p>
+            <PreparationButton disabled={loadedContextFiles.length === 0} />
+          </div>
+
           <SettingsPanel />
         </div>
 
-        <div>
+        <div className="space-y-4">
+          <PreparationSummary 
+            summary={preparationSummary} 
+            isExpanded={isPreparationExpanded} 
+            onToggle={() => setPreparationExpanded(!isPreparationExpanded)} 
+          />
           <AnswerDisplay />
         </div>
       </main>

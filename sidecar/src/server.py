@@ -30,6 +30,7 @@ from protocol import (
     create_session_data_message,
     create_session_export_message,
     create_session_deleted_message,
+    create_preparation_ready_message,
 )
 from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
@@ -68,6 +69,8 @@ class SessionState:
     conversation_history: List[Dict[str, str]] = field(default_factory=list)
     # Phase 3: Persistent session ID for history storage
     persistent_session_id: Optional[str] = None
+    # Phase 3B: Pre-interview preparation summary
+    preparation_summary: Optional[str] = None
 
 
 class SidecarServer:
@@ -222,6 +225,8 @@ class SidecarServer:
             MessageType.LOAD_SESSION: self._handle_load_session,
             MessageType.EXPORT_SESSION: self._handle_export_session,
             MessageType.DELETE_SESSION: self._handle_delete_session,
+            # Pre-interview preparation (Phase 3B: STORY-047)
+            MessageType.PREPARE_INTERVIEW: self._handle_prepare_interview,
         }
 
         handler = handlers.get(message.type)
@@ -744,6 +749,150 @@ class SidecarServer:
                 code="ERR_DELETE_SESSION"
             )
             await websocket.send(error_msg.to_json())
+
+    async def _handle_prepare_interview(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle PREPARE_INTERVIEW message - generates pre-interview preparation summary.
+        
+        Phase 3B: STORY-047
+        """
+        logger.info("Starting interview preparation...")
+        
+        # Check if we have any context loaded
+        chunks = self.context_manager.get_all_chunks()
+        
+        if not chunks:
+            summary = """## Interview Preparation
+
+**No documents uploaded.** Upload your resume and job description for personalized preparation.
+
+To get started:
+1. Upload your resume/CV
+2. Upload the job description
+3. Optionally add company information
+4. Click "Prepare for Interview" again"""
+            
+            response = create_preparation_ready_message(summary)
+            await websocket.send(response.to_json())
+            return
+        
+        # Build preparation prompt from context
+        try:
+            preparation_prompt = self._build_preparation_prompt(chunks)
+            
+            if not self.llm:
+                # Fallback if no LLM available
+                summary = self._generate_fallback_preparation(chunks)
+            else:
+                # Generate preparation using LLM
+                summary = await self._generate_preparation_with_llm(preparation_prompt)
+            
+            # Store in session state
+            self.session_state.preparation_summary = summary
+            
+            response = create_preparation_ready_message(summary)
+            await websocket.send(response.to_json())
+            logger.info("Interview preparation complete")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate preparation: {e}")
+            error_msg = create_error_message(
+                f"Failed to generate preparation: {e}",
+                code="ERR_PREPARATION_FAILED"
+            )
+            await websocket.send(error_msg.to_json())
+    
+    def _build_preparation_prompt(self, chunks: list) -> str:
+        """Build prompt for preparation generation from context chunks."""
+        # Group chunks by source/type
+        resume_text = []
+        jd_text = []
+        company_text = []
+        other_text = []
+        
+        for chunk in chunks:
+            meta = chunk.metadata or {}
+            source = meta.get("source", "").lower()
+            doc_type = meta.get("document_type", "").lower()
+            
+            if "resume" in source or "cv" in source or doc_type == "resume":
+                resume_text.append(chunk.text)
+            elif "job" in source or "jd" in source or doc_type == "job_description":
+                jd_text.append(chunk.text)
+            elif "company" in source or "about" in source or doc_type == "company_info":
+                company_text.append(chunk.text)
+            else:
+                other_text.append(chunk.text)
+        
+        sections = []
+        
+        if resume_text:
+            sections.append(f"## CANDIDATE BACKGROUND\n{' '.join(resume_text[:5])}")
+        
+        if jd_text:
+            sections.append(f"## ROLE REQUIREMENTS\n{' '.join(jd_text[:5])}")
+        
+        if company_text:
+            sections.append(f"## COMPANY CONTEXT\n{' '.join(company_text[:3])}")
+        
+        if other_text and not (resume_text or jd_text):
+            sections.append(f"## ADDITIONAL CONTEXT\n{' '.join(other_text[:3])}")
+        
+        return f"""Based on the following documents, prepare a comprehensive interview briefing:
+
+{chr(10).join(sections)}
+
+Generate a structured preparation summary with:
+1. **Key Talking Points**: 3-5 points that align the candidate's experience with role requirements
+2. **Potential Challenges**: 2-3 areas where the candidate may need to address gaps
+3. **Company-Specific Insights**: 2-3 talking points that reference company values/products (if available)
+4. **STAR Story Suggestions**: 2-3 specific experiences from the resume that could be used for behavioral questions
+5. **Questions to Ask**: 2-3 intelligent questions the candidate could ask
+
+Keep the briefing concise and actionable. Use bullet points and markdown formatting."""
+    
+    async def _generate_preparation_with_llm(self, prompt: str) -> str:
+        """Generate preparation summary using LLM."""
+        if not self.llm:
+            raise RuntimeError("LLM not available")
+        
+        full_response_parts: List[str] = []
+        
+        async for chunk in self.llm.generate_response(
+            prompt,
+            "",  # No additional context
+            []   # No conversation history
+        ):
+            full_response_parts.append(chunk)
+        
+        return "".join(full_response_parts)
+    
+    def _generate_fallback_preparation(self, chunks: list) -> str:
+        """Generate basic preparation without LLM."""
+        doc_count = len(chunks)
+        
+        return f"""## Interview Preparation Summary
+
+**Documents Analyzed**: {doc_count} context chunks loaded
+
+### Key Points from Your Documents
+
+Based on the uploaded documents, here are the main topics to prepare:
+
+{chr(10).join([f"- {chunk.text[:100]}..." for chunk in chunks[:5]])}
+
+### General Preparation Tips
+
+1. **Review your experience** aligned with the role requirements
+2. **Prepare STAR stories** for behavioral questions
+3. **Research the company** culture and recent news
+4. **Prepare thoughtful questions** to ask the interviewer
+
+*Note: For personalized insights, ensure an LLM provider is configured.*"""
 
     # Session History Helper Methods
 
