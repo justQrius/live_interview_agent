@@ -243,24 +243,8 @@ class SidecarServer:
         self.session_state.api_key = "multi-provider-active" 
         self.session_state.status = SessionStatus.LISTENING
         
-        try:
-            rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
-            self.vector_store = VectorStore(api_key=rag_key)
-            self.rag_engine = RAGEngine(self.vector_store)
-            
-            pre_loaded_chunks = self.context_manager.get_all_chunks()
-            if pre_loaded_chunks:
-                logger.info(f"Adding {len(pre_loaded_chunks)} pre-loaded chunks to vector store")
-                chunk_texts = [c.text for c in pre_loaded_chunks]
-                chunk_metas = [c.metadata for c in pre_loaded_chunks]
-                try:
-                    self.vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
-                except Exception as e:
-                    logger.error(f"Failed to add pre-loaded chunks to vector store: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Failed to initialize vector store: {e}")
-            
+        # CRITICAL: Start audio processing FIRST - this is the user's primary need
+        # RAG initialization can happen in background and may timeout on network issues
         try:
             await self._start_audio_processing()
         except Exception as e:
@@ -273,10 +257,15 @@ class SidecarServer:
             self.session_state.status = SessionStatus.IDLE
             return
 
-        logger.info("Session started")
+        logger.info("Session started - audio processing active")
 
         status_msg = create_status_message(self.session_state.status)
         await websocket.send(status_msg.to_json())
+        
+        # Initialize RAG in background - don't block audio processing
+        # Session works even if RAG fails (graceful degradation)
+        rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
+        asyncio.create_task(self._init_rag_background(rag_key))
 
     async def _handle_stop_session(
         self,
@@ -597,6 +586,48 @@ class SidecarServer:
         await self.audio_capture.start_capture()
         self._audio_task = asyncio.create_task(self._audio_loop())
         logger.info("Audio processing started")
+
+    async def _init_rag_background(self, api_key: str) -> None:
+        """
+        Initialize RAG components in background.
+        
+        This runs asynchronously to avoid blocking audio processing.
+        Session continues to work even if RAG initialization fails.
+        """
+        try:
+            logger.info("Initializing RAG in background...")
+            
+            # Run blocking VectorStore initialization in executor
+            loop = asyncio.get_event_loop()
+            vector_store = await loop.run_in_executor(
+                None, 
+                lambda: VectorStore(api_key=api_key)
+            )
+            self.vector_store = vector_store
+            self.rag_engine = RAGEngine(vector_store)
+            
+            # Add pre-loaded context chunks
+            pre_loaded_chunks = self.context_manager.get_all_chunks()
+            if pre_loaded_chunks:
+                logger.info(f"Adding {len(pre_loaded_chunks)} pre-loaded chunks to vector store (background)")
+                chunk_texts = [c.text for c in pre_loaded_chunks]
+                chunk_metas = [c.metadata for c in pre_loaded_chunks]
+                try:
+                    # Run blocking add_documents in executor
+                    def add_docs():
+                        vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
+                    await loop.run_in_executor(None, add_docs)
+                    logger.info("RAG initialization complete - context loaded")
+                except Exception as e:
+                    logger.warning(f"Failed to add pre-loaded chunks (RAG degraded): {e}")
+            else:
+                logger.info("RAG initialization complete - no pre-loaded chunks")
+                    
+        except Exception as e:
+            logger.warning(f"RAG initialization failed (session continues without RAG): {e}")
+            # Don't raise - session continues without RAG support
+            self.vector_store = None
+            self.rag_engine = None
 
     async def _stop_audio_processing(self) -> None:
         """Stop audio processing components."""
