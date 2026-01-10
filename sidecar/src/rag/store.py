@@ -115,6 +115,57 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Failed to query ChromaDB: {e}")
             return {}
+    
+    def query_with_filter(
+        self,
+        query: str,
+        n_results: int = 5,
+        where: Optional[Dict[str, Any]] = None,
+        where_document: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Query with metadata filtering.
+        
+        Enables filtering by document_type, level, section, or any metadata
+        field before performing vector similarity search.
+        
+        Args:
+            query: Search query text.
+            n_results: Number of results to return (default 5).
+            where: Metadata filter dict. Examples:
+                - {"document_type": "resume"}
+                - {"level": "child"}
+                - {"$and": [{"document_type": "resume"}, {"level": "child"}]}
+                - {"document_type": {"$in": ["resume", "job_description"]}}
+            where_document: Document content filter. Example:
+                - {"$contains": "Python"}
+        
+        Returns:
+            Dict containing 'ids', 'distances', 'metadatas', 'documents'.
+            
+        Examples:
+            # Get only resume chunks
+            store.query_with_filter("Python experience", where={"document_type": "resume"})
+            
+            # Get child chunks from job descriptions
+            store.query_with_filter(
+                "requirements",
+                where={"$and": [{"document_type": "job_description"}, {"level": "child"}]}
+            )
+            
+            # Get chunks from specific section
+            store.query_with_filter("skills", where={"section": "experience"})
+        """
+        try:
+            return self.collection.query(
+                query_texts=[query],
+                n_results=n_results,
+                where=where,
+                where_document=where_document
+            )
+        except Exception as e:
+            logger.error(f"Failed to query ChromaDB with filter: {e}")
+            return {}
 
     def clear(self) -> None:
         """Clear the vector store (delete collection and recreate)."""
