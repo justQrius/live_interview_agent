@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from .store import VectorStore
 from .retrieval import RetrievalResult, confidence_from_distance
-from ..context.enhanced_manager import DocumentType
+from context.enhanced_manager import DocumentType
 
 logger = logging.getLogger(__name__)
 
