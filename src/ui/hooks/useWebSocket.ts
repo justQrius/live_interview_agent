@@ -13,7 +13,16 @@ export type MessageType =
   | 'ANSWER_START'
   | 'ANSWER_CHUNK'
   | 'ERROR'
-  | 'STATUS';
+  | 'STATUS'
+  // Session History (Phase 3: STORY-039)
+  | 'LIST_SESSIONS'
+  | 'LOAD_SESSION'
+  | 'EXPORT_SESSION'
+  | 'DELETE_SESSION'
+  | 'SESSION_LIST'
+  | 'SESSION_DATA'
+  | 'SESSION_EXPORT'
+  | 'SESSION_DELETED';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -104,6 +113,59 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       const data = message.data as { message: string };
       console.error('Python sidecar error:', data.message);
       store.setLastError(data.message);
+      break;
+    }
+
+    // Session History responses (Phase 3: STORY-040)
+    case 'SESSION_LIST': {
+      const data = message.data as {
+        sessions: Array<{
+          id: string;
+          startedAt: number;
+          endedAt: number | null;
+          contextFiles: string[];
+          transcriptionCount: number;
+          answerCount: number;
+        }>;
+        total: number;
+        hasMore: boolean;
+      };
+      store.setSavedSessions(data.sessions);
+      store.setHistoryLoading(false);
+      break;
+    }
+
+    case 'SESSION_DATA': {
+      const data = message.data as {
+        id: string;
+        startedAt: number;
+        endedAt: number | null;
+        contextFiles: string[];
+        transcriptions: Array<{
+          speaker: 'User' | 'Interviewer';
+          text: string;
+          timestamp: number;
+          confidence: number;
+        }>;
+        answers: Array<{
+          question: string;
+          answer: string;
+          confidence: string;
+          timestamp?: number;
+          latency_ms?: number;
+        }>;
+      };
+      store.setSelectedSession(data);
+      store.setHistoryLoading(false);
+      break;
+    }
+
+    case 'SESSION_DELETED': {
+      const data = message.data as { sessionId: string; success: boolean };
+      if (data.success) {
+        store.removeSession(data.sessionId);
+      }
+      store.setHistoryLoading(false);
       break;
     }
 
@@ -222,9 +284,75 @@ export const useWebSocket = () => {
     });
   };
 
+  // Session History operations (Phase 3: STORY-040)
+  const listSessions = (limit = 20, offset = 0) => {
+    const store = useSessionStore.getState();
+    store.setHistoryLoading(true);
+    sendMessage({
+      type: 'LIST_SESSIONS',
+      data: { limit, offset },
+    });
+  };
+
+  const loadSession = (sessionId: string) => {
+    const store = useSessionStore.getState();
+    store.setHistoryLoading(true);
+    sendMessage({
+      type: 'LOAD_SESSION',
+      data: { sessionId },
+    });
+  };
+
+  const exportSession = (sessionId: string, format: 'md' | 'json' = 'md'): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // Set up one-time listener for export response
+      const handleExport = (event: MessageEvent) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'SESSION_EXPORT') {
+            resolve(message.data.content);
+            sharedWs?.removeEventListener('message', handleExport);
+          }
+        } catch {
+          // Ignore parse errors for other messages
+        }
+      };
+
+      if (sharedWs) {
+        sharedWs.addEventListener('message', handleExport);
+        sendMessage({
+          type: 'EXPORT_SESSION',
+          data: { sessionId, format },
+        });
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          sharedWs?.removeEventListener('message', handleExport);
+          reject(new Error('Export timed out'));
+        }, 10000);
+      } else {
+        reject(new Error('WebSocket not connected'));
+      }
+    });
+  };
+
+  const deleteSession = (sessionId: string) => {
+    const store = useSessionStore.getState();
+    store.setHistoryLoading(true);
+    sendMessage({
+      type: 'DELETE_SESSION',
+      data: { sessionId },
+    });
+  };
+
   return {
     sendMessage,
     sendAudio,
     isConnected,
+    // Session History (Phase 3: STORY-040)
+    listSessions,
+    loadSession,
+    exportSession,
+    deleteSession,
   };
 };

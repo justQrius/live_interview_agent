@@ -28,6 +28,18 @@ class MessageType(str, Enum):
     ERROR = "ERROR"
     STATUS = "STATUS"
 
+    # Session History - Client -> Server
+    LIST_SESSIONS = "LIST_SESSIONS"
+    LOAD_SESSION = "LOAD_SESSION"
+    EXPORT_SESSION = "EXPORT_SESSION"
+    DELETE_SESSION = "DELETE_SESSION"
+
+    # Session History - Server -> Client
+    SESSION_LIST = "SESSION_LIST"
+    SESSION_DATA = "SESSION_DATA"
+    SESSION_EXPORT = "SESSION_EXPORT"
+    SESSION_DELETED = "SESSION_DELETED"
+
 
 class SessionStatus(str, Enum):
     """Session status values."""
@@ -169,3 +181,51 @@ def create_status_message(state: SessionStatus) -> Message:
     """Create a STATUS message."""
     data = StatusData(state)
     return Message(type=MessageType.STATUS, data=data.to_dict())
+
+
+# Session History Helper Functions
+
+def create_session_list_message(
+    sessions: list[dict],
+    total: int,
+    has_more: bool
+) -> Message:
+    """Create a SESSION_LIST response message."""
+    return Message(
+        type=MessageType.SESSION_LIST,
+        data={
+            "sessions": sessions,
+            "total": total,
+            "hasMore": has_more
+        }
+    )
+
+
+def create_session_data_message(session_data: dict) -> Message:
+    """Create a SESSION_DATA response message."""
+    return Message(
+        type=MessageType.SESSION_DATA,
+        data=session_data
+    )
+
+
+def create_session_export_message(content: str, format: str) -> Message:
+    """Create a SESSION_EXPORT response message."""
+    return Message(
+        type=MessageType.SESSION_EXPORT,
+        data={
+            "content": content,
+            "format": format
+        }
+    )
+
+
+def create_session_deleted_message(session_id: str, success: bool) -> Message:
+    """Create a SESSION_DELETED response message."""
+    return Message(
+        type=MessageType.SESSION_DELETED,
+        data={
+            "sessionId": session_id,
+            "success": success
+        }
+    )

@@ -26,6 +26,10 @@ from protocol import (
     create_answer_chunk_message,
     create_error_message,
     create_status_message,
+    create_session_list_message,
+    create_session_data_message,
+    create_session_export_message,
+    create_session_deleted_message,
 )
 from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
@@ -206,6 +210,11 @@ class SidecarServer:
             MessageType.UPLOAD_CONTEXT: self._handle_upload_context,
             MessageType.CALIBRATE_VOICE: self._handle_calibrate_voice,
             MessageType.MANUAL_QUESTION: self._handle_manual_question,
+            # Session History handlers (Phase 3: STORY-039)
+            MessageType.LIST_SESSIONS: self._handle_list_sessions,
+            MessageType.LOAD_SESSION: self._handle_load_session,
+            MessageType.EXPORT_SESSION: self._handle_export_session,
+            MessageType.DELETE_SESSION: self._handle_delete_session,
         }
 
         handler = handlers.get(message.type)
@@ -578,6 +587,226 @@ class SidecarServer:
         self.session_state.status = SessionStatus.LISTENING
         status_msg = create_status_message(SessionStatus.LISTENING)
         await websocket.send(status_msg.to_json())
+
+    # Session History Handlers (Phase 3: STORY-039)
+
+    async def _handle_list_sessions(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """Handle LIST_SESSIONS message - returns paginated session list."""
+        data = message.data or {}
+        limit = data.get("limit", 20)
+        offset = data.get("offset", 0)
+        
+        try:
+            sessions = self.session_store.list_sessions(limit=limit, offset=offset)
+            session_summaries = [self._session_summary_to_dict(s) for s in sessions]
+            
+            response = create_session_list_message(
+                sessions=session_summaries,
+                total=len(session_summaries),
+                has_more=len(sessions) == limit
+            )
+            await websocket.send(response.to_json())
+            logger.info(f"Listed {len(sessions)} sessions (offset={offset}, limit={limit})")
+        except Exception as e:
+            logger.error(f"Failed to list sessions: {e}")
+            error_msg = create_error_message(
+                f"Failed to list sessions: {e}",
+                code="ERR_LIST_SESSIONS"
+            )
+            await websocket.send(error_msg.to_json())
+
+    async def _handle_load_session(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """Handle LOAD_SESSION message - returns full session data."""
+        data = message.data or {}
+        session_id = data.get("sessionId")
+        
+        if not session_id:
+            error_msg = create_error_message(
+                "sessionId is required",
+                code="ERR_MISSING_SESSION_ID"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        try:
+            session = self.session_store.get_session(session_id)
+            if not session:
+                error_msg = create_error_message(
+                    f"Session not found: {session_id}",
+                    code="ERR_SESSION_NOT_FOUND"
+                )
+                await websocket.send(error_msg.to_json())
+                return
+            
+            response = create_session_data_message(self._session_to_full_dict(session))
+            await websocket.send(response.to_json())
+            logger.info(f"Loaded session: {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to load session: {e}")
+            error_msg = create_error_message(
+                f"Failed to load session: {e}",
+                code="ERR_LOAD_SESSION"
+            )
+            await websocket.send(error_msg.to_json())
+
+    async def _handle_export_session(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """Handle EXPORT_SESSION message - returns formatted session content."""
+        data = message.data or {}
+        session_id = data.get("sessionId")
+        export_format = data.get("format", "md")
+        
+        if not session_id:
+            error_msg = create_error_message(
+                "sessionId is required",
+                code="ERR_MISSING_SESSION_ID"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        try:
+            session = self.session_store.get_session(session_id)
+            if not session:
+                error_msg = create_error_message(
+                    f"Session not found: {session_id}",
+                    code="ERR_SESSION_NOT_FOUND"
+                )
+                await websocket.send(error_msg.to_json())
+                return
+            
+            if export_format == "json":
+                content = self._export_session_as_json(session)
+            else:
+                content = self._export_session_as_markdown(session)
+                export_format = "md"
+            
+            response = create_session_export_message(content=content, format=export_format)
+            await websocket.send(response.to_json())
+            logger.info(f"Exported session {session_id} as {export_format}")
+        except Exception as e:
+            logger.error(f"Failed to export session: {e}")
+            error_msg = create_error_message(
+                f"Failed to export session: {e}",
+                code="ERR_EXPORT_SESSION"
+            )
+            await websocket.send(error_msg.to_json())
+
+    async def _handle_delete_session(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """Handle DELETE_SESSION message - deletes session and confirms."""
+        data = message.data or {}
+        session_id = data.get("sessionId")
+        
+        if not session_id:
+            error_msg = create_error_message(
+                "sessionId is required",
+                code="ERR_MISSING_SESSION_ID"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        try:
+            success = self.session_store.delete_session(session_id)
+            response = create_session_deleted_message(session_id=session_id, success=success)
+            await websocket.send(response.to_json())
+            
+            if success:
+                logger.info(f"Deleted session: {session_id}")
+            else:
+                logger.warning(f"Session not found for deletion: {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete session: {e}")
+            error_msg = create_error_message(
+                f"Failed to delete session: {e}",
+                code="ERR_DELETE_SESSION"
+            )
+            await websocket.send(error_msg.to_json())
+
+    # Session History Helper Methods
+
+    def _session_summary_to_dict(self, session) -> dict:
+        """Convert a Session object to a summary dict for list responses."""
+        from storage.session_store import SessionData
+        s: SessionData = session
+        return {
+            "id": s.id,
+            "startedAt": int(s.started_at.timestamp() * 1000) if s.started_at else None,
+            "endedAt": int(s.ended_at.timestamp() * 1000) if s.ended_at else None,
+            "contextFiles": s.context_files,
+            "transcriptionCount": len(s.transcriptions),
+            "answerCount": len(s.answers)
+        }
+
+    def _session_to_full_dict(self, session) -> dict:
+        """Convert a Session object to a full dict with all data."""
+        from storage.session_store import SessionData
+        s: SessionData = session
+        return {
+            "id": s.id,
+            "startedAt": int(s.started_at.timestamp() * 1000) if s.started_at else None,
+            "endedAt": int(s.ended_at.timestamp() * 1000) if s.ended_at else None,
+            "contextFiles": s.context_files,
+            "transcriptions": s.transcriptions,
+            "answers": s.answers
+        }
+
+    def _export_session_as_markdown(self, session) -> str:
+        """Export a session as formatted markdown."""
+        from storage.session_store import SessionData
+        s: SessionData = session
+        
+        lines = ["# Interview Session", ""]
+        
+        if s.started_at:
+            lines.append(f"**Date**: {s.started_at.strftime('%Y-%m-%d %H:%M')}")
+        
+        if s.context_files:
+            lines.append(f"**Context Files**: {', '.join(s.context_files)}")
+        
+        lines.extend(["", "## Conversation", ""])
+        
+        # Interleave transcriptions and answers by timestamp
+        events = []
+        for t in s.transcriptions:
+            events.append((t.get("timestamp", 0), "transcription", t))
+        for a in s.answers:
+            events.append((a.get("timestamp", 0), "answer", a))
+        
+        events.sort(key=lambda x: x[0])
+        
+        for _, event_type, data in events:
+            if event_type == "transcription":
+                speaker = data.get("speaker", "Unknown")
+                text = data.get("text", "")
+                lines.append(f"**{speaker}**: {text}")
+                lines.append("")
+            elif event_type == "answer":
+                question = data.get("question", "")
+                answer = data.get("answer", "")
+                lines.append(f"> **Question**: {question}")
+                lines.append(f">")
+                lines.append(f"> **Suggested Answer**: {answer}")
+                lines.append("")
+        
+        return "\n".join(lines)
+
+    def _export_session_as_json(self, session) -> str:
+        """Export a session as JSON string."""
+        return json.dumps(self._session_to_full_dict(session), indent=2)
 
     async def broadcast(self, message: Message) -> None:
         """
