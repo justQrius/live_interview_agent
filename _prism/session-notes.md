@@ -1,88 +1,124 @@
 # Session Notes - Live Interview Agent
 
-## Session: 2026-01-08 - Critical Bug Fix: Windows Keyring Failure
+## Session: 2026-01-09 - Phase 3 COMPLETE ✅
 
 ### COMPLETED TODAY
 
-**Bug Fix #1: Start button disabled after API key configuration**
-- Root cause: API key state not syncing when keys saved/deleted in ProviderSettings
-- Implemented event-based synchronization using `apiKeyChanged` custom event
-- Fixed SessionControls to use `hasPrimaryKey` instead of undefined `apiKey` variable
-- Commit: `07d1ffe` - "fix: start button now enables immediately after API key save/delete"
+**Phase 3A - Intelligent Question Detection (8 stories)**
+- STORY-034: Question Detector Core
+- STORY-035: Pattern Matching Engine  
+- STORY-036: Context Awareness
+- STORY-037: Server Integration
+- STORY-038: Enhanced Context Manager
+- STORY-039: Session Store
+- STORY-040: Document Priority Engine
+- STORY-041: Semantic Chunking
 
-**Bug Fix #2: Windows Credential Manager not persisting API keys** ⭐ CRITICAL
-- Root cause: `keyring` crate reports success but Windows Credential Manager is intermittent
-- Discovered via debug panel showing `exists: false` immediately after `Save successful`
-- Terminal logs showed: "OS keyring verification successful!" but then retrieve failed
-- **Final solution**: Store to fallback FIRST (guaranteed), then OS keyring (best-effort)
-- Storage location: `%APPDATA%\live_interview_agent\api_keys.json`
-- Commits:
-  - `768540e` - Added debug panel and comprehensive logging
-  - `aa359e5` - Implemented fallback storage mechanism
-  - `ff3542d`, `6d2c7b0` - Enhanced logging to diagnose the issue
-  - `81b455b` - **FIX**: Fallback-first strategy (reliable storage)
+**Phase 3B - Enhanced Context UI (7 stories)**
+- STORY-042: Context Tagging
+- STORY-043: Context Preview
+- STORY-044: Priority Visualization
+- STORY-045: Follow-up Detection
+- STORY-046: Document Type Selector UI
+- STORY-047: Pre-Interview Preparation Flow
+- STORY-048: Preparation Summary UI
 
-### TECHNICAL DETAILS
+**Phase 3C - Conversational Intelligence (4 stories)**
+- STORY-049: Query Reformulator
+- STORY-050: Question Splitter
+- STORY-051: Pipeline Integration
+- STORY-052: End-to-End Testing
 
-**Event Flow:**
-1. User saves/deletes API key in ProviderSettings
-2. `window.dispatchEvent(new CustomEvent('apiKeyChanged', { detail: { provider } }))`
-3. SettingsPanel listens → re-syncs API key to store
-4. SessionControls listens → re-checks `hasPrimaryKey` state
-5. Button enables/disables correctly ✅
+### TEST RESULTS
 
-**Files Changed:**
-- `src/ui/components/ProviderSettings.tsx` - Dispatch events on save/delete
-- `src/ui/components/SettingsPanel.tsx` - Listen and re-sync API key
-- `src/ui/components/SessionControls.tsx` - Listen and re-check key existence + fix button logic
+- **Frontend Tests**: 109 passing, 1 skipped
+- **Phase 3 Python Tests**: 201 passing
+  - test_question_detector.py: 119 tests
+  - test_query_reformulator.py: 28 tests
+  - test_question_splitter.py: 22 tests
+  - test_pipeline_integration.py: 14 tests
+  - test_phase3_e2e.py: 18 tests
 
----
+### PERFORMANCE BENCHMARKS
 
-## Session: 2026-01-07 - Stories 026/027/029/030/031 Complete
+- Question detection: <10ms P95
+- Query reformulation: <5ms P95
+- Question splitting: <3ms P95
+- Combined pipeline: <15ms P95
 
-### COMPLETED TODAY
+### KEY FILES CREATED
 
-1. **Story 026: Groq STT Provider - COMPLETE**
-   - Implemented `GroqSTTProvider` (whisper-large-v3, ~300ms latency)
+**Python/Sidecar:**
+```
+sidecar/src/classification/
+├── __init__.py
+├── question_detector.py (500+ lines)
+├── query_reformulator.py (295 lines)
+└── question_splitter.py (220 lines)
 
-2. **Story 027: Deepgram STT Provider - COMPLETE**
-   - Implemented `DeepgramSTTProvider` (nova-2)
+sidecar/src/context/
+├── manager.py
+└── enhanced_manager.py
 
-3. **Story 029: OpenAI LLM Provider - COMPLETE**
-   - Implemented `OpenAILLMProvider` (gpt-4o)
+sidecar/src/rag/
+├── engine.py
+└── enhanced_engine.py
+```
 
-4. **Story 030: Anthropic LLM Provider - COMPLETE**
-   - Implemented `AnthropicLLMProvider` (claude-3-5-sonnet)
+**Frontend:**
+```
+src/ui/components/
+├── DocumentTypeSelector.tsx
+├── PreparationButton.tsx
+├── PreparationSummary.tsx
+└── __tests__/
+    ├── DocumentTypeSelector.test.tsx
+    └── PreparationButton.test.tsx
+```
 
-5. **Story 031: Browser VAD Integration - COMPLETE**
-   - Installed `@ricky0123/vad-react` and `onnxruntime-web`
-   - Copied assets to `public/assets/vad/` (model + runtime)
-   - Created `src/ui/hooks/useVADFilter.ts`
-   - Updated `tauri.conf.json` CSP for WASM support
-   - Created passing unit tests for the hook
+### COMMITS (Phase 3)
 
-### KEY IMPLEMENTATION DETAILS
-
-**Browser VAD:**
-- Uses local assets in `public/assets/vad/` to ensure offline capability (and reliable loading in Tauri).
-- Configured to filter non-speech frames in the browser.
-- Actual WebSocket integration (sending only speech) is deferred to **Story 033** (Integration), as it requires modifying the main loop.
+```
+cbe6ef6 feat(phase3b): add pre-interview preparation feature
+d3ed5b5 feat(phase3b): add DocumentTypeSelector for context file uploads
+392315c feat(phase3c): add comprehensive E2E tests for Phase 3
+673af45 feat(phase3c): integrate Phase 3C components into server pipeline
+c794fc2 feat(phase3c): add QuestionSplitter for compound questions
+1ae90f8 feat(phase3c): add QueryReformulator for follow-up expansion
+```
 
 ### CURRENT STATE
 
 - **Phase 1**: 19/20 stories complete (STORY-020 E2E Testing remains)
-- **Phase 2**: 10/13 stories complete
-  - ... (All providers done)
-  - STORY-031 ✅ Browser VAD Integration
+- **Phase 2**: 13/13 stories COMPLETE ✅
+- **Phase 3**: 19/19 stories COMPLETE ✅
 
 ### NEXT STEPS
 
-1. **STORY-032**: Provider Configuration UI
-   - Add UI components to select providers and enter API keys.
-   - Update `sessionStore` to persist these preferences.
+1. **Phase 4 Planning** - If defined
+2. **Production Optimization** - Bundle size, performance tuning
+3. **User Testing** - Real interview scenarios
+4. **Documentation Updates** - API docs, user guide
+5. **STORY-020** - End-to-End Testing (Phase 1 remaining)
 
-2. **STORY-033**: Server Integration + E2E Testing
-   - Stitch everything together.
-   - Update `server.py` to use `ProviderFactory`.
-   - Update `useWebSocket.ts` to send provider config on start.
-   - Implement the VAD filtering logic in the audio capture loop (or switch to browser audio source).
+---
+
+## Previous Sessions
+
+### Session: 2026-01-08 - Critical Bug Fix: Windows Keyring Failure
+
+**Bug Fix #1: Start button disabled after API key configuration**
+- Root cause: API key state not syncing when keys saved/deleted in ProviderSettings
+- Implemented event-based synchronization using `apiKeyChanged` custom event
+
+**Bug Fix #2: Windows Credential Manager not persisting API keys**
+- Root cause: `keyring` crate reports success but Windows Credential Manager is intermittent
+- **Final solution**: Store to fallback FIRST (guaranteed), then OS keyring (best-effort)
+
+### Session: 2026-01-07 - Stories 026/027/029/030/031 Complete
+
+- Story 026: Groq STT Provider
+- Story 027: Deepgram STT Provider
+- Story 029: OpenAI LLM Provider
+- Story 030: Anthropic LLM Provider
+- Story 031: Browser VAD Integration
