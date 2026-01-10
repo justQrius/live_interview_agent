@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useSessionStore } from '../store/sessionStore';
+import DocumentTypeSelector, { detectDocumentType } from './DocumentTypeSelector';
 
 const ContextLoader: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, isConnected } = useWebSocket();
   const loadedContextFiles = useSessionStore((state) => state.loadedContextFiles);
   const addContextFile = useSessionStore((state) => state.addContextFile);
+  const updateContextFile = useSessionStore((state) => state.updateContextFile);
   const removeContextFile = useSessionStore((state) => state.removeContextFile);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -51,15 +53,18 @@ const ContextLoader: React.FC = () => {
     for (const file of files) {
       try {
         const base64Content = await readFileAsBase64(file);
+        const docType = detectDocumentType(file.name);
+        
         filesData.push({
           name: file.name,
-          content: base64Content
+          content: base64Content,
+          type: docType
         });
 
         addContextFile({
           id: crypto.randomUUID(),
           name: file.name,
-          type: 'job_description',
+          type: docType,
           size: file.size,
           uploadDate: Date.now(),
           preview: 'Uploading...'
@@ -148,11 +153,13 @@ const ContextLoader: React.FC = () => {
           ) : (
             <ul className="space-y-2 max-h-40 overflow-y-auto">
               {loadedContextFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                    </svg>
+                <li key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200 gap-2">
+                  <div className="flex items-center gap-2 overflow-hidden flex-1">
+                    <DocumentTypeSelector 
+                      value={file.type} 
+                      onChange={(newType) => updateContextFile(file.id, { type: newType })}
+                      filename={file.name}
+                    />
                     <span className="text-sm text-gray-700 truncate" title={file.name}>
                       {file.name}
                     </span>

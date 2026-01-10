@@ -19,7 +19,7 @@ export interface Answer {
 export interface ContextFile {
   id: string;
   name: string;
-  type: 'resume' | 'job_description' | 'company_info' | 'qa';
+  type: 'resume' | 'job_description' | 'company_info' | 'industry_research' | 'sample_qa' | 'custom';
   size: number;
   uploadDate: number;
   preview: string; // First 200 chars
@@ -102,6 +102,7 @@ export interface SessionState {
   appendAnswerText: (text: string) => void;
   completeAnswer: (confidence: 'high' | 'medium' | 'low') => void;
   addContextFile: (file: ContextFile) => void;
+  updateContextFile: (id: string, updates: Partial<ContextFile>) => void;
   removeContextFile: (id: string) => void;
   addTranscription: (transcription: Transcription) => void;
   clearSession: () => void;
@@ -246,6 +247,13 @@ export const useSessionStore = create<SessionState>((set) => ({
   addContextFile: (file) =>
     set((state) => ({
       loadedContextFiles: [...state.loadedContextFiles, file],
+    })),
+
+  updateContextFile: (id, updates) =>
+    set((state) => ({
+      loadedContextFiles: state.loadedContextFiles.map((f) =>
+        f.id === id ? { ...f, ...updates } : f
+      ),
     })),
 
   removeContextFile: (id) =>
