@@ -44,6 +44,7 @@ from rag.engine import RAGEngine
 from warmup import ModelWarmer
 from classification.question_detector import QuestionDetector
 from storage.session_store import SessionHistoryStore
+from storage.exporter import SessionExporter, ExportFormat
 
 # Configure logging
 logging.basicConfig(
@@ -687,6 +688,8 @@ class SidecarServer:
             
             if export_format == "json":
                 content = self._export_session_as_json(session)
+            elif export_format == "txt":
+                content = SessionExporter.export(session, ExportFormat.TEXT)
             else:
                 content = self._export_session_as_markdown(session)
                 export_format = "md"
@@ -765,48 +768,12 @@ class SidecarServer:
         }
 
     def _export_session_as_markdown(self, session) -> str:
-        """Export a session as formatted markdown."""
-        from storage.session_store import SessionData
-        s: SessionData = session
-        
-        lines = ["# Interview Session", ""]
-        
-        if s.started_at:
-            lines.append(f"**Date**: {s.started_at.strftime('%Y-%m-%d %H:%M')}")
-        
-        if s.context_files:
-            lines.append(f"**Context Files**: {', '.join(s.context_files)}")
-        
-        lines.extend(["", "## Conversation", ""])
-        
-        # Interleave transcriptions and answers by timestamp
-        events = []
-        for t in s.transcriptions:
-            events.append((t.get("timestamp", 0), "transcription", t))
-        for a in s.answers:
-            events.append((a.get("timestamp", 0), "answer", a))
-        
-        events.sort(key=lambda x: x[0])
-        
-        for _, event_type, data in events:
-            if event_type == "transcription":
-                speaker = data.get("speaker", "Unknown")
-                text = data.get("text", "")
-                lines.append(f"**{speaker}**: {text}")
-                lines.append("")
-            elif event_type == "answer":
-                question = data.get("question", "")
-                answer = data.get("answer", "")
-                lines.append(f"> **Question**: {question}")
-                lines.append(f">")
-                lines.append(f"> **Suggested Answer**: {answer}")
-                lines.append("")
-        
-        return "\n".join(lines)
+        """Export a session as formatted markdown using SessionExporter."""
+        return SessionExporter.export(session, ExportFormat.MARKDOWN)
 
     def _export_session_as_json(self, session) -> str:
-        """Export a session as JSON string."""
-        return json.dumps(self._session_to_full_dict(session), indent=2)
+        """Export a session as JSON string using SessionExporter."""
+        return SessionExporter.export(session, ExportFormat.JSON)
 
     async def broadcast(self, message: Message) -> None:
         """
