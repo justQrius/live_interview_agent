@@ -7,5 +7,6 @@ utterances to determine what requires a response vs. what should be ignored.
 
 from .question_detector import QuestionDetector
 from .query_reformulator import QueryReformulator
+from .question_splitter import QuestionSplitter
 
-__all__ = ["QuestionDetector", "QueryReformulator"]
+__all__ = ["QuestionDetector", "QueryReformulator", "QuestionSplitter"]
