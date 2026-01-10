@@ -449,3 +449,230 @@ class TestSessionPersistenceIntegration:
         
         server.session_persistence_enabled = False
         assert server.session_persistence_enabled is False
+
+
+class TestSessionHistoryProtocol:
+    """Tests for session history message types in protocol."""
+
+    def test_session_history_message_types_exist(self):
+        """Session history message types should exist in protocol."""
+        # Client -> Server
+        assert MessageType.LIST_SESSIONS.value == "LIST_SESSIONS"
+        assert MessageType.LOAD_SESSION.value == "LOAD_SESSION"
+        assert MessageType.EXPORT_SESSION.value == "EXPORT_SESSION"
+        assert MessageType.DELETE_SESSION.value == "DELETE_SESSION"
+        
+        # Server -> Client
+        assert MessageType.SESSION_LIST.value == "SESSION_LIST"
+        assert MessageType.SESSION_DATA.value == "SESSION_DATA"
+        assert MessageType.SESSION_EXPORT.value == "SESSION_EXPORT"
+        assert MessageType.SESSION_DELETED.value == "SESSION_DELETED"
+
+    def test_create_session_list_message(self):
+        """Session list messages should be created correctly."""
+        from protocol import create_session_list_message
+        
+        sessions = [
+            {
+                "id": "sess_abc123",
+                "startedAt": 1704825600000,
+                "endedAt": 1704829200000,
+                "contextFiles": ["resume.pdf"],
+                "transcriptionCount": 45,
+                "answerCount": 12
+            }
+        ]
+        
+        msg = create_session_list_message(sessions=sessions, total=1, has_more=False)
+        
+        assert msg.type == MessageType.SESSION_LIST
+        assert msg.data["sessions"] == sessions
+        assert msg.data["total"] == 1
+        assert msg.data["hasMore"] is False
+
+    def test_create_session_data_message(self):
+        """Session data messages should be created correctly."""
+        from protocol import create_session_data_message
+        
+        session_data = {
+            "id": "sess_abc123",
+            "startedAt": 1704825600000,
+            "endedAt": 1704829200000,
+            "contextFiles": ["resume.pdf"],
+            "transcriptions": [],
+            "answers": []
+        }
+        
+        msg = create_session_data_message(session_data)
+        
+        assert msg.type == MessageType.SESSION_DATA
+        assert msg.data["id"] == "sess_abc123"
+        assert msg.data["transcriptions"] == []
+
+    def test_create_session_export_message(self):
+        """Session export messages should be created correctly."""
+        from protocol import create_session_export_message
+        
+        content = "# Interview Session\n\n**Date**: 2024-01-09..."
+        
+        msg = create_session_export_message(content=content, format="md")
+        
+        assert msg.type == MessageType.SESSION_EXPORT
+        assert msg.data["content"] == content
+        assert msg.data["format"] == "md"
+
+    def test_create_session_deleted_message(self):
+        """Session deleted messages should be created correctly."""
+        from protocol import create_session_deleted_message
+        
+        msg = create_session_deleted_message(session_id="sess_abc123", success=True)
+        
+        assert msg.type == MessageType.SESSION_DELETED
+        assert msg.data["sessionId"] == "sess_abc123"
+        assert msg.data["success"] is True
+
+
+class TestSessionHistoryWebSocket:
+    """Tests for session history WebSocket handlers."""
+
+    def test_list_sessions_request_parsing(self):
+        """LIST_SESSIONS request should be parsed correctly."""
+        json_str = '{"type": "LIST_SESSIONS", "data": {"limit": 20, "offset": 0}}'
+        msg = Message.from_json(json_str)
+        
+        assert msg.type == MessageType.LIST_SESSIONS
+        assert msg.data["limit"] == 20
+        assert msg.data["offset"] == 0
+
+    def test_load_session_request_parsing(self):
+        """LOAD_SESSION request should be parsed correctly."""
+        json_str = '{"type": "LOAD_SESSION", "data": {"sessionId": "sess_abc123"}}'
+        msg = Message.from_json(json_str)
+        
+        assert msg.type == MessageType.LOAD_SESSION
+        assert msg.data["sessionId"] == "sess_abc123"
+
+    def test_export_session_request_parsing(self):
+        """EXPORT_SESSION request should be parsed correctly."""
+        json_str = '{"type": "EXPORT_SESSION", "data": {"sessionId": "sess_abc123", "format": "md"}}'
+        msg = Message.from_json(json_str)
+        
+        assert msg.type == MessageType.EXPORT_SESSION
+        assert msg.data["sessionId"] == "sess_abc123"
+        assert msg.data["format"] == "md"
+
+    def test_delete_session_request_parsing(self):
+        """DELETE_SESSION request should be parsed correctly."""
+        json_str = '{"type": "DELETE_SESSION", "data": {"sessionId": "sess_abc123"}}'
+        msg = Message.from_json(json_str)
+        
+        assert msg.type == MessageType.DELETE_SESSION
+        assert msg.data["sessionId"] == "sess_abc123"
+
+
+class TestSessionHistoryHandlers:
+    """Integration tests for session history handler methods."""
+
+    @pytest.fixture
+    def server_with_sessions(self):
+        """Create a server with test sessions."""
+        from server import SidecarServer
+        server = SidecarServer()
+        
+        # Create test sessions
+        session1 = server.session_store.create_session(context_files=["resume.pdf"])
+        server.session_store.add_transcription(
+            session_id=session1,
+            speaker="Interviewer",
+            text="Tell me about yourself",
+            timestamp=0.0,
+            confidence=0.95
+        )
+        server.session_store.add_answer(
+            session_id=session1,
+            question="Tell me about yourself",
+            answer="I am a software engineer...",
+            confidence="high",
+            latency_ms=500
+        )
+        server.session_store.end_session(session1)
+        
+        session2 = server.session_store.create_session(context_files=["jd.txt"])
+        server.session_store.end_session(session2)
+        
+        return server, [session1, session2]
+
+    def test_server_has_list_sessions_handler(self, server_with_sessions):
+        """Server should have _handle_list_sessions method."""
+        server, _ = server_with_sessions
+        assert hasattr(server, '_handle_list_sessions')
+
+    def test_server_has_load_session_handler(self, server_with_sessions):
+        """Server should have _handle_load_session method."""
+        server, _ = server_with_sessions
+        assert hasattr(server, '_handle_load_session')
+
+    def test_server_has_export_session_handler(self, server_with_sessions):
+        """Server should have _handle_export_session method."""
+        server, _ = server_with_sessions
+        assert hasattr(server, '_handle_export_session')
+
+    def test_server_has_delete_session_handler(self, server_with_sessions):
+        """Server should have _handle_delete_session method."""
+        server, _ = server_with_sessions
+        assert hasattr(server, '_handle_delete_session')
+
+    def test_session_summary_to_dict(self, server_with_sessions):
+        """Server should have helper to convert session to dict."""
+        server, session_ids = server_with_sessions
+        assert hasattr(server, '_session_summary_to_dict')
+        
+        session = server.session_store.get_session(session_ids[0])
+        summary = server._session_summary_to_dict(session)
+        
+        assert summary["id"] == session_ids[0]
+        assert "startedAt" in summary
+        assert "endedAt" in summary
+        assert summary["contextFiles"] == ["resume.pdf"]
+        assert summary["transcriptionCount"] == 1
+        assert summary["answerCount"] == 1
+
+    def test_session_to_full_dict(self, server_with_sessions):
+        """Server should have helper to convert session to full dict."""
+        server, session_ids = server_with_sessions
+        assert hasattr(server, '_session_to_full_dict')
+        
+        session = server.session_store.get_session(session_ids[0])
+        full_data = server._session_to_full_dict(session)
+        
+        assert full_data["id"] == session_ids[0]
+        assert "startedAt" in full_data
+        assert "transcriptions" in full_data
+        assert "answers" in full_data
+        assert len(full_data["transcriptions"]) == 1
+        assert len(full_data["answers"]) == 1
+
+    def test_export_session_as_markdown(self, server_with_sessions):
+        """Server should export session as markdown."""
+        server, session_ids = server_with_sessions
+        assert hasattr(server, '_export_session_as_markdown')
+        
+        session = server.session_store.get_session(session_ids[0])
+        markdown = server._export_session_as_markdown(session)
+        
+        assert "# Interview Session" in markdown
+        assert "Tell me about yourself" in markdown
+        assert "I am a software engineer" in markdown
+
+    def test_export_session_as_json(self, server_with_sessions):
+        """Server should export session as JSON."""
+        server, session_ids = server_with_sessions
+        assert hasattr(server, '_export_session_as_json')
+        
+        session = server.session_store.get_session(session_ids[0])
+        json_str = server._export_session_as_json(session)
+        
+        import json
+        data = json.loads(json_str)
+        assert data["id"] == session_ids[0]
+        assert len(data["transcriptions"]) == 1

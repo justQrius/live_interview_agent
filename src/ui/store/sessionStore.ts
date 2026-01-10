@@ -27,6 +27,31 @@ export interface ContextFile {
 
 export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic';
 
+// Session History Types (Phase 3: STORY-040)
+export interface SessionSummary {
+  id: string;
+  startedAt: number; // Unix ms
+  endedAt: number | null;
+  contextFiles: string[];
+  transcriptionCount: number;
+  answerCount: number;
+}
+
+export interface SessionData {
+  id: string;
+  startedAt: number;
+  endedAt: number | null;
+  contextFiles: string[];
+  transcriptions: Transcription[];
+  answers: Array<{
+    question: string;
+    answer: string;
+    confidence: string;
+    timestamp?: number;
+    latency_ms?: number;
+  }>;
+}
+
 export interface SessionState {
   // Session status
   status: 'idle' | 'calibrating' | 'listening' | 'processing';
@@ -57,6 +82,12 @@ export interface SessionState {
   answerHistory: Answer[];
   loadedContextFiles: ContextFile[];
 
+  // Session History (Phase 3: STORY-040) - persisted sessions from sidecar
+  savedSessions: SessionSummary[];
+  selectedSession: SessionData | null;
+  isHistoryOpen: boolean;
+  isHistoryLoading: boolean;
+
   // Actions
   setStatus: (status: SessionState['status']) => void;
   setScreenInvisibility: (enabled: boolean) => void;
@@ -74,6 +105,13 @@ export interface SessionState {
   removeContextFile: (id: string) => void;
   addTranscription: (transcription: Transcription) => void;
   clearSession: () => void;
+
+  // Session History Actions (Phase 3: STORY-040)
+  setHistoryOpen: (open: boolean) => void;
+  setSavedSessions: (sessions: SessionSummary[]) => void;
+  setSelectedSession: (session: SessionData | null) => void;
+  setHistoryLoading: (loading: boolean) => void;
+  removeSession: (sessionId: string) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -93,6 +131,12 @@ export const useSessionStore = create<SessionState>((set) => ({
   transcriptionHistory: [],
   answerHistory: [],
   loadedContextFiles: [],
+
+  // Session History initial state (Phase 3: STORY-040)
+  savedSessions: [],
+  selectedSession: null,
+  isHistoryOpen: false,
+  isHistoryLoading: false,
 
   // Actions
   setStatus: (status) => set({ status }),
@@ -224,4 +268,19 @@ export const useSessionStore = create<SessionState>((set) => ({
       answerHistory: [],
       lastError: null,
     }),
+
+  // Session History Actions (Phase 3: STORY-040)
+  setHistoryOpen: (open) => set({ isHistoryOpen: open }),
+
+  setSavedSessions: (sessions) => set({ savedSessions: sessions }),
+
+  setSelectedSession: (session) => set({ selectedSession: session }),
+
+  setHistoryLoading: (loading) => set({ isHistoryLoading: loading }),
+
+  removeSession: (sessionId) =>
+    set((state) => ({
+      savedSessions: state.savedSessions.filter((s) => s.id !== sessionId),
+      selectedSession: state.selectedSession?.id === sessionId ? null : state.selectedSession,
+    })),
 }));
