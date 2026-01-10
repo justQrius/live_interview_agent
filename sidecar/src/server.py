@@ -762,7 +762,16 @@ class SidecarServer:
         """
         logger.info("Starting interview preparation...")
         
-        # Check if we have any context loaded
+        data = message.data or {}
+        if not self.llm and data.get("apiKeys"):
+            try:
+                config = ProviderConfig.from_dict(data)
+                factory = ProviderFactory(config)
+                self.llm = factory.get_llm_provider()
+                logger.info("Initialized LLM provider for preparation")
+            except Exception as e:
+                logger.warning(f"Could not initialize LLM from preparation data: {e}")
+        
         chunks = self.context_manager.get_all_chunks()
         
         if not chunks:
