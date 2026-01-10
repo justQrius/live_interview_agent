@@ -5,9 +5,13 @@ A cross-platform desktop application that provides real-time AI assistance durin
 ## Key Features
 
 - **Multi-Provider Support**: Choose from **Groq** (ultra-fast), **Deepgram**, or **OpenAI** for STT, and **OpenAI** or **Anthropic** for LLM reasoning.
+- **Intelligent Question Detection**: Real-time classification of interview questions (behavioral, technical, etc.) with <10ms latency.
+- **Conversational Intelligence**: Advanced query reformulation and question splitting for complex, multi-part, or follow-up interview questions.
+- **Enhanced Context Preparation**: Multi-document support (Resume, JD, Company Info) with automated pre-interview briefing and STAR story generation.
 - **Low-Latency Architecture**:
   - **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.
   - **Model Pre-warming**: ML models load at app startup for <1s session starts.
+  - **Intelligence Pipeline**: Optimized classification and reformulation with <15ms combined overhead.
   - **Parallel Processing**: Audio pipeline optimized for <1.5s end-to-end latency.
 - **Real-time Audio Capture & Transcription**: High-accuracy speech recognition with speaker diarization.
 - **Context-Aware Assistance**: RAG-powered answers grounded in your resume and job description.
@@ -109,6 +113,13 @@ graph TB
         end
         
         Models[Pre-warmed Models<br/>(VAD/Diarization)]
+        
+        subgraph "Intelligence Pipeline"
+            Detector[Question Detector]
+            Reformulator[Query Reformulator]
+            Splitter[Question Splitter]
+        end
+        
         RAG[RAG Engine]
     end
 
@@ -117,16 +128,20 @@ graph TB
     Server --> Models
     Models --> Factory
     Factory --> Providers
-    Providers --> RAG
+    Providers --> Detector
+    Detector --> Reformulator
+    Reformulator --> Splitter
+    Splitter --> RAG
+    RAG --> Providers
 ```
 
 ## Development
 
 ### Project Structure
 
-- **`src/`**: React frontend (UI, Hooks, VAD).
+- **`src/`**: React frontend (UI, Hooks, VAD, Context UI).
 - **`src-tauri/`**: Rust backend (OS integration, Keyring).
-- **`sidecar/`**: Python engine (Audio processing, Providers, RAG).
+- **`sidecar/`**: Python engine (Audio processing, Classification, Providers, RAG).
 - **`_prism/`**: SDLC documentation.
 
 ### Testing

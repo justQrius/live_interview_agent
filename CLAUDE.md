@@ -2,7 +2,7 @@
 
 ## Quick Reference
 
-**Status**: Implementation Complete (Phase 1: 20/20, Phase 2: 13/13)
+**Status**: Implementation Complete (Phase 1: 19/20, Phase 2: 13/13, Phase 3: 19/19)
 **Project**: AI-powered live interview agent that provides real-time contextual answers
 **Architecture**: `_prism/architecture/architecture-phase2.md`
 **Tasks**: `_prism/tasks.md`
@@ -149,9 +149,11 @@ live_interview_agent/
 ├── sidecar/               # Python sidecar
 │   └── src/
 │       ├── audio/          # Capture, VAD, diarization
+│       ├── classification/ # Question detection, reformulation, splitting
 │       ├── providers/      # STT/LLM Provider implementations
-│       ├── context/        # Document parsing/chunking
+│       ├── context/        # Document parsing, chunking, preparation
 │       ├── rag/            # ChromaDB + retrieval
+│       ├── storage/        # Session and context persistence
 │       └── server.py       # WebSocket server
 └── _prism/                # SDLC artifacts
     ├── planning/           # PRD

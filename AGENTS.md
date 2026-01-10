@@ -50,6 +50,9 @@ cd src-tauri && cargo test
 # Python tests
 cd sidecar && pytest
 
+# Phase 3 Classification tests
+cd sidecar && pytest tests/test_question_detector.py tests/test_query_reformulator.py tests/test_question_splitter.py
+
 # End-to-End Latency Benchmark (requires server running)
 cd sidecar && python scripts/benchmark_latency.py
 ```
@@ -104,7 +107,7 @@ live_interview_agent/
 ├── src/                    # React UI (TypeScript)
 │   └── ui/
 │       ├── hooks/          # useWebSocket.ts, useVADFilter.ts
-│       ├── components/     # SessionControls, ProviderSettings, etc.
+│       ├── components/     # DocumentTypeSelector.tsx, PreparationButton.tsx, PreparationSummary.tsx, etc.
 │       └── store/          # sessionStore.ts
 ├── src-tauri/             # Tauri backend (Rust)
 │   └── src/
@@ -118,6 +121,9 @@ live_interview_agent/
 │       │   ├── stt/        # Groq, Deepgram, OpenAI, Gemini
 │       │   ├── llm/        # OpenAI, Anthropic, Gemini
 │       │   └── factory.py  # Provider instantiation logic
+│       ├── classification/ # question_detector.py, query_reformulator.py, question_splitter.py
+│       ├── context/        # manager.py, enhanced_manager.py, chunker.py
+│       ├── storage/        # session_store.py
 │       ├── audio/          # capture.py, vad.py
 │       └── rag/            # engine.py
 └── _prism/                # SDLC artifacts
@@ -136,23 +142,27 @@ Port: `localhost:8765`
     "preferences": { "sttProvider": "groq", "llmProvider": "openai" }
   }
 }
+{"type": "PREPARE_INTERVIEW", "data": {}}
+{"type": "UPLOAD_CONTEXT", "data": {"fileName": "resume.pdf", "content": "...", "documentType": "resume"}}
 ```
 
 ### Server → Client Messages
 ```json
 {"type": "TRANSCRIPTION", "speaker": "Interviewer", "text": "..."}
 {"type": "ANSWER_CHUNK", "chunk": "...", "complete": false}
+{"type": "PREPARATION_READY", "data": {"summary": "## Key Talking Points\n..."}}
+{"type": "QUESTION_DETECTED", "data": {"type": "behavioral", "confidence": 0.95}}
 ```
 
 ## Prism SDLC
 
 This project uses the Prism SDLC framework.
 
-| Phase | Command | Status |
+| Phase | Stories | Status |
 |-------|---------|--------|
-| Planning | `/prism-plan` | Complete (Phase 1 + 2) |
-| Solution | `/prism-solution` | Complete (Phase 1 + 2) |
-| Implementation | `/prism-implement` | Complete (33/33) |
+| Phase 1 (MVP) | 19/20 | Complete (STORY-020 pending) |
+| Phase 2 (Optimization) | 13/13 | Complete |
+| Phase 3 (Intelligence) | 19/19 | Complete |
 | Verification | `/prism-verify` | Ready for Manual |
 
 ### Key Documents
