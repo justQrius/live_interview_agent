@@ -88,6 +88,11 @@ export interface SessionState {
   isHistoryOpen: boolean;
   isHistoryLoading: boolean;
 
+  // Preparation State (STORY-047/048)
+  preparationStatus: 'not_started' | 'preparing' | 'ready' | 'error';
+  preparationSummary: string | null;
+  isPreparationExpanded: boolean;
+
   // Actions
   setStatus: (status: SessionState['status']) => void;
   setScreenInvisibility: (enabled: boolean) => void;
@@ -113,6 +118,11 @@ export interface SessionState {
   setSelectedSession: (session: SessionData | null) => void;
   setHistoryLoading: (loading: boolean) => void;
   removeSession: (sessionId: string) => void;
+
+  // Preparation Actions (STORY-047/048)
+  setPreparationStatus: (status: 'not_started' | 'preparing' | 'ready' | 'error') => void;
+  setPreparationSummary: (summary: string | null) => void;
+  setPreparationExpanded: (expanded: boolean) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -138,6 +148,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   selectedSession: null,
   isHistoryOpen: false,
   isHistoryLoading: false,
+
+  // Preparation initial state
+  preparationStatus: 'not_started',
+  preparationSummary: null,
+  isPreparationExpanded: false,
 
   // Actions
   setStatus: (status) => set({ status }),
@@ -291,4 +306,8 @@ export const useSessionStore = create<SessionState>((set) => ({
       savedSessions: state.savedSessions.filter((s) => s.id !== sessionId),
       selectedSession: state.selectedSession?.id === sessionId ? null : state.selectedSession,
     })),
+
+  setPreparationStatus: (status) => set({ preparationStatus: status }),
+  setPreparationSummary: (summary) => set({ preparationSummary: summary }),
+  setPreparationExpanded: (expanded) => set({ isPreparationExpanded: expanded }),
 }));

@@ -20,6 +20,7 @@ class MessageType(str, Enum):
     UPLOAD_CONTEXT = "UPLOAD_CONTEXT"
     CALIBRATE_VOICE = "CALIBRATE_VOICE"
     MANUAL_QUESTION = "MANUAL_QUESTION"
+    PREPARE_INTERVIEW = "PREPARE_INTERVIEW"  # Phase 3B: Request preparation summary
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
@@ -39,6 +40,7 @@ class MessageType(str, Enum):
     SESSION_DATA = "SESSION_DATA"
     SESSION_EXPORT = "SESSION_EXPORT"
     SESSION_DELETED = "SESSION_DELETED"
+    PREPARATION_READY = "PREPARATION_READY"  # Phase 3B: Preparation summary ready
 
 
 class SessionStatus(str, Enum):
@@ -227,5 +229,15 @@ def create_session_deleted_message(session_id: str, success: bool) -> Message:
         data={
             "sessionId": session_id,
             "success": success
+        }
+    )
+
+
+def create_preparation_ready_message(summary: str) -> Message:
+    """Create a PREPARATION_READY response message."""
+    return Message(
+        type=MessageType.PREPARATION_READY,
+        data={
+            "summary": summary
         }
     )

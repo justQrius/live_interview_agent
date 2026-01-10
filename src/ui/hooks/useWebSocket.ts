@@ -14,6 +14,9 @@ export type MessageType =
   | 'ANSWER_CHUNK'
   | 'ERROR'
   | 'STATUS'
+  // Preparation (STORY-047/048)
+  | 'PREPARE_INTERVIEW'
+  | 'PREPARATION_READY'
   // Session History (Phase 3: STORY-039)
   | 'LIST_SESSIONS'
   | 'LOAD_SESSION'
@@ -106,6 +109,14 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         state: 'listening' | 'processing' | 'idle' | 'calibrating';
       };
       store.setStatus(data.state);
+      break;
+    }
+
+    case 'PREPARATION_READY': {
+      const data = message.data as { summary: string };
+      store.setPreparationStatus('ready');
+      store.setPreparationSummary(data.summary);
+      store.setPreparationExpanded(true);
       break;
     }
 
@@ -345,6 +356,15 @@ export const useWebSocket = () => {
     });
   };
 
+  const requestPreparation = () => {
+    const store = useSessionStore.getState();
+    store.setPreparationStatus('preparing');
+    sendMessage({
+      type: 'PREPARE_INTERVIEW',
+      data: {},
+    });
+  };
+
   return {
     sendMessage,
     sendAudio,
@@ -354,5 +374,7 @@ export const useWebSocket = () => {
     loadSession,
     exportSession,
     deleteSession,
+    // Preparation
+    requestPreparation,
   };
 };
