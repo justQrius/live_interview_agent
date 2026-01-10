@@ -43,6 +43,8 @@ from rag.store import VectorStore
 from rag.engine import RAGEngine
 from warmup import ModelWarmer
 from classification.question_detector import QuestionDetector
+from classification.query_reformulator import QueryReformulator
+from classification.question_splitter import QuestionSplitter
 from storage.session_store import SessionHistoryStore
 from storage.exporter import SessionExporter, ExportFormat
 
@@ -112,6 +114,10 @@ class SidecarServer:
         self.question_detector = QuestionDetector()
         self.question_detection_enabled = True  # Feature flag for rollout
         self.question_confidence_threshold = 0.7  # Configurable threshold
+        
+        # Phase 3C: Conversational Intelligence
+        self.query_reformulator = QueryReformulator()
+        self.question_splitter = QuestionSplitter()
         
         # Phase 3: Session History Persistence
         self.session_store = SessionHistoryStore()
@@ -971,7 +977,8 @@ class SidecarServer:
                 logger.info(f"Question detection: {q_type} (confidence={confidence:.2f})")
                 
                 if is_question and confidence >= self.question_confidence_threshold:
-                    await self._generate_answer_for_question(text, pipeline_start)
+                    # Phase 3C: Enhanced processing pipeline
+                    await self._process_question_pipeline(text, q_type, pipeline_start)
                 else:
                     logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
             else:
@@ -995,6 +1002,170 @@ class SidecarServer:
         except Exception as e:
             logger.warning(f"Speaker verification failed: {e}, defaulting to Interviewer")
             return Speaker.INTERVIEWER
+
+    async def _process_question_pipeline(
+        self,
+        original_question: str,
+        question_type: str,
+        start_time: float
+    ) -> None:
+        """
+        Phase 3C: Enhanced question processing pipeline.
+        
+        Pipeline: Query Reformulation → Question Splitting → Enhanced Retrieval → Answer Generation
+        
+        Args:
+            original_question: The raw question text from transcription
+            question_type: The detected question type (behavioral, technical, etc.)
+            start_time: Pipeline start time for latency tracking
+        """
+        import time
+        
+        # Step 1: Query Reformulation (expand follow-ups)
+        reformulated_question = original_question
+        try:
+            # Build conversation history in format expected by reformulator
+            history_for_reformulator = []
+            for i in range(0, len(self.session_state.conversation_history) - 1, 2):
+                if i + 1 < len(self.session_state.conversation_history):
+                    history_for_reformulator.append({
+                        "question": self.session_state.conversation_history[i].get("content", ""),
+                        "answer": self.session_state.conversation_history[i + 1].get("content", "")
+                    })
+            
+            reformulated_question, was_reformulated = self.query_reformulator.reformulate_if_needed(
+                original_question, history_for_reformulator
+            )
+            if was_reformulated:
+                logger.info(f"Reformulated: '{original_question[:50]}...' → '{reformulated_question[:50]}...'")
+        except Exception as e:
+            logger.warning(f"Query reformulation failed: {e}")
+            reformulated_question = original_question
+        
+        # Step 2: Question Splitting (handle compound questions)
+        sub_questions = [reformulated_question]
+        try:
+            split_result = self.question_splitter.split_questions(reformulated_question)
+            if len(split_result) > 1:
+                sub_questions = split_result
+                logger.info(f"Split into {len(sub_questions)} sub-questions: {sub_questions}")
+        except Exception as e:
+            logger.warning(f"Question splitting failed: {e}")
+        
+        # Step 3: Retrieve context (using question type for enhanced retrieval when available)
+        context_chunks, rag_confidence = self._retrieve_context_enhanced(
+            reformulated_question, question_type, sub_questions
+        )
+        
+        # Step 4: Generate answer
+        await self._generate_answer_with_context(
+            original_question=original_question,
+            reformulated_question=reformulated_question,
+            context_chunks=context_chunks,
+            rag_confidence=rag_confidence,
+            start_time=start_time
+        )
+    
+    def _retrieve_context_enhanced(
+        self,
+        question: str,
+        question_type: str,
+        sub_questions: List[str]
+    ) -> tuple[list[str], ConfidenceLevel]:
+        """
+        Enhanced context retrieval using question type and sub-questions.
+        
+        Args:
+            question: The reformulated question
+            question_type: Detected question type for priority filtering
+            sub_questions: List of sub-questions for compound queries
+            
+        Returns:
+            Tuple of (context_chunks, confidence)
+        """
+        # Use standard retrieval for now, can be enhanced with EnhancedRAGEngine
+        # when document types are available
+        return self._retrieve_context(question)
+    
+    async def _generate_answer_with_context(
+        self,
+        original_question: str,
+        reformulated_question: str,
+        context_chunks: List[str],
+        rag_confidence: ConfidenceLevel,
+        start_time: float
+    ) -> None:
+        """
+        Generate answer with provided context and persist.
+        
+        Args:
+            original_question: Original transcribed question
+            reformulated_question: Reformulated question (may be same as original)
+            context_chunks: Retrieved context chunks
+            rag_confidence: Confidence level from retrieval
+            start_time: Pipeline start time for latency tracking
+        """
+        import time
+        
+        if not self.llm:
+            logger.warning("LLM not initialized, cannot generate answer")
+            return
+        
+        try:
+            context_str = "\n\n".join(context_chunks)
+            full_answer_parts: List[str] = []
+            
+            # Use reformulated question for generation but track original
+            async for chunk in self.llm.generate_response(
+                reformulated_question, context_str, self.session_state.conversation_history
+            ):
+                full_answer_parts.append(chunk)
+                answer_msg = create_answer_chunk_message(chunk=chunk, complete=False)
+                await self.broadcast(answer_msg)
+            
+            latency = time.time() - start_time
+            logger.info(f"Answer generation complete. Latency: {latency:.2f}s")
+            
+            final_msg = create_answer_chunk_message(
+                chunk="",
+                complete=True,
+                confidence=rag_confidence
+            )
+            await self.broadcast(final_msg)
+            
+            # Append Q&A to conversation history (use original question for history)
+            full_answer = "".join(full_answer_parts)
+            self.session_state.conversation_history.append({
+                "role": "user",
+                "content": original_question
+            })
+            self.session_state.conversation_history.append({
+                "role": "assistant",
+                "content": full_answer
+            })
+            logger.debug(f"Added Q&A to history. Total exchanges: {len(self.session_state.conversation_history) // 2}")
+            
+            # Phase 3: Persist answer to session history
+            if self.session_persistence_enabled and self.session_state.persistent_session_id:
+                try:
+                    self.session_store.add_answer(
+                        session_id=self.session_state.persistent_session_id,
+                        question=original_question,
+                        answer=full_answer,
+                        confidence=rag_confidence.value,
+                        rag_chunks=context_chunks[:3] if context_chunks else None,
+                        latency_ms=int(latency * 1000)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to persist answer: {e}")
+                    
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            error_msg = create_error_message(
+                f"Failed to generate answer: {e}",
+                code="ERR_LLM_GENERATION"
+            )
+            await self.broadcast(error_msg)
 
     async def _generate_answer_for_question(self, question: str, start_time: float) -> None:
         """Generate answer using RAG retrieval + LLM streaming."""
