@@ -15,23 +15,49 @@ Classification Types:
 """
 
 import re
-from typing import Dict, List, Optional, Pattern, Tuple
+import logging
+import time
+from typing import Dict, List, Optional, Pattern, Tuple, Any
 
 # Type alias for classification result
 ClassificationResult = Tuple[bool, float, str]
+
+logger = logging.getLogger(__name__)
+
+TIER3_PROMPT = """Determine if this is an interview question requiring a response.
+
+Utterance: "{text}"
+
+Recent conversation:
+{context}
+
+Reply ONLY with:
+- QUESTION - if this requires a substantive answer
+- NOT_QUESTION - if this is a statement, acknowledgment, or small talk
+
+Your classification:"""
 
 
 class QuestionDetector:
     """
     Rule-based question detector for interview utterances.
     
-    Uses pre-compiled regex patterns for fast classification (<2ms P99).
+    Uses cascaded classification:
+    - Tier 1: Fast regex (<2ms)
+    - Tier 2: Context-aware (<10ms)
+    - Tier 3: LLM verification (async, ~100-200ms) for ambiguous cases
+    
     Returns (is_actionable_question, confidence, classification_type).
     """
 
-    def __init__(self):
+    def __init__(self, llm_provider: Optional[Any] = None):
         """Initialize detector with pre-compiled patterns."""
         self._compile_patterns()
+        self.llm_provider = llm_provider
+        
+    def set_llm_provider(self, provider: Any) -> None:
+        """Set the LLM provider for Tier 3 detection."""
+        self.llm_provider = provider
 
     def _compile_patterns(self) -> None:
         """Pre-compile all regex patterns for performance."""
@@ -150,7 +176,7 @@ class QuestionDetector:
             re.compile(r"^\s*$"),
         ]
 
-    def is_actionable_question(
+    async def is_actionable_question(
         self,
         text: Optional[str],
         conversation_history: Optional[List[Dict[str, str]]] = None,
@@ -161,6 +187,7 @@ class QuestionDetector:
         Uses cascaded classification:
         - Tier 1: Fast rule-based (<2ms) - handles obvious cases with high confidence
         - Tier 2: Context-aware (<10ms) - uses history for ambiguous cases
+        - Tier 3: LLM verification (~150ms) - uses LLM for low-confidence triggers
         
         Args:
             text: The utterance text to classify
@@ -185,9 +212,78 @@ class QuestionDetector:
         if conversation_history and len(conversation_history) > 0:
             context_result = self._context_aware_classification(text, conversation_history, result)
             if context_result[1] > result[1]:  # Only use if more confident
-                return context_result
+                result = context_result
+        
+        # If still high confidence after Tier 2, return
+        if result[1] >= 0.75:
+            return result
+            
+        # Tier 3: LLM Verification (for ambiguous cases)
+        # Only trigger if we have an LLM, the text is substantive, and it's not clearly junk
+        if (self.llm_provider and 
+            text and 
+            len(text.split()) >= 3 and 
+            0.4 <= result[1] < 0.75 and
+            result[2] not in ("acknowledgment", "small_talk", "filler")):
+            
+            return await self._tier3_llm_classification(text, conversation_history or [])
         
         return result
+
+    async def _tier3_llm_classification(
+        self,
+        text: str,
+        history: List[Dict[str, str]]
+    ) -> ClassificationResult:
+        """
+        Tier 3: LLM-based verification for ambiguous utterances.
+        
+        Args:
+            text: Text to classify
+            history: Conversation context
+            
+        Returns:
+            ClassificationResult
+        """
+        try:
+            # Build context (last 3 turns)
+            context_lines = []
+            for h in history[-3:]:
+                role = h.get("role") or h.get("speaker", "unknown")
+                content = h.get("content") or h.get("text", "")
+                if content:
+                    context_lines.append(f"{role}: {content[:100]}")
+            
+            prompt = TIER3_PROMPT.format(
+                text=text,
+                context="\n".join(context_lines) or "No previous context."
+            )
+            
+            start_time = time.time()
+            
+            # Use generate_response (stream) but just get first chunk(s)
+            response_text = ""
+            async for chunk in self.llm_provider.generate_response(prompt, "", []):
+                response_text += chunk
+                # We only need a short response
+                if len(response_text) > 20:
+                    break
+                    
+            latency = (time.time() - start_time) * 1000
+            
+            is_question = "QUESTION" in response_text.upper() and "NOT" not in response_text.upper()
+            
+            if is_question:
+                logger.info(f"Tier 3 detected QUESTION ({latency:.0f}ms): {text[:50]}...")
+                return (True, 0.85, "interview_question")
+            else:
+                logger.info(f"Tier 3 detected NON-QUESTION ({latency:.0f}ms): {text[:50]}...")
+                return (False, 0.85, "statement")
+                
+        except Exception as e:
+            logger.warning(f"Tier 3 classification failed: {e}")
+            # Fallback to conservative non-question if LLM fails
+            return (False, 0.5, "statement")
 
     def _context_aware_classification(
         self,
