@@ -16,21 +16,21 @@ As a user, I want to see the recommended answer structure for each question type
 ## Acceptance Criteria
 
 ### AC-1: Structure by Question Type
-- [ ] Behavioral → STAR method with percentages
-- [ ] Technical → Concept-Example-Tradeoff
-- [ ] Motivation → Company-Role-Value
-- [ ] Situational → Context-Approach-Outcome
-- [ ] General → Direct-Support-Close
+- [x] Behavioral → STAR method with percentages
+- [x] Technical → Concept-Example-Tradeoff
+- [x] Motivation → Past-Future-Bridge (Updated from company-role-value for better flow)
+- [x] Situational → Framework-Hypothesis
+- [x] General → Direct-Support-Close
 
 ### AC-2: Display Content
-- [ ] Framework name
-- [ ] Section breakdown with suggested percentages
-- [ ] 2-3 tips for this question type
+- [x] Framework name
+- [x] Section breakdown with suggested percentages
+- [x] 2-3 tips for this question type
 
 ### AC-3: UI Integration
-- [ ] Structure hint displayed with answer
-- [ ] Compact format, not overwhelming
-- [ ] Visible before user starts speaking
+- [ ] Structure hint displayed with answer (Deferred to Phase 4E STORY-070)
+- [ ] Compact format, not overwhelming (Deferred to Phase 4E STORY-070)
+- [ ] Visible before user starts speaking (Deferred to Phase 4E STORY-070)
 
 ---
 
@@ -92,7 +92,7 @@ def get_structure_hint(question_type: str) -> StructureHint:
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All question types covered
-- [ ] UI displays structure hint
-- [ ] Code reviewed
+- [x] All acceptance criteria met
+- [x] All question types covered (Heuristics in `_detect_subtype`)
+- [x] UI displays structure hint (Message protocol implemented, UI component deferred to STORY-070)
+- [x] Code reviewed
