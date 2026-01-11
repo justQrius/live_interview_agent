@@ -1,0 +1,145 @@
+Based on Dominic's LinkedIn profile, here's comprehensive intelligence for your Senior Solutions Engineer interview at Smarsh:
+​
+
+KEY BACKGROUND INFORMATION
+Current Role & Experience:
+
+Dominic is the Director of Enterprise Presales at Smarsh (just started Oct 2025, 4 months into role)
+
+He's directly related to the Sr. Solutions Engineer role you're interviewing for and is actively hiring for this position
+
+He has 25+ years of enterprise software experience, primarily in financial services
+
+Career Trajectory:
+
+Pegasystems (6+ yrs, 2019-2025) - Most recent major employer
+
+Director of Solutions Consulting, Financial Services (May 2022 - Oct 2025)
+
+Manager of Solutions Consulting (Apr 2019 - May 2022)
+
+Deep expertise in complex enterprise solutions
+
+Salesforce (Principal Solutions Engineer, 2010-2015) - 4+ years
+
+Financial Services Pre-Sales Engineer background
+
+Indicates strong solution selling expertise
+
+Product Management - Vlocity & The Athene Group (2015-2019)
+
+Director of Product Management experience
+
+Shows understanding of product strategy and market needs
+
+CRITICAL EXPERTISE AREAS TO UNDERSTAND
+What He Values (From His Profile):
+
+"Customer-first Solutions Engineering leader"
+
+Helping "world's most regulated enterprises" with compliance and communications intelligence
+
+Building out teams and functions (he traveled to India to help build sales enablement)
+
+Strategic thinking and critical thinking (highlighted in multiple roles)
+
+Objective, outcome-driven leadership with tangible value delivery
+
+Technical/Domain Knowledge:
+
+Communications Intelligence platform expertise
+
+Compliance, risk management, and archiving solutions
+
+Cloud-native archiving and AI-driven supervision
+
+Enterprise AI projects and data enrichment
+
+Global risk detection and data acquisition APIs
+
+Financial services compliance (his specialty)
+
+Smarsh recently recognized as AWS Vertical Technology Partner of the Year - this is likely a topic he's proud of
+
+SKILLS & CERTIFICATIONS
+Critical Thinking (demonstrated across Pegasystems and other companies - appears to be his strongest skill)
+
+Strategic Thinking (across multiple roles)
+
+Pega Certified System Architect 8 (Apr 2019)
+
+49 total skills listed on profile
+
+LEADERSHIP & PERSONALITY TRAITS
+From the recommendation by Jagan Vyasam: Dominic is described as:
+​
+
+"Exceptional leader—objective, outcome‑driven"
+
+"Adept at showing teams how to add tangible value to client accounts"
+
+Pragmatic go-to-market execution
+
+Consistently raises the bar for client engagement
+
+Strong at building high-calibre teams and ensuring visibility of contributions
+
+Collaborative across time zones and organizational boundaries
+
+INTERVIEW PREPARATION RECOMMENDATIONS
+Align Your Background With His Values:
+Demonstrate customer-first thinking - Be ready to share examples of how you solve customer problems, not just technical implementation
+
+Show enterprise software experience - Even if less than his 25 years, connect your experience to enterprise complexity and scale
+
+Highlight financial services knowledge - This is clearly his domain; any relevant experience is valuable
+
+Compliance & Risk management mindset - Understand Smarsh's core value proposition in these areas
+
+Key Questions to Ask Him:
+What qualities does he look for in a Sr. Solutions Engineer given his experience building teams?
+
+How has his product management background influenced his approach to presales?
+
+What's the biggest challenge in solutions selling for highly regulated industries?
+
+How does he measure success for his presales team?
+
+What's the transition like moving from Pegasystems to Smarsh?
+
+Topics to Prepare For:
+Sales enablement - He literally traveled to build this function; understands its importance
+
+Enterprise architecture & design - Core to the Sr. Solutions Engineer role
+
+Proof of Concept (POC) execution - This is explicitly mentioned in the job description
+
+RFI/RFP response strategy - Job requires technical leadership here
+
+Team scaling - He's built teams; has perspective on what makes people successful
+
+Financial services regulatory landscape - His sweet spot
+
+Cloud architecture - Smarsh is cloud-native focused
+
+AI/ML in compliance - Growing area for the company
+
+What NOT to Do:
+Don't focus purely on technical features without business impact
+
+Avoid being overly academic - he values pragmatic execution
+
+Don't oversell experience you don't have
+
+Avoid being passive in the conversation - he values objective, outcome-driven people
+
+Key Signals About Smarsh Culture (from his posts):
+They emphasize innovation and cloud-native solutions
+
+AWS partnership and AI-powered compliance are strategic initiatives
+
+They value global teams and cross-functional collaboration
+
+They're in growth mode (actively hiring)
+
+One Important Note: Dominic is actively promoting the Sr. Solutions Engineer roles on LinkedIn, which suggests he's committed to building out his presales team. Show him you understand not just the technical requirements, but how you'll drive revenue impact and help build a strong function.
