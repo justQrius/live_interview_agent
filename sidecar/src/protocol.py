@@ -24,6 +24,7 @@ class MessageType(str, Enum):
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
+    INTERIM_TRANSCRIPTION = "INTERIM_TRANSCRIPTION"
     ANSWER_START = "ANSWER_START"
     ANSWER_CHUNK = "ANSWER_CHUNK"
     ERROR = "ERROR"
@@ -102,13 +103,32 @@ class TranscriptionData:
     text: str
     timestamp: float
     confidence: float = 0.0
+    is_final: bool = True
 
     def to_dict(self) -> dict:
         return {
             "speaker": self.speaker.value,
             "text": self.text,
             "timestamp": self.timestamp,
-            "confidence": self.confidence
+            "confidence": self.confidence,
+            "isFinal": self.is_final
+        }
+
+
+@dataclass
+class InterimTranscriptionData:
+    """Data for INTERIM_TRANSCRIPTION messages."""
+
+    text: str
+    timestamp: float
+    speaker: Speaker = Speaker.INTERVIEWER
+
+    def to_dict(self) -> dict:
+        return {
+            "text": self.text,
+            "timestamp": self.timestamp,
+            "speaker": self.speaker.value,
+            "isFinal": False
         }
 
 
@@ -163,8 +183,18 @@ def create_transcription_message(
     confidence: float = 0.0
 ) -> Message:
     """Create a TRANSCRIPTION message."""
-    data = TranscriptionData(speaker, text, timestamp, confidence)
+    data = TranscriptionData(speaker, text, timestamp, confidence, is_final=True)
     return Message(type=MessageType.TRANSCRIPTION, data=data.to_dict())
+
+
+def create_interim_transcription_message(
+    text: str,
+    timestamp: float,
+    speaker: Speaker = Speaker.INTERVIEWER
+) -> Message:
+    """Create an INTERIM_TRANSCRIPTION message."""
+    data = InterimTranscriptionData(text, timestamp, speaker)
+    return Message(type=MessageType.INTERIM_TRANSCRIPTION, data=data.to_dict())
 
 
 def create_answer_chunk_message(

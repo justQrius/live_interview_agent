@@ -16,7 +16,7 @@ import numpy as np
 import websockets
 from websockets.asyncio.server import serve, ServerConnection
 
-from protocol import (
+from .protocol import (
     Message,
     MessageType,
     SessionStatus,
@@ -33,26 +33,28 @@ from protocol import (
     create_preparation_ready_message,
     create_extraction_progress_message,
     create_extraction_complete_message,
+    create_interim_transcription_message,
 )
-from audio.diarization import SpeakerRecognizer
-from audio.capture import AudioCapture, AudioCaptureError
-from audio.vad import VADProcessor, SpeechSegment
-from audio.noise_reduction import NoiseReducer
-from providers.base import STTProvider, LLMProvider
-from providers.factory import ProviderFactory
-from providers.config import ProviderConfig
-from context.manager import ContextManager
-from rag.store import VectorStore
-from rag.engine import RAGEngine
-from warmup import ModelWarmer
-from classification.question_detector import QuestionDetector
-from classification.query_reformulator import QueryReformulator
-from classification.question_splitter import QuestionSplitter
-from storage.session_store import SessionHistoryStore
-from storage.exporter import SessionExporter, ExportFormat
-from memory.store import MemoryStore
-from memory.models import DocumentType
-from extraction.pipeline import ExtractionPipeline
+from .audio.diarization import SpeakerRecognizer
+from .audio.capture import AudioCapture, AudioCaptureError
+from .audio.vad import VADProcessor, SpeechSegment
+from .audio.noise_reduction import NoiseReducer
+from .providers.base import STTProvider, LLMProvider
+from .providers.factory import ProviderFactory
+from .providers.config import ProviderConfig
+from .context.manager import ContextManager
+from .rag.store import VectorStore
+from .rag.engine import RAGEngine
+from .rag.speculative import SpeculativeRetriever
+from .warmup import ModelWarmer
+from .classification.question_detector import QuestionDetector
+from .classification.query_reformulator import QueryReformulator
+from .classification.question_splitter import QuestionSplitter
+from .storage.session_store import SessionHistoryStore
+from .storage.exporter import SessionExporter, ExportFormat
+from .memory.store import MemoryStore
+from .memory.models import DocumentType
+from .extraction.pipeline import ExtractionPipeline
 from rag.speculative import SpeculativeRetriever
 
 # Configure logging
@@ -1207,6 +1209,7 @@ Based on the uploaded documents, here are the main topics to prepare:
         Run a single cycle of speculative retrieval.
         Captures current audio buffer, transcribes it, and triggers retrieval.
         """
+        import time
         if not self.stt or not self.speculative_retriever or not self.vad:
             return
             
@@ -1220,6 +1223,16 @@ Based on the uploaded documents, here are the main topics to prepare:
             # Note: This relies on STT provider being able to handle short partials
             result = await self.stt.transcribe(audio_buffer)
             if result.text:
+                # Phase 4D: Broadcast interim transcript
+                # Calculate approx start time based on current duration
+                start_time = time.time() - self.vad.current_duration
+                interim_msg = create_interim_transcription_message(
+                    text=result.text,
+                    timestamp=start_time,
+                    speaker=Speaker.INTERVIEWER
+                )
+                await self.broadcast(interim_msg)
+                
                 await self.speculative_retriever.on_interim_transcript(result.text)
                 
         except Exception as e:
