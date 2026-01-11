@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useSessionStore } from '../store/sessionStore';
+import { 
+  useSessionStore, 
+  StorySuggestion, 
+  StructureHint, 
+  Contradiction 
+} from '../store/sessionStore';
 
 // WebSocket message types (as per architecture)
 export type MessageType =
@@ -26,7 +31,12 @@ export type MessageType =
   | 'SESSION_LIST'
   | 'SESSION_DATA'
   | 'SESSION_EXPORT'
-  | 'SESSION_DELETED';
+  | 'SESSION_DELETED'
+  // Coaching (Phase 4E: STORY-070)
+  | 'STORY_SUGGESTION'
+  | 'STRUCTURE_SUGGESTION'
+  | 'CONSISTENCY_WARNING'
+  | 'INTERIM_TRANSCRIPTION';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -81,6 +91,7 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       // This clears the previous answer and associates the new question text
       if (data.speaker === 'Interviewer') {
         store.startAnswer(data.text, data.timestamp);
+        store.setInterimTranscript(null); // Clear interim on final
       }
 
       store.addTranscription(data);
@@ -178,6 +189,33 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         store.removeSession(data.sessionId);
       }
       store.setHistoryLoading(false);
+      break;
+    }
+
+    // Coaching messages (Phase 4E)
+    case 'STORY_SUGGESTION': {
+      const data = message.data as StorySuggestion;
+      store.setStorySuggestion(data);
+      break;
+    }
+
+    case 'STRUCTURE_SUGGESTION': {
+      const data = message.data as StructureHint;
+      store.setStructureHint(data);
+      break;
+    }
+
+    case 'CONSISTENCY_WARNING': {
+      const data = message.data as { contradictions: Contradiction[] };
+      store.setConsistencyWarnings(data.contradictions);
+      break;
+    }
+
+    case 'INTERIM_TRANSCRIPTION': {
+      const data = message.data as { text: string; speaker: string };
+      if (data.speaker === 'Interviewer') {
+        store.setInterimTranscript(data.text);
+      }
       break;
     }
 

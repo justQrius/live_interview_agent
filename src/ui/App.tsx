@@ -9,6 +9,7 @@ import { DebugPanel } from './components/DebugPanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { PreparationButton } from './components/PreparationButton';
 import { PreparationSummary } from './components/PreparationSummary';
+import { CoachingPanel } from './components/CoachingPanel';
 
 function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -56,6 +57,7 @@ function App() {
             isExpanded={isPreparationExpanded} 
             onToggle={() => setPreparationExpanded(!isPreparationExpanded)} 
           />
+          <CoachingPanel />
           <AnswerDisplay />
         </div>
       </main>

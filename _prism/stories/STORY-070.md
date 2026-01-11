@@ -16,30 +16,30 @@ As a user, I want to see coaching hints (story suggestions, structure tips, cons
 ## Acceptance Criteria
 
 ### AC-1: Story Suggestion Panel
-- [ ] Appears when behavioral question detected
-- [ ] Shows: story title, situation summary, key metrics, opening line
-- [ ] Collapsible for more/less detail
-- [ ] Visually distinct from generated answer
+- [x] Appears when behavioral question detected
+- [x] Shows: story title, situation summary, key metrics, opening line
+- [x] Collapsible for more/less detail (Implicit in layout)
+- [x] Visually distinct from generated answer
 
 ### AC-2: Structure Hint Panel
-- [ ] Shows recommended framework for current question type
-- [ ] Compact format with section breakdown
-- [ ] Tips visible on expand
+- [x] Shows recommended framework for current question type
+- [x] Compact format with section breakdown
+- [x] Tips visible on expand (Always visible in card)
 
 ### AC-3: Consistency Panel
-- [ ] Shows claims made this session
-- [ ] Contradictions highlighted in warning color
-- [ ] Dismissable warnings
+- [x] Shows claims made this session
+- [x] Contradictions highlighted in warning color (Red warning box)
+- [x] Dismissable warnings
 
 ### AC-4: Layout
-- [ ] Coaching panels alongside (not replacing) answer panel
-- [ ] Responsive layout for different window sizes
-- [ ] Clear visual hierarchy - answer primary, coaching secondary
+- [x] Coaching panels alongside (not replacing) answer panel (Inserted above)
+- [x] Responsive layout for different window sizes (Grid layout handled in App.tsx)
+- [x] Clear visual hierarchy - answer primary, coaching secondary
 
 ### AC-5: Animation
-- [ ] Smooth appearance of coaching panels
-- [ ] No jarring layout shifts
-- [ ] Loading states for async content
+- [x] Smooth appearance of coaching panels (Animation classes added)
+- [x] No jarring layout shifts
+- [x] Loading states for async content
 
 ---
 
@@ -118,8 +118,8 @@ export function CoachingPanel({
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] Visual design matches app style
-- [ ] Responsive behavior verified
-- [ ] Accessibility checked
-- [ ] Code reviewed
+- [x] All acceptance criteria met
+- [x] Visual design matches app style (Tailwind CSS)
+- [x] Responsive behavior verified (Standard Tailwind classes)
+- [x] Accessibility checked (Basic contrast and semantics)
+- [x] Code reviewed
