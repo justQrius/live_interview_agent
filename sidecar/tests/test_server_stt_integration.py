@@ -150,7 +150,7 @@ async def test_speaker_labeling(mock_components):
     # Manually trigger one iteration of loop logic (hard to do without private method access or running loop)
     # Instead, we'll verify verify_speaker is called if we run the loop
     
-    await server._start_audio_processing("api_key")
+    await server._start_audio_processing()
     
     # Add a mock client to capture broadcast
     mock_client = AsyncMock()

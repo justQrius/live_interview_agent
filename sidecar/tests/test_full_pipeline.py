@@ -33,11 +33,11 @@ from src.providers.base import TranscriptionResult
 @pytest.fixture
 def mock_full_pipeline():
     """Mock all pipeline components for full integration testing."""
-    with patch("src.server.GeminiSTTProvider") as mock_stt_cls, \
+    with patch("src.providers.stt.gemini.GeminiSTTProvider") as mock_stt_cls, \
          patch("src.server.VADProcessor") as mock_vad_cls, \
          patch("src.server.AudioCapture") as mock_capture_cls, \
          patch("src.server.SpeakerRecognizer") as mock_recognizer_cls, \
-         patch("src.server.GeminiLLMProvider") as mock_llm_cls, \
+         patch("src.providers.llm.gemini.GeminiLLMProvider") as mock_llm_cls, \
          patch("src.server.VectorStore") as mock_vector_cls, \
          patch("src.server.RAGEngine") as mock_rag_cls, \
          patch("src.server.ModelWarmer") as mock_warmer_cls, \
