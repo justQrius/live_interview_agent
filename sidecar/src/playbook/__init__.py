@@ -12,6 +12,7 @@ Part of Phase 4: Interview Coach Evolution
 
 from .question_generator import QuestionGenerator, PlaybookQuestion, QuestionCategory, AnswerFramework
 from .answer_drafter import AnswerDrafter
+from .competency_mapper import CompetencyMapper, CompetencyMapping, CompetencyReport, MatchStrength
 
 __all__ = [
     "QuestionGenerator",
@@ -19,4 +20,8 @@ __all__ = [
     "QuestionCategory",
     "AnswerFramework",
     "AnswerDrafter",
+    "CompetencyMapper",
+    "CompetencyMapping",
+    "CompetencyReport",
+    "MatchStrength",
 ]
