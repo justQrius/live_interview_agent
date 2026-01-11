@@ -52,6 +52,36 @@ export interface SessionData {
   }>;
 }
 
+// Coaching Types (Phase 4E: STORY-070)
+export interface StorySuggestion {
+  storyId: string;
+  title: string;
+  situation: string;
+  relevanceScore: number;
+  suggestedOpening: string;
+  keyMetrics: string[];
+  tags: string[];
+}
+
+export interface StructureSection {
+  name: string;
+  percentage: string;
+  description: string;
+}
+
+export interface StructureHint {
+  name: string;
+  sections: StructureSection[];
+  tips: string[];
+}
+
+export interface Contradiction {
+  claim_type: string;
+  existing: string;
+  new: string;
+  message: string;
+}
+
 export interface SessionState {
   // Session status
   status: 'idle' | 'calibrating' | 'listening' | 'processing';
@@ -93,6 +123,12 @@ export interface SessionState {
   preparationSummary: string | null;
   isPreparationExpanded: boolean;
 
+  // Coaching State (Phase 4E: STORY-070)
+  storySuggestion: StorySuggestion | null;
+  structureHint: StructureHint | null;
+  consistencyWarnings: Contradiction[];
+  interimTranscript: string | null;
+
   // Actions
   setStatus: (status: SessionState['status']) => void;
   setScreenInvisibility: (enabled: boolean) => void;
@@ -123,6 +159,14 @@ export interface SessionState {
   setPreparationStatus: (status: 'not_started' | 'preparing' | 'ready' | 'error') => void;
   setPreparationSummary: (summary: string | null) => void;
   setPreparationExpanded: (expanded: boolean) => void;
+
+  // Coaching Actions (Phase 4E: STORY-070)
+  setStorySuggestion: (suggestion: StorySuggestion | null) => void;
+  setStructureHint: (hint: StructureHint | null) => void;
+  setConsistencyWarnings: (warnings: Contradiction[]) => void;
+  setInterimTranscript: (text: string | null) => void;
+  addConsistencyWarning: (warning: Contradiction) => void;
+  clearCoachingData: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -153,6 +197,12 @@ export const useSessionStore = create<SessionState>((set) => ({
   preparationStatus: 'not_started',
   preparationSummary: null,
   isPreparationExpanded: false,
+
+  // Coaching initial state
+  storySuggestion: null,
+  structureHint: null,
+  consistencyWarnings: [],
+  interimTranscript: null,
 
   // Actions
   setStatus: (status) => set({ status }),
@@ -310,4 +360,23 @@ export const useSessionStore = create<SessionState>((set) => ({
   setPreparationStatus: (status) => set({ preparationStatus: status }),
   setPreparationSummary: (summary) => set({ preparationSummary: summary }),
   setPreparationExpanded: (expanded) => set({ isPreparationExpanded: expanded }),
+
+  // Coaching Actions (Phase 4E: STORY-070)
+  setStorySuggestion: (suggestion) => set({ storySuggestion: suggestion }),
+  setStructureHint: (hint) => set({ structureHint: hint }),
+  setConsistencyWarnings: (warnings) => set({ consistencyWarnings: warnings }),
+  setInterimTranscript: (text) => set({ interimTranscript: text }),
+  
+  addConsistencyWarning: (warning) =>
+    set((state) => ({
+      consistencyWarnings: [...state.consistencyWarnings, warning]
+    })),
+    
+  clearCoachingData: () =>
+    set({
+      storySuggestion: null,
+      structureHint: null,
+      consistencyWarnings: [],
+      interimTranscript: null
+    }),
 }));

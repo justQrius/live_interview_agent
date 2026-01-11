@@ -19,6 +19,7 @@ type CombinedHistoryItem =
 
 const AnswerDisplay: React.FC = () => {
   const currentTranscription = useSessionStore((state) => state.currentTranscription);
+  const interimTranscript = useSessionStore((state) => state.interimTranscript);
   const currentAnswer = useSessionStore((state) => state.currentAnswer);
   const transcriptionHistory = useSessionStore((state) => state.transcriptionHistory);
   const answerHistory = useSessionStore((state) => state.answerHistory);
@@ -142,9 +143,15 @@ const AnswerDisplay: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-gray-800">
-            {currentTranscription?.text || 'Detected question will appear here...'}
+          <p className={`text-gray-800 ${interimTranscript ? 'italic text-gray-500' : ''}`}>
+            {interimTranscript || currentTranscription?.text || 'Detected question will appear here...'}
           </p>
+          {interimTranscript && (
+            <span className="inline-flex items-center gap-1 text-xs text-blue-500 mt-2">
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
+              Listening...
+            </span>
+          )}
         </div>
 
         <div className="p-4 bg-green-50 rounded-lg min-h-[300px]">
