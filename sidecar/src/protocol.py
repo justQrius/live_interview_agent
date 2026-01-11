@@ -27,6 +27,7 @@ class MessageType(str, Enum):
     INTERIM_TRANSCRIPTION = "INTERIM_TRANSCRIPTION"
     STORY_SUGGESTION = "STORY_SUGGESTION"  # Phase 4E: Story suggestion
     STRUCTURE_SUGGESTION = "STRUCTURE_SUGGESTION"  # Phase 4E: Structure suggestion
+    CONSISTENCY_WARNING = "CONSISTENCY_WARNING"  # Phase 4E: Consistency check
     ANSWER_START = "ANSWER_START"
     ANSWER_CHUNK = "ANSWER_CHUNK"
     ERROR = "ERROR"
@@ -315,6 +316,18 @@ def create_structure_suggestion_message(
             "name": name,
             "sections": sections,
             "tips": tips
+        }
+    )
+
+
+def create_consistency_warning_message(
+    contradictions: list[dict]
+) -> Message:
+    """Create a CONSISTENCY_WARNING message."""
+    return Message(
+        type=MessageType.CONSISTENCY_WARNING,
+        data={
+            "contradictions": contradictions
         }
     )
 
