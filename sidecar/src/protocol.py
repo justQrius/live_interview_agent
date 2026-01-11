@@ -26,6 +26,7 @@ class MessageType(str, Enum):
     TRANSCRIPTION = "TRANSCRIPTION"
     INTERIM_TRANSCRIPTION = "INTERIM_TRANSCRIPTION"
     STORY_SUGGESTION = "STORY_SUGGESTION"  # Phase 4E: Story suggestion
+    STRUCTURE_SUGGESTION = "STRUCTURE_SUGGESTION"  # Phase 4E: Structure suggestion
     ANSWER_START = "ANSWER_START"
     ANSWER_CHUNK = "ANSWER_CHUNK"
     ERROR = "ERROR"
@@ -298,6 +299,22 @@ def create_preparation_ready_message(summary: str) -> Message:
         type=MessageType.PREPARATION_READY,
         data={
             "summary": summary
+        }
+    )
+
+
+def create_structure_suggestion_message(
+    name: str,
+    sections: list[dict],
+    tips: list[str]
+) -> Message:
+    """Create a STRUCTURE_SUGGESTION message."""
+    return Message(
+        type=MessageType.STRUCTURE_SUGGESTION,
+        data={
+            "name": name,
+            "sections": sections,
+            "tips": tips
         }
     )
 

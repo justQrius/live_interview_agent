@@ -35,6 +35,7 @@ from .protocol import (
     create_extraction_complete_message,
     create_interim_transcription_message,
     create_story_suggestion_message,
+    create_structure_suggestion_message,
 )
 from .audio.diarization import SpeakerRecognizer
 from .audio.capture import AudioCapture, AudioCaptureError
@@ -57,6 +58,7 @@ from .memory.store import MemoryStore
 from .memory.models import DocumentType
 from .extraction.pipeline import ExtractionPipeline
 from .coaching.story_recaller import StoryRecaller
+from .coaching.structure_suggester import StructureSuggester
 from rag.speculative import SpeculativeRetriever
 
 # Configure logging
@@ -119,6 +121,7 @@ class SidecarServer:
         self.rag_engine: Optional[RAGEngine] = None
         self.speculative_retriever: Optional[SpeculativeRetriever] = None
         self.story_recaller: Optional[StoryRecaller] = None
+        self.structure_suggester: Optional[StructureSuggester] = None
         
         self.model_warmer = ModelWarmer.get_instance()
         self.model_warmer.start_warming()
@@ -1118,6 +1121,8 @@ Based on the uploaded documents, here are the main topics to prepare:
                 # Warm up stories in background
                 asyncio.create_task(self.story_recaller.warm_up())
             
+            self.structure_suggester = StructureSuggester()
+            
             # Add pre-loaded context chunks
             pre_loaded_chunks = self.context_manager.get_all_chunks()
             if pre_loaded_chunks:
@@ -1352,6 +1357,22 @@ Based on the uploaded documents, here are the main topics to prepare:
         except Exception as e:
             logger.warning(f"Story recall failed: {e}")
 
+    async def _suggest_structure(self, question: str, q_type: str) -> None:
+        """Suggest an answer structure framework."""
+        if not self.structure_suggester:
+            return
+            
+        try:
+            hint = self.structure_suggester.suggest_structure(question, q_type)
+            msg = create_structure_suggestion_message(
+                name=hint.name,
+                sections=[s.to_dict() for s in hint.sections],
+                tips=hint.tips
+            )
+            await self.broadcast(msg)
+        except Exception as e:
+            logger.warning(f"Structure suggestion failed: {e}")
+
     async def _process_question_pipeline(
         self,
         original_question: str,
@@ -1373,6 +1394,9 @@ Based on the uploaded documents, here are the main topics to prepare:
         # Phase 4E: Recall relevant stories (parallel)
         if self.story_recaller and question_type in ("behavioral", "interview_question"):
             asyncio.create_task(self._recall_and_suggest_story(original_question, question_type))
+            
+        # Phase 4E: Suggest structure (parallel)
+        asyncio.create_task(self._suggest_structure(original_question, question_type))
         
         # Step 1: Query Reformulation (expand follow-ups)
         reformulated_question = original_question
