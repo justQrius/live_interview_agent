@@ -576,3 +576,70 @@ class DocumentSummary:
     @classmethod
     def from_json(cls, json_str: str) -> "DocumentSummary":
         return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class DraftedAnswer:
+    """A drafted answer for an interview question."""
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    question_id: str = ""  # Reference to PlaybookQuestion.id
+    suggested_answer: str = ""  # Full answer text (100-200 words)
+    key_points: List[str] = field(default_factory=list)  # 3-5 bullet points
+    opening_line: str = ""  # Suggested first sentence
+    story_id: Optional[str] = None  # Reference to STARStory.id if used
+    story_title: Optional[str] = None  # Story title for display
+    framework_used: str = "STAR"  # Which answer framework was used
+    word_count: int = 0  # Word count of suggested_answer
+    estimated_duration_seconds: int = 0  # Approx speaking time
+    metrics_used: List[str] = field(default_factory=list)  # Metrics from resume
+    grounded_in: List[str] = field(default_factory=list)  # Source documents/stories
+    confidence: float = 0.0  # How confident in this answer (0-1)
+    created_at: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "question_id": self.question_id,
+            "suggested_answer": self.suggested_answer,
+            "key_points": self.key_points,
+            "opening_line": self.opening_line,
+            "story_id": self.story_id,
+            "story_title": self.story_title,
+            "framework_used": self.framework_used,
+            "word_count": self.word_count,
+            "estimated_duration_seconds": self.estimated_duration_seconds,
+            "metrics_used": self.metrics_used,
+            "grounded_in": self.grounded_in,
+            "confidence": self.confidence,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DraftedAnswer":
+        created_at = data.get("created_at")
+        if created_at and isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at)
+
+        return cls(
+            id=data.get("id", str(uuid.uuid4())),
+            question_id=data.get("question_id", ""),
+            suggested_answer=data.get("suggested_answer", ""),
+            key_points=data.get("key_points", []),
+            opening_line=data.get("opening_line", ""),
+            story_id=data.get("story_id"),
+            story_title=data.get("story_title"),
+            framework_used=data.get("framework_used", "STAR"),
+            word_count=data.get("word_count", 0),
+            estimated_duration_seconds=data.get("estimated_duration_seconds", 0),
+            metrics_used=data.get("metrics_used", []),
+            grounded_in=data.get("grounded_in", []),
+            confidence=data.get("confidence", 0.0),
+            created_at=created_at,
+        )
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "DraftedAnswer":
+        return cls.from_dict(json.loads(json_str))

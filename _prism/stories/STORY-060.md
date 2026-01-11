@@ -16,26 +16,26 @@ As a job seeker, I want each generated question to have a suggested answer based
 ## Acceptance Criteria
 
 ### AC-1: Answer Generation
-- [ ] Each question has a complete suggested answer
-- [ ] Answers grounded in user's resume/experience
-- [ ] Answers use appropriate framework (STAR for behavioral, etc.)
-- [ ] Answers are 100-200 words (45-90 seconds spoken)
+- [x] Each question has a complete suggested answer
+- [x] Answers grounded in user's resume/experience
+- [x] Answers use appropriate framework (STAR for behavioral, etc.)
+- [x] Answers are 100-200 words (45-90 seconds spoken)
 
 ### AC-2: Story Linking
-- [ ] Behavioral questions linked to relevant STAR stories
-- [ ] Story ID referenced in answer metadata
-- [ ] Story opening line included in answer
+- [x] Behavioral questions linked to relevant STAR stories
+- [x] Story ID referenced in answer metadata
+- [x] Story opening line included in answer
 
 ### AC-3: Key Points
-- [ ] Each answer has 3-5 bullet point key points
-- [ ] Key points include metrics where available
-- [ ] Key points easy to remember during interview
+- [x] Each answer has 3-5 bullet point key points
+- [x] Key points include metrics where available
+- [x] Key points easy to remember during interview
 
 ### AC-4: Quality
-- [ ] Answers sound natural, not robotic
-- [ ] No invented facts - only from provided context
-- [ ] Answers avoid cliches and buzzwords
-- [ ] Generation time < 20 seconds for all answers
+- [x] Answers sound natural, not robotic
+- [x] No invented facts - only from provided context
+- [x] Answers avoid cliches and buzzwords
+- [x] Generation time < 20 seconds for all answers
 
 ---
 
@@ -107,8 +107,8 @@ class AnswerDrafter:
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] Unit tests with mocked data
-- [ ] Integration test with real LLM
-- [ ] Answers validated against source resume
-- [ ] Code reviewed
+- [x] All acceptance criteria met
+- [x] Unit tests with mocked data
+- [x] Integration test with real LLM
+- [x] Answers validated against source resume
+- [x] Code reviewed
