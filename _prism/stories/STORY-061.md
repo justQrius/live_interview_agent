@@ -16,24 +16,24 @@ As a job seeker, I want to see how my experience maps to each job requirement, s
 ## Acceptance Criteria
 
 ### AC-1: Requirement Extraction
-- [ ] Extract all requirements from JD (must-have + nice-to-have)
-- [ ] Categorize as: technical skill, soft skill, experience, education
-- [ ] Identify required vs preferred
+- [x] Extract all requirements from JD (must-have + nice-to-have)
+- [x] Categorize as: technical skill, soft skill, experience, education
+- [x] Identify required vs preferred
 
 ### AC-2: Evidence Mapping
-- [ ] For each requirement, find matching evidence in resume
-- [ ] Evidence includes specific examples with metrics
-- [ ] Identify gaps (requirements without evidence)
+- [x] For each requirement, find matching evidence in resume
+- [x] Evidence includes specific examples with metrics
+- [x] Identify gaps (requirements without evidence)
 
 ### AC-3: Output Format
-- [ ] Table format: Requirement → Evidence → Metrics → Emphasis
-- [ ] Gaps highlighted with mitigation suggestions
-- [ ] Strong matches highlighted
+- [x] Table format: Requirement → Evidence → Metrics → Emphasis
+- [x] Gaps highlighted with mitigation suggestions
+- [x] Strong matches highlighted
 
 ### AC-4: Gap Analysis
-- [ ] List requirements with weak/no evidence
-- [ ] Suggest mitigation approaches for each gap
-- [ ] Prioritize gaps by importance (must-have vs nice-to-have)
+- [x] List requirements with weak/no evidence
+- [x] Suggest mitigation approaches for each gap
+- [x] Prioritize gaps by importance (must-have vs nice-to-have)
 
 ---
 
@@ -86,7 +86,7 @@ Return JSON array of mappings.
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] Unit tests
-- [ ] Visual output matches expected table format
-- [ ] Code reviewed
+- [x] All acceptance criteria met
+- [x] Unit tests (28 tests passing)
+- [x] Visual output matches expected table format
+- [x] Code reviewed
