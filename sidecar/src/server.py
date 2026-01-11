@@ -36,6 +36,7 @@ from .protocol import (
     create_interim_transcription_message,
     create_story_suggestion_message,
     create_structure_suggestion_message,
+    create_consistency_warning_message,
 )
 from .audio.diarization import SpeakerRecognizer
 from .audio.capture import AudioCapture, AudioCaptureError
@@ -59,6 +60,7 @@ from .memory.models import DocumentType
 from .extraction.pipeline import ExtractionPipeline
 from .coaching.story_recaller import StoryRecaller
 from .coaching.structure_suggester import StructureSuggester
+from .coaching.consistency_tracker import ConsistencyTracker
 from rag.speculative import SpeculativeRetriever
 
 # Configure logging
@@ -112,16 +114,20 @@ class SidecarServer:
         self.vad: Optional[VADProcessor] = None
         self.noise_reducer: Optional[NoiseReducer] = None
         self.audio_capture: Optional[AudioCapture] = None
-        self._audio_task: Optional[asyncio.Task] = None
-        
+        self.vad: Optional[VADProcessor] = None
+        self.stt: Optional[STTProvider] = None
         self.llm: Optional[LLMProvider] = None
-        
-        self.context_manager = ContextManager()
         self.vector_store: Optional[VectorStore] = None
         self.rag_engine: Optional[RAGEngine] = None
         self.speculative_retriever: Optional[SpeculativeRetriever] = None
         self.story_recaller: Optional[StoryRecaller] = None
         self.structure_suggester: Optional[StructureSuggester] = None
+        
+        # Initialize storage
+        self.session_store = SessionHistoryStore()
+        
+        # Phase 4E: Initialize Consistency Tracker (needs session store)
+        self.consistency_tracker = ConsistencyTracker(self.session_store)
         
         self.model_warmer = ModelWarmer.get_instance()
         self.model_warmer.start_warming()
@@ -334,6 +340,11 @@ class SidecarServer:
                     context_files=context_files
                 )
                 logger.info(f"Created persistent session: {self.session_state.persistent_session_id}")
+                
+                # Phase 4E: Start consistency tracking
+                if self.consistency_tracker:
+                    self.consistency_tracker.start_session(self.session_state.persistent_session_id)
+                    
             except Exception as e:
                 logger.warning(f"Failed to create persistent session: {e}")
                 # Continue without persistence - don't break main flow
@@ -1475,6 +1486,19 @@ Based on the uploaded documents, here are the main topics to prepare:
         # Fallback to standard retrieval
         return self._retrieve_context(question)
     
+    async def _check_consistency(self, text: str) -> None:
+        """Extract claims and check for contradictions."""
+        if not self.consistency_tracker or not self.session_state.persistent_session_id:
+            return
+            
+        try:
+            result = self.consistency_tracker.extract_and_check(text)
+            if result.contradictions:
+                msg = create_consistency_warning_message([c.to_dict() for c in result.contradictions])
+                await self.broadcast(msg)
+        except Exception as e:
+            logger.warning(f"Consistency check failed: {e}")
+
     async def _generate_answer_with_context(
         self,
         original_question: str,
@@ -1523,6 +1547,10 @@ Based on the uploaded documents, here are the main topics to prepare:
             
             # Append Q&A to conversation history (use original question for history)
             full_answer = "".join(full_answer_parts)
+            
+            # Phase 4E: Check consistency
+            asyncio.create_task(self._check_consistency(full_answer))
+            
             self.session_state.conversation_history.append({
                 "role": "user",
                 "content": original_question
@@ -1589,6 +1617,10 @@ Based on the uploaded documents, here are the main topics to prepare:
             
             # Append Q&A to conversation history for future context
             full_answer = "".join(full_answer_parts)
+            
+            # Phase 4E: Check consistency
+            asyncio.create_task(self._check_consistency(full_answer))
+            
             self.session_state.conversation_history.append({
                 "role": "user",
                 "content": question

@@ -85,10 +85,22 @@ class SessionHistoryStore:
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     
+    CREATE TABLE IF NOT EXISTS claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        claim_type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        original_text TEXT,
+        timestamp REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
     CREATE INDEX IF NOT EXISTS idx_transcriptions_session 
         ON transcriptions(session_id);
     CREATE INDEX IF NOT EXISTS idx_answers_session 
         ON answers(session_id);
+    CREATE INDEX IF NOT EXISTS idx_claims_session 
+        ON claims(session_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_started 
         ON sessions(started_at DESC);
     """
@@ -255,6 +267,66 @@ class SessionHistoryStore:
         except sqlite3.IntegrityError as e:
             logger.warning(f"Failed to add answer (invalid session?): {e}")
             raise
+
+    def add_claim(
+        self,
+        session_id: str,
+        claim_type: str,
+        value: str,
+        original_text: str,
+        timestamp: float
+    ) -> None:
+        """
+        Record a factual claim made during the session.
+        
+        Args:
+            session_id: Session ID
+            claim_type: Type of claim (e.g. "experience_years")
+            value: Normalized value (e.g. "5")
+            original_text: Original text fragment
+            timestamp: Time of claim
+        """
+        conn = self._get_connection()
+        try:
+            conn.execute(
+                """
+                INSERT INTO claims (session_id, claim_type, value, original_text, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, claim_type, value, original_text, timestamp)
+            )
+            conn.commit()
+        except sqlite3.IntegrityError as e:
+            logger.warning(f"Failed to add claim: {e}")
+
+    def get_claims(self, session_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all factual claims for a session.
+        
+        Args:
+            session_id: Session ID
+            
+        Returns:
+            List of claim dictionaries
+        """
+        conn = self._get_connection()
+        cursor = conn.execute(
+            """
+            SELECT claim_type, value, original_text, timestamp
+            FROM claims WHERE session_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (session_id,)
+        )
+        return [
+            {
+                "claim_type": r[0],
+                "value": r[1],
+                "original_text": r[2],
+                "timestamp": r[3]
+            }
+            for r in cursor.fetchall()
+        ]
 
     def get_session(self, session_id: str) -> Optional[SessionData]:
         """
