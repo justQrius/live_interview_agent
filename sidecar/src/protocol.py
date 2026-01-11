@@ -25,6 +25,7 @@ class MessageType(str, Enum):
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
     INTERIM_TRANSCRIPTION = "INTERIM_TRANSCRIPTION"
+    STORY_SUGGESTION = "STORY_SUGGESTION"  # Phase 4E: Story suggestion
     ANSWER_START = "ANSWER_START"
     ANSWER_CHUNK = "ANSWER_CHUNK"
     ERROR = "ERROR"
@@ -195,6 +196,30 @@ def create_interim_transcription_message(
     """Create an INTERIM_TRANSCRIPTION message."""
     data = InterimTranscriptionData(text, timestamp, speaker)
     return Message(type=MessageType.INTERIM_TRANSCRIPTION, data=data.to_dict())
+
+
+def create_story_suggestion_message(
+    story_id: str,
+    title: str,
+    situation: str,
+    relevance_score: float,
+    suggested_opening: str,
+    key_metrics: list[str],
+    tags: list[str]
+) -> Message:
+    """Create a STORY_SUGGESTION message."""
+    return Message(
+        type=MessageType.STORY_SUGGESTION,
+        data={
+            "storyId": story_id,
+            "title": title,
+            "situation": situation,
+            "relevanceScore": relevance_score,
+            "suggestedOpening": suggested_opening,
+            "keyMetrics": key_metrics,
+            "tags": tags
+        }
+    )
 
 
 def create_answer_chunk_message(
