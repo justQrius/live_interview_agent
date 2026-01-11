@@ -61,6 +61,8 @@ class GeminiLLMProvider(LLMProvider):
             ValueError: If API key is empty
             GeminiLLMProviderError: If client initialization fails
         """
+        super().__init__()
+        
         if not api_key:
             raise ValueError("API key is required")
 
@@ -109,30 +111,27 @@ class GeminiLLMProvider(LLMProvider):
         Returns:
             Formatted prompt string
         """
-        # Build dynamic system prompt based on question type
-        system_content, question_type = build_system_prompt(prompt)
+        system_content, question_type = build_system_prompt(
+            prompt,
+            candidate_profile=self._candidate_profile or ""
+        )
         
-        # Format context based on question type  
         formatted_context = format_context_for_prompt(context, question_type)
         
         parts = [system_content]
 
-        # Add formatted context if provided
         if formatted_context:
             parts.append(f"\n{formatted_context}")
 
-        # Add conversation history if provided
         if history:
             parts.append("\n## Conversation History:")
-            for msg in history[-10:]:  # Limit to last 10
+            for msg in history[-10:]:
                 role = msg.get("role", "user")
                 content = msg.get("content", "")
                 if content:
-                    # Map roles for clarity
                     display_role = "Interviewer" if role in ("user", "interviewer") else "You (Candidate)"
                     parts.append(f"{display_role}: {content}")
 
-        # Add the current question
         parts.append(f"\n## Current Question:\n{prompt}")
 
         return "\n".join(parts)

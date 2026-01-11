@@ -313,23 +313,28 @@ Note: Clear structure (headline, background, highlights, bridge), specific metri
 # PROMPT BUILDER
 # =============================================================================
 
-def build_system_prompt(question: str, include_examples: bool = True) -> Tuple[str, str]:
+def build_system_prompt(question: str, include_examples: bool = True, candidate_profile: str = "") -> Tuple[str, str]:
     """
     Build a complete system prompt based on question classification.
 
     Args:
         question: The interview question to respond to
         include_examples: Whether to include few-shot examples
+        candidate_profile: Optional candidate profile to inject at start
 
     Returns:
         Tuple of (complete_system_prompt, question_type)
     """
     question_type = classify_question(question)
 
-    # Start with master prompt
-    prompt_parts = [MASTER_SYSTEM_PROMPT]
+    prompt_parts = []
+    
+    if candidate_profile:
+        prompt_parts.append(candidate_profile)
+        prompt_parts.append("\n---\n")
+    
+    prompt_parts.append(MASTER_SYSTEM_PROMPT)
 
-    # Add question-specific addon
     addons = {
         "behavioral": BEHAVIORAL_ADDON,
         "intro": INTRO_ADDON,
@@ -341,7 +346,6 @@ def build_system_prompt(question: str, include_examples: bool = True) -> Tuple[s
 
     prompt_parts.append(addons.get(question_type, GENERAL_ADDON))
 
-    # Add relevant example for behavioral and intro (most common)
     if include_examples:
         if question_type == "behavioral":
             prompt_parts.append(BEHAVIORAL_EXAMPLE)

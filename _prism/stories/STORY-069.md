@@ -16,23 +16,23 @@ As a system, I need to inject the Candidate Profile into every LLM call, so that
 ## Acceptance Criteria
 
 ### AC-1: Profile Injection
-- [ ] Candidate Profile included in system prompt for all LLM calls
-- [ ] Profile appears at start of system prompt
-- [ ] Profile updated when documents change
+- [x] Candidate Profile included in system prompt for all LLM calls
+- [x] Profile appears at start of system prompt
+- [x] Profile updated when documents change
 
 ### AC-2: All LLM Entry Points
-- [ ] Answer generation includes profile
-- [ ] Preparation generation includes profile
-- [ ] Manual question handling includes profile
+- [x] Answer generation includes profile
+- [x] Preparation generation includes profile
+- [x] Manual question handling includes profile
 
 ### AC-3: Token Management
-- [ ] Profile stays within ~1000 tokens
-- [ ] Total prompt stays within provider limits
-- [ ] Profile truncated gracefully if too long
+- [x] Profile stays within ~1000 tokens
+- [x] Total prompt stays within provider limits
+- [x] Profile truncated gracefully if too long
 
 ### AC-4: Fallback
-- [ ] System works without profile (graceful degradation)
-- [ ] Warning logged if profile unavailable
+- [x] System works without profile (graceful degradation)
+- [x] Warning logged if profile unavailable
 
 ---
 
@@ -74,8 +74,8 @@ if profile := memory_store.get_profile():
 
 ## Definition of Done
 
-- [ ] All acceptance criteria met
-- [ ] All LLM entry points verified
-- [ ] Token counting validated
-- [ ] Integration tests passing
-- [ ] Code reviewed
+- [x] All acceptance criteria met
+- [x] All LLM entry points verified (Answer generation, Preparation, Manual questions)
+- [x] Token counting validated (Warning on excessive tokens)
+- [x] Integration tests passing
+- [x] Code reviewed
