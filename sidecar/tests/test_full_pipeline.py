@@ -21,27 +21,27 @@ sys.modules["speechbrain"] = MagicMock()
 sys.modules["speechbrain.inference"] = MagicMock()
 sys.modules["speechbrain.inference.speaker"] = MagicMock()
 
-# Add sidecar/src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+# Add sidecar to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
-from server import SidecarServer, SessionStatus, Speaker
-from protocol import Message, MessageType, ConfidenceLevel
-from audio.vad import SpeechSegment
-from providers.base import TranscriptionResult
+from src.server import SidecarServer, SessionStatus, Speaker
+from src.protocol import Message, MessageType, ConfidenceLevel
+from src.audio.vad import SpeechSegment
+from src.providers.base import TranscriptionResult
 
 
 @pytest.fixture
 def mock_full_pipeline():
     """Mock all pipeline components for full integration testing."""
-    with patch("server.GeminiSTTProvider") as mock_stt_cls, \
-         patch("server.VADProcessor") as mock_vad_cls, \
-         patch("server.AudioCapture") as mock_capture_cls, \
-         patch("server.SpeakerRecognizer") as mock_recognizer_cls, \
-         patch("server.GeminiLLMProvider") as mock_llm_cls, \
-         patch("server.VectorStore") as mock_vector_cls, \
-         patch("server.RAGEngine") as mock_rag_cls, \
-         patch("server.ModelWarmer") as mock_warmer_cls, \
-         patch("server.NoiseReducer") as mock_noise_reducer_cls:
+    with patch("src.server.GeminiSTTProvider") as mock_stt_cls, \
+         patch("src.server.VADProcessor") as mock_vad_cls, \
+         patch("src.server.AudioCapture") as mock_capture_cls, \
+         patch("src.server.SpeakerRecognizer") as mock_recognizer_cls, \
+         patch("src.server.GeminiLLMProvider") as mock_llm_cls, \
+         patch("src.server.VectorStore") as mock_vector_cls, \
+         patch("src.server.RAGEngine") as mock_rag_cls, \
+         patch("src.server.ModelWarmer") as mock_warmer_cls, \
+         patch("src.server.NoiseReducer") as mock_noise_reducer_cls:
         
         # Setup mocks
         mock_stt = mock_stt_cls.return_value

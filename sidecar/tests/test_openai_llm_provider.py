@@ -1,7 +1,13 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from sidecar.src.providers.llm.openai import OpenAILLMProvider
-from sidecar.src.providers.base import LLMProvider
+import sys
+import os
+
+# Add sidecar/src to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+from providers.llm.openai import OpenAILLMProvider
+from providers.base import LLMProvider
 
 class TestOpenAILLMProvider:
     @pytest.fixture

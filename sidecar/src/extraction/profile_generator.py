@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, List, Any, Dict
 
-from ..memory.models import (
+from memory.models import (
     CandidateProfile,
     ExtractedFacts,
     DocumentSummary,

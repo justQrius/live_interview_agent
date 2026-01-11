@@ -22,7 +22,7 @@ from .fact_extractor import FactExtractor
 from .story_extractor import StoryExtractor
 from .profile_generator import ProfileGenerator
 
-from ..memory.models import (
+from memory.models import (
     DocumentSummary,
     ExtractedFacts,
     STARStory,

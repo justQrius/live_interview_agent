@@ -197,7 +197,7 @@ phase2_stories:
   stories_complete: 13
 
 phase1_stories:
-  status: mostly_complete
+  status: complete
   stories_total: 20
-  stories_complete: 19
-  remaining: STORY-020
+  stories_complete: 20
+  remaining: 0
