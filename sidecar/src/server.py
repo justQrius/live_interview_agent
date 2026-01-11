@@ -61,7 +61,6 @@ from extraction.pipeline import ExtractionPipeline
 from coaching.story_recaller import StoryRecaller
 from coaching.structure_suggester import StructureSuggester
 from coaching.consistency_tracker import ConsistencyTracker
-from rag.speculative import SpeculativeRetriever
 
 # Configure logging
 logging.basicConfig(
@@ -114,8 +113,6 @@ class SidecarServer:
         self.vad: Optional[VADProcessor] = None
         self.noise_reducer: Optional[NoiseReducer] = None
         self.audio_capture: Optional[AudioCapture] = None
-        self.vad: Optional[VADProcessor] = None
-        self.stt: Optional[STTProvider] = None
         self.llm: Optional[LLMProvider] = None
         self.vector_store: Optional[VectorStore] = None
         self.rag_engine: Optional[RAGEngine] = None
@@ -123,8 +120,9 @@ class SidecarServer:
         self.story_recaller: Optional[StoryRecaller] = None
         self.structure_suggester: Optional[StructureSuggester] = None
         
-        # Initialize storage
+        # Initialize storage and managers
         self.session_store = SessionHistoryStore()
+        self.context_manager = ContextManager()
         
         # Phase 4E: Initialize Consistency Tracker (needs session store)
         self.consistency_tracker = ConsistencyTracker(self.session_store)
@@ -143,8 +141,6 @@ class SidecarServer:
         self.query_reformulator = QueryReformulator()
         self.question_splitter = QuestionSplitter()
         
-        # Phase 3: Session History Persistence
-        self.session_store = SessionHistoryStore()
         self.session_persistence_enabled = True  # Feature flag for rollout 
         
         # Phase 4: Persistent Memory & Extraction Pipeline
