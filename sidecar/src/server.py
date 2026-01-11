@@ -53,6 +53,7 @@ from storage.exporter import SessionExporter, ExportFormat
 from memory.store import MemoryStore
 from memory.models import DocumentType
 from extraction.pipeline import ExtractionPipeline
+from rag.speculative import SpeculativeRetriever
 
 # Configure logging
 logging.basicConfig(
@@ -112,6 +113,7 @@ class SidecarServer:
         self.context_manager = ContextManager()
         self.vector_store: Optional[VectorStore] = None
         self.rag_engine: Optional[RAGEngine] = None
+        self.speculative_retriever: Optional[SpeculativeRetriever] = None
         
         self.model_warmer = ModelWarmer.get_instance()
         self.model_warmer.start_warming()
@@ -1102,6 +1104,9 @@ Based on the uploaded documents, here are the main topics to prepare:
             self.vector_store = vector_store
             self.rag_engine = RAGEngine(vector_store)
             
+            # Phase 4D: Initialize Speculative Retriever
+            self.speculative_retriever = SpeculativeRetriever(self.rag_engine)
+            
             # Add pre-loaded context chunks
             pre_loaded_chunks = self.context_manager.get_all_chunks()
             if pre_loaded_chunks:
@@ -1153,18 +1158,36 @@ Based on the uploaded documents, here are the main topics to prepare:
         - User speech: transcribed and displayed (filtered from RAG+LLM)
         - Interviewer speech: transcribed, then triggers RAG retrieval and LLM generation
         """
+        import time
         if not self.audio_capture or not self.vad or not self.stt:
             logger.error("Audio components not initialized")
             return
 
         logger.info("Starting audio processing loop")
         
+        last_speculation_time = 0.0
+        
         try:
             async for chunk in self.audio_capture.get_audio_stream():
                 segments = await self.vad.process_chunk(chunk)
                 
                 for segment in segments:
+                    # Reset speculation state on segment completion
+                    if self.speculative_retriever:
+                        self.speculative_retriever.reset()
                     await self._process_speech_segment(segment)
+                
+                # Phase 4D: Speculative Retrieval Trigger
+                # Check periodically if we should speculatively retrieve for ongoing speech
+                now = time.time()
+                if (self.speculative_retriever and 
+                    self.vad.is_speaking and 
+                    self.vad.current_duration > 2.0 and 
+                    now - last_speculation_time > 2.0):
+                    
+                    # Run in background to avoid blocking audio loop
+                    asyncio.create_task(self._run_speculative_cycle())
+                    last_speculation_time = now
                         
         except asyncio.CancelledError:
             logger.info("Audio loop cancelled")
@@ -1178,6 +1201,29 @@ Based on the uploaded documents, here are the main topics to prepare:
             await self.broadcast(error_msg)
             self.session_state.status = SessionStatus.IDLE
             await self.broadcast(create_status_message(SessionStatus.IDLE))
+
+    async def _run_speculative_cycle(self) -> None:
+        """
+        Run a single cycle of speculative retrieval.
+        Captures current audio buffer, transcribes it, and triggers retrieval.
+        """
+        if not self.stt or not self.speculative_retriever or not self.vad:
+            return
+            
+        try:
+            audio_buffer = self.vad.get_current_audio()
+            # Need at least ~1s of audio (16000 samples * 2 bytes = 32000 bytes)
+            if not audio_buffer or len(audio_buffer) < 32000:
+                return
+                
+            # Quick transcription of partial buffer
+            # Note: This relies on STT provider being able to handle short partials
+            result = await self.stt.transcribe(audio_buffer)
+            if result.text:
+                await self.speculative_retriever.on_interim_transcript(result.text)
+                
+        except Exception as e:
+            logger.debug(f"Speculative cycle failed: {e}")
 
     async def _process_speech_segment(self, segment) -> None:
         """Process a speech segment: NoiseReducer → Speaker ID → STT → Broadcast → (RAG+LLM if Interviewer)."""
@@ -1313,7 +1359,7 @@ Based on the uploaded documents, here are the main topics to prepare:
             logger.warning(f"Question splitting failed: {e}")
         
         # Step 3: Retrieve context (using question type for enhanced retrieval when available)
-        context_chunks, rag_confidence = self._retrieve_context_enhanced(
+        context_chunks, rag_confidence = await self._retrieve_context_enhanced(
             reformulated_question, question_type, sub_questions
         )
         
@@ -1326,14 +1372,14 @@ Based on the uploaded documents, here are the main topics to prepare:
             start_time=start_time
         )
     
-    def _retrieve_context_enhanced(
+    async def _retrieve_context_enhanced(
         self,
         question: str,
         question_type: str,
         sub_questions: List[str]
     ) -> tuple[list[str], ConfidenceLevel]:
         """
-        Enhanced context retrieval using question type and sub-questions.
+        Enhanced context retrieval using question type, sub-questions, and speculative cache.
         
         Args:
             question: The reformulated question
@@ -1343,8 +1389,19 @@ Based on the uploaded documents, here are the main topics to prepare:
         Returns:
             Tuple of (context_chunks, confidence)
         """
-        # Use standard retrieval for now, can be enhanced with EnhancedRAGEngine
-        # when document types are available
+        # Phase 4D: Use speculative results if available
+        if self.speculative_retriever:
+            try:
+                results = await self.speculative_retriever.on_segment_complete(question)
+                if results:
+                    chunks = [r.text for r in results]
+                    confidence = self._confidence_from_string(results[0].confidence)
+                    logger.info(f"Using {len(chunks)} speculative/retrieved chunks")
+                    return chunks, confidence
+            except Exception as e:
+                logger.warning(f"Speculative retrieval failed in pipeline: {e}")
+        
+        # Fallback to standard retrieval
         return self._retrieve_context(question)
     
     async def _generate_answer_with_context(

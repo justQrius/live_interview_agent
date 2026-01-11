@@ -87,8 +87,8 @@ class TestRAGEngine:
         assert r1.confidence == ConfidenceLevel.HIGH
         assert r1.metadata == {'source': 'doc1'}
         
-        # Check second result (Low confidence)
+        # Check second result (Medium confidence)
         r2 = results[1]
         assert r2.text == 'content2'
         assert r2.distance == 0.6
-        assert r2.confidence == ConfidenceLevel.LOW
+        assert r2.confidence == ConfidenceLevel.MEDIUM

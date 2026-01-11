@@ -146,6 +146,33 @@ class VADProcessor:
         """Return the configured sample rate."""
         return self._sample_rate
 
+    @property
+    def is_speaking(self) -> bool:
+        """Return True if currently detecting speech."""
+        return self._is_speaking
+
+    @property
+    def current_duration(self) -> float:
+        """Return duration of current ongoing speech in seconds."""
+        with self._lock:
+            if not self._is_speaking or not self._current_segment_samples:
+                return 0.0
+            # Sum length of all arrays in list
+            total_samples = sum(len(s) for s in self._current_segment_samples)
+            return total_samples / self._sample_rate
+
+    def get_current_audio(self) -> Optional[bytes]:
+        """
+        Get currently accumulated audio for active speech.
+        
+        Returns:
+            Raw audio bytes of the current ongoing segment, or None if not speaking.
+        """
+        with self._lock:
+            if not self._is_speaking or not self._current_segment_samples:
+                return None
+            return np.concatenate(self._current_segment_samples).tobytes()
+
     def _load_model(self) -> None:
         """
         Load the Silero VAD v4 model.

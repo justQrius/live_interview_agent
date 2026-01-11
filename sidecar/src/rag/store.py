@@ -167,6 +167,25 @@ class VectorStore:
             logger.error(f"Failed to query ChromaDB with filter: {e}")
             return {}
 
+    def embed_query(self, text: str) -> List[float]:
+        """
+        Generate embedding for a single query text.
+        
+        Args:
+            text: Query text.
+            
+        Returns:
+            Embedding vector as list of floats.
+        """
+        try:
+            embeddings = self.embedding_function(input=[text])
+            if embeddings and len(embeddings) > 0:
+                return embeddings[0]
+            return []
+        except Exception as e:
+            logger.error(f"Failed to embed query: {e}")
+            return []
+
     def clear(self) -> None:
         """Clear the vector store (delete collection and recreate)."""
         logger.info("Clearing vector store")
