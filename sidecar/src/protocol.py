@@ -41,6 +41,10 @@ class MessageType(str, Enum):
     SESSION_EXPORT = "SESSION_EXPORT"
     SESSION_DELETED = "SESSION_DELETED"
     PREPARATION_READY = "PREPARATION_READY"  # Phase 3B: Preparation summary ready
+    
+    # Phase 4: Extraction Pipeline
+    EXTRACTION_PROGRESS = "EXTRACTION_PROGRESS"  # Phase 4: Document extraction progress
+    EXTRACTION_COMPLETE = "EXTRACTION_COMPLETE"  # Phase 4: Document extraction complete
 
 
 class SessionStatus(str, Enum):
@@ -238,6 +242,38 @@ def create_preparation_ready_message(summary: str) -> Message:
     return Message(
         type=MessageType.PREPARATION_READY,
         data={
+            "summary": summary
+        }
+    )
+
+
+def create_extraction_progress_message(
+    stage: str,
+    progress: float,
+    message: str = ""
+) -> Message:
+    return Message(
+        type=MessageType.EXTRACTION_PROGRESS,
+        data={
+            "stage": stage,
+            "progress": progress,
+            "message": message
+        }
+    )
+
+
+def create_extraction_complete_message(
+    document_id: str,
+    filename: str,
+    success: bool,
+    summary: dict
+) -> Message:
+    return Message(
+        type=MessageType.EXTRACTION_COMPLETE,
+        data={
+            "documentId": document_id,
+            "filename": filename,
+            "success": success,
             "summary": summary
         }
     )

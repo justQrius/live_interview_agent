@@ -31,6 +31,8 @@ from protocol import (
     create_session_export_message,
     create_session_deleted_message,
     create_preparation_ready_message,
+    create_extraction_progress_message,
+    create_extraction_complete_message,
 )
 from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
@@ -48,6 +50,9 @@ from classification.query_reformulator import QueryReformulator
 from classification.question_splitter import QuestionSplitter
 from storage.session_store import SessionHistoryStore
 from storage.exporter import SessionExporter, ExportFormat
+from memory.store import MemoryStore
+from memory.models import DocumentType
+from extraction.pipeline import ExtractionPipeline
 
 # Configure logging
 logging.basicConfig(
@@ -125,6 +130,11 @@ class SidecarServer:
         # Phase 3: Session History Persistence
         self.session_store = SessionHistoryStore()
         self.session_persistence_enabled = True  # Feature flag for rollout 
+        
+        # Phase 4: Persistent Memory & Extraction Pipeline
+        self.memory_store = MemoryStore()
+        self.extraction_pipeline = ExtractionPipeline(memory_store=self.memory_store)
+        self.extraction_enabled = True  # Feature flag for rollout
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -380,13 +390,24 @@ class SidecarServer:
             for file_data in files:
                 filename = file_data.get("name")
                 content = file_data.get("content")
+                doc_type_str = file_data.get("documentType", "other")
                 
                 if not filename or not content:
                     logger.warning(f"Invalid file data: {filename}")
                     errors.append(f"Invalid data for {filename or 'unknown file'}")
                     continue
+                
+                # Map document type string to enum
+                doc_type_map = {
+                    "resume": DocumentType.RESUME,
+                    "job_description": DocumentType.JOB_DESCRIPTION,
+                    "company_info": DocumentType.COMPANY_INFO,
+                    "interviewer_info": DocumentType.INTERVIEWER_INFO,
+                }
+                doc_type = doc_type_map.get(doc_type_str, DocumentType.OTHER)
                     
                 try:
+                    # Process through context manager for RAG chunks
                     new_chunks = await self.context_manager.process_file(filename, content)
                     
                     if new_chunks and self.vector_store:
@@ -398,6 +419,32 @@ class SidecarServer:
                             logger.error(f"Failed to add chunks to vector store: {e}")
                     
                     total_chunks += len(new_chunks)
+                    
+                    # Phase 4: Run extraction pipeline in background
+                    if self.extraction_enabled and self.extraction_pipeline:
+                        import uuid
+                        doc_id = str(uuid.uuid4())
+                        
+                        async def extraction_progress(stage: str, progress: float, msg: str = ""):
+                            try:
+                                progress_msg = create_extraction_progress_message(
+                                    stage=stage,
+                                    progress=progress,
+                                    message=msg
+                                )
+                                await websocket.send(progress_msg.to_json())
+                            except Exception as e:
+                                logger.debug(f"Failed to send progress: {e}")
+                        
+                        # Set LLM provider for extraction if available
+                        if self.llm:
+                            self.extraction_pipeline.set_llm_provider(self.llm)
+                        
+                        # Run extraction (non-blocking for UI responsiveness)
+                        asyncio.create_task(self._run_extraction(
+                            websocket, doc_id, content, doc_type, filename, extraction_progress
+                        ))
+                    
                     processed_count += 1
                 except Exception as e:
                     logger.error(f"Failed to process {filename}: {e}")
@@ -429,6 +476,46 @@ class SidecarServer:
                  self.session_state.status = SessionStatus.IDLE
                  
             await websocket.send(create_status_message(self.session_state.status).to_json())
+    
+    async def _run_extraction(
+        self,
+        websocket: ServerConnection,
+        doc_id: str,
+        content: str,
+        doc_type: DocumentType,
+        filename: str,
+        progress_callback
+    ) -> None:
+        """Run extraction pipeline in background."""
+        try:
+            result = await self.extraction_pipeline.process_document(
+                document_id=doc_id,
+                text=content,
+                document_type=doc_type,
+                filename=filename,
+                progress_callback=progress_callback,
+            )
+            
+            complete_msg = create_extraction_complete_message(
+                document_id=doc_id,
+                filename=filename,
+                success=result.success,
+                summary=result.to_dict()
+            )
+            await websocket.send(complete_msg.to_json())
+            
+        except Exception as e:
+            logger.error(f"Extraction pipeline failed for {filename}: {e}")
+            complete_msg = create_extraction_complete_message(
+                document_id=doc_id,
+                filename=filename,
+                success=False,
+                summary={"error": str(e)}
+            )
+            try:
+                await websocket.send(complete_msg.to_json())
+            except Exception:
+                pass
 
     async def _handle_calibrate_voice(
         self,
