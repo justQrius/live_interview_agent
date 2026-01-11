@@ -277,6 +277,10 @@ class SidecarServer:
                     if existing_profile:
                         logger.info(f"Loaded existing candidate profile ({len(existing_profile.profile_text)} chars)")
                         self.llm.set_candidate_profile(existing_profile.get_prompt_injection())
+                
+                # Phase 4C: Set LLM for Tier 3 Question Detection
+                self.question_detector.set_llm_provider(self.llm)
+                
             except Exception as e:
                 logger.warning(f"No LLM provider available: {e}")
                 self.llm = None
@@ -1226,7 +1230,7 @@ Based on the uploaded documents, here are the main topics to prepare:
         if speaker == Speaker.INTERVIEWER:
             # Phase 3: Question detection before answer generation
             if self.question_detection_enabled:
-                is_question, confidence, q_type = self.question_detector.is_actionable_question(
+                is_question, confidence, q_type = await self.question_detector.is_actionable_question(
                     text,
                     self.session_state.conversation_history
                 )
