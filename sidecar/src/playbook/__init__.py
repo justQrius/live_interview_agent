@@ -10,10 +10,13 @@ This module provides:
 Part of Phase 4: Interview Coach Evolution
 """
 
-from .question_generator import QuestionGenerator, PlaybookQuestion, QuestionCategory
+from .question_generator import QuestionGenerator, PlaybookQuestion, QuestionCategory, AnswerFramework
+from .answer_drafter import AnswerDrafter
 
 __all__ = [
     "QuestionGenerator",
     "PlaybookQuestion",
     "QuestionCategory",
+    "AnswerFramework",
+    "AnswerDrafter",
 ]
