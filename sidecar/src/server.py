@@ -16,7 +16,7 @@ import numpy as np
 import websockets
 from websockets.asyncio.server import serve, ServerConnection
 
-from .protocol import (
+from protocol import (
     Message,
     MessageType,
     SessionStatus,
@@ -38,29 +38,29 @@ from .protocol import (
     create_structure_suggestion_message,
     create_consistency_warning_message,
 )
-from .audio.diarization import SpeakerRecognizer
-from .audio.capture import AudioCapture, AudioCaptureError
-from .audio.vad import VADProcessor, SpeechSegment
-from .audio.noise_reduction import NoiseReducer
-from .providers.base import STTProvider, LLMProvider
-from .providers.factory import ProviderFactory
-from .providers.config import ProviderConfig
-from .context.manager import ContextManager
-from .rag.store import VectorStore
-from .rag.engine import RAGEngine
-from .rag.speculative import SpeculativeRetriever
-from .warmup import ModelWarmer
-from .classification.question_detector import QuestionDetector
-from .classification.query_reformulator import QueryReformulator
-from .classification.question_splitter import QuestionSplitter
-from .storage.session_store import SessionHistoryStore
-from .storage.exporter import SessionExporter, ExportFormat
-from .memory.store import MemoryStore
-from .memory.models import DocumentType
-from .extraction.pipeline import ExtractionPipeline
-from .coaching.story_recaller import StoryRecaller
-from .coaching.structure_suggester import StructureSuggester
-from .coaching.consistency_tracker import ConsistencyTracker
+from audio.diarization import SpeakerRecognizer
+from audio.capture import AudioCapture, AudioCaptureError
+from audio.vad import VADProcessor, SpeechSegment
+from audio.noise_reduction import NoiseReducer
+from providers.base import STTProvider, LLMProvider
+from providers.factory import ProviderFactory
+from providers.config import ProviderConfig
+from context.manager import ContextManager
+from rag.store import VectorStore
+from rag.engine import RAGEngine
+from rag.speculative import SpeculativeRetriever
+from warmup import ModelWarmer
+from classification.question_detector import QuestionDetector
+from classification.query_reformulator import QueryReformulator
+from classification.question_splitter import QuestionSplitter
+from storage.session_store import SessionHistoryStore
+from storage.exporter import SessionExporter, ExportFormat
+from memory.store import MemoryStore
+from memory.models import DocumentType
+from extraction.pipeline import ExtractionPipeline
+from coaching.story_recaller import StoryRecaller
+from coaching.structure_suggester import StructureSuggester
+from coaching.consistency_tracker import ConsistencyTracker
 from rag.speculative import SpeculativeRetriever
 
 # Configure logging

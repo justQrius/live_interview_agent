@@ -6,24 +6,24 @@ import os
 import json
 import asyncio
 
-# Add src to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+# Add sidecar to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
-from server import SidecarServer
-from protocol import Message, MessageType
+from src.server import SidecarServer
+from src.protocol import Message, MessageType
 
 @pytest.mark.asyncio
 class TestServerRagIntegration:
     @pytest.fixture
     def mock_vector_store(self):
-        with patch('server.VectorStore') as mock_cls:
+        with patch('src.server.VectorStore') as mock_cls:
             instance = MagicMock()
             mock_cls.return_value = instance
             yield instance
 
     @pytest.fixture
     def mock_context_manager(self):
-        with patch('server.ContextManager') as mock_cls:
+        with patch('src.server.ContextManager') as mock_cls:
             instance = MagicMock()
             # Setup process_file to return some chunks count (default)
             instance.process_file = AsyncMock(return_value=2)
@@ -40,10 +40,10 @@ class TestServerRagIntegration:
     @pytest_asyncio.fixture
     async def server(self):
         # We need to mock Audio things to prevent server startup failure or errors
-        with patch('server.SpeakerRecognizer'), \
-             patch('server.GeminiSTTProvider'), \
-             patch('server.VADProcessor'), \
-             patch('server.AudioCapture'):
+        with patch('src.server.SpeakerRecognizer'), \
+             patch('src.server.GeminiSTTProvider'), \
+             patch('src.server.VADProcessor'), \
+             patch('src.server.AudioCapture'):
             s = SidecarServer()
             yield s
             # Cleaning up any running tasks if necessary, though stop() is not awaited in existing code?
@@ -63,7 +63,7 @@ class TestServerRagIntegration:
             await server._handle_start_session(websocket, message)
             
             # Check VectorStore initialized with API key
-            from server import VectorStore as VSClass
+            from src.server import VectorStore as VSClass
             VSClass.assert_called_with(api_key="test-key")
             
             # Check server holds reference

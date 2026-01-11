@@ -1,12 +1,16 @@
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
 import sys
+import os
 
 # Mock deepgram module before importing the provider
 sys.modules['deepgram'] = MagicMock()
 
-from sidecar.src.providers.stt.deepgram import DeepgramSTTProvider
-from sidecar.src.providers.base import TranscriptionResult
+# Add sidecar/src to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+from providers.stt.deepgram import DeepgramSTTProvider
+from providers.base import TranscriptionResult
 
 class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
     
