@@ -41,6 +41,8 @@ class OpenAILLMProvider(LLMProvider):
             api_key: OpenAI API key
             model: Model to use (default: gpt-4o)
         """
+        super().__init__()
+        
         if not api_key:
             raise ValueError("API key is required for OpenAI provider")
             
@@ -111,10 +113,11 @@ class OpenAILLMProvider(LLMProvider):
         Returns:
             List of message dictionaries for OpenAI API
         """
-        # Build dynamic system prompt based on question type
-        system_content, question_type = build_system_prompt(prompt)
+        system_content, question_type = build_system_prompt(
+            prompt,
+            candidate_profile=self._candidate_profile or ""
+        )
         
-        # Format context based on question type
         formatted_context = format_context_for_prompt(context, question_type)
         
         messages: List[Dict[str, str]] = [

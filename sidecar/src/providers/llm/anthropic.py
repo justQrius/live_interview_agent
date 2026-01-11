@@ -79,6 +79,8 @@ class AnthropicLLMProvider(LLMProvider):
             api_key: Anthropic API key
             model: Model to use (default: claude-3-5-sonnet-20240620)
         """
+        super().__init__()
+        
         if AsyncAnthropic is None:
             raise ImportError(
                 "anthropic package is not installed. "
@@ -108,13 +110,13 @@ class AnthropicLLMProvider(LLMProvider):
         Yields:
             String chunks of the response
         """
-        # Build dynamic system prompt based on question type
-        system_content, question_type = build_system_prompt(prompt)
+        system_content, question_type = build_system_prompt(
+            prompt,
+            candidate_profile=self._candidate_profile or ""
+        )
         
-        # Format context based on question type
         formatted_context = format_context_for_prompt(context, question_type)
 
-        # Build messages with formatted context
         messages = _to_anthropic_messages(
             history=history, 
             prompt=prompt,

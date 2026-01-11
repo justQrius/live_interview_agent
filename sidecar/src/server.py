@@ -271,6 +271,12 @@ class SidecarServer:
             
             try:
                 self.llm = self.provider_factory.get_llm_provider()
+                # Phase 4: Load existing profile for context injection
+                if self.memory_store:
+                    existing_profile = self.memory_store.get_profile()
+                    if existing_profile:
+                        logger.info(f"Loaded existing candidate profile ({len(existing_profile.profile_text)} chars)")
+                        self.llm.set_candidate_profile(existing_profile.get_prompt_injection())
             except Exception as e:
                 logger.warning(f"No LLM provider available: {e}")
                 self.llm = None
@@ -495,6 +501,11 @@ class SidecarServer:
                 filename=filename,
                 progress_callback=progress_callback,
             )
+            
+            # Phase 4: Inject updated profile into LLM if available
+            if result.profile and self.llm:
+                logger.info(f"Injecting updated candidate profile ({len(result.profile.profile_text)} chars)")
+                self.llm.set_candidate_profile(result.profile.get_prompt_injection())
             
             complete_msg = create_extraction_complete_message(
                 document_id=doc_id,
