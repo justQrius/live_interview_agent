@@ -34,6 +34,7 @@ from .protocol import (
     create_extraction_progress_message,
     create_extraction_complete_message,
     create_interim_transcription_message,
+    create_story_suggestion_message,
 )
 from .audio.diarization import SpeakerRecognizer
 from .audio.capture import AudioCapture, AudioCaptureError
@@ -55,6 +56,7 @@ from .storage.exporter import SessionExporter, ExportFormat
 from .memory.store import MemoryStore
 from .memory.models import DocumentType
 from .extraction.pipeline import ExtractionPipeline
+from .coaching.story_recaller import StoryRecaller
 from rag.speculative import SpeculativeRetriever
 
 # Configure logging
@@ -116,6 +118,7 @@ class SidecarServer:
         self.vector_store: Optional[VectorStore] = None
         self.rag_engine: Optional[RAGEngine] = None
         self.speculative_retriever: Optional[SpeculativeRetriever] = None
+        self.story_recaller: Optional[StoryRecaller] = None
         
         self.model_warmer = ModelWarmer.get_instance()
         self.model_warmer.start_warming()
@@ -1109,6 +1112,12 @@ Based on the uploaded documents, here are the main topics to prepare:
             # Phase 4D: Initialize Speculative Retriever
             self.speculative_retriever = SpeculativeRetriever(self.rag_engine)
             
+            # Phase 4E: Initialize Story Recaller
+            if self.memory_store:
+                self.story_recaller = StoryRecaller(self.memory_store, self.vector_store)
+                # Warm up stories in background
+                asyncio.create_task(self.story_recaller.warm_up())
+            
             # Add pre-loaded context chunks
             pre_loaded_chunks = self.context_manager.get_all_chunks()
             if pre_loaded_chunks:
@@ -1322,6 +1331,27 @@ Based on the uploaded documents, here are the main topics to prepare:
             logger.warning(f"Speaker verification failed: {e}, defaulting to Interviewer")
             return Speaker.INTERVIEWER
 
+    async def _recall_and_suggest_story(self, question: str, q_type: str) -> None:
+        """Find and broadcast relevant story match."""
+        if not self.story_recaller:
+            return
+            
+        try:
+            match = await self.story_recaller.find_relevant_story(question, q_type)
+            if match:
+                msg = create_story_suggestion_message(
+                    story_id=match.story.id,
+                    title=match.story.title,
+                    situation=match.story.situation,
+                    relevance_score=match.relevance_score,
+                    suggested_opening=match.suggested_opening,
+                    key_metrics=match.key_metrics,
+                    tags=match.story.tags
+                )
+                await self.broadcast(msg)
+        except Exception as e:
+            logger.warning(f"Story recall failed: {e}")
+
     async def _process_question_pipeline(
         self,
         original_question: str,
@@ -1339,6 +1369,10 @@ Based on the uploaded documents, here are the main topics to prepare:
             start_time: Pipeline start time for latency tracking
         """
         import time
+        
+        # Phase 4E: Recall relevant stories (parallel)
+        if self.story_recaller and question_type in ("behavioral", "interview_question"):
+            asyncio.create_task(self._recall_and_suggest_story(original_question, question_type))
         
         # Step 1: Query Reformulation (expand follow-ups)
         reformulated_question = original_question
