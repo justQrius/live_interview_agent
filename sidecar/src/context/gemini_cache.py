@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+from src.providers.llm.prompts import MASTER_SYSTEM_PROMPT
+
 class GeminiCacheManager:
     """
     Manages Gemini Context Caching with atomic operations.
@@ -75,7 +77,7 @@ class GeminiCacheManager:
         self, 
         context_manager: EnhancedContextManager,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-flash-preview",
+        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
         system_instruction: Optional[str] = None,
         profile_text: Optional[str] = None
     ) -> str:
@@ -185,7 +187,7 @@ class GeminiCacheManager:
         self, 
         context_manager: EnhancedContextManager,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-flash-preview",
+        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
         system_instruction: Optional[str] = None
     ) -> str:
         """
@@ -203,7 +205,7 @@ class GeminiCacheManager:
         uploaded_files: List["UploadedFile"],
         document_manifest: str,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-flash-preview",
+        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
         profile_text: Optional[str] = None
     ) -> str:
         """
@@ -271,13 +273,16 @@ class GeminiCacheManager:
         logger.info(f"Creating cache from {len(uploaded_files)} files (version: {new_content_version})...")
         
         # Build system instruction with document manifest and profile
-        system_parts = []
+        # CRITICAL: Since we can't pass system_instruction during generation when using cache,
+        # we MUST include the MASTER_SYSTEM_PROMPT here in the cache configuration.
+        system_parts = [MASTER_SYSTEM_PROMPT]
+        
         if document_manifest:
             system_parts.append(document_manifest)
         if profile_text:
             system_parts.append(f"\n\n## CANDIDATE PROFILE (HIGH PRIORITY)\n{profile_text}")
         
-        effective_instruction = "\n".join(system_parts) if system_parts else None
+        effective_instruction = "\n\n".join(system_parts)
         
         try:
             # Create NEW cache with file objects
@@ -320,7 +325,7 @@ class GeminiCacheManager:
         uploaded_files: List["UploadedFile"],
         document_manifest: str,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-flash-preview",
+        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
         profile_text: Optional[str] = None
     ) -> str:
         """
