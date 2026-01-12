@@ -21,6 +21,7 @@ class MessageType(str, Enum):
     CALIBRATE_VOICE = "CALIBRATE_VOICE"
     MANUAL_QUESTION = "MANUAL_QUESTION"
     PREPARE_INTERVIEW = "PREPARE_INTERVIEW"  # Phase 3B: Request preparation summary
+    ENHANCE_ANSWER = "ENHANCE_ANSWER"  # Phase 5: Request answer enhancement
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
@@ -49,6 +50,11 @@ class MessageType(str, Enum):
     # Phase 4: Extraction Pipeline
     EXTRACTION_PROGRESS = "EXTRACTION_PROGRESS"  # Phase 4: Document extraction progress
     EXTRACTION_COMPLETE = "EXTRACTION_COMPLETE"  # Phase 4: Document extraction complete
+    
+    # Phase 5: Answer Enhancement
+    ENHANCED_ANSWER_START = "ENHANCED_ANSWER_START"  # Phase 5: Enhanced answer streaming start
+    ENHANCED_ANSWER_CHUNK = "ENHANCED_ANSWER_CHUNK"  # Phase 5: Enhanced answer chunk
+    ENHANCED_ANSWER_COMPLETE = "ENHANCED_ANSWER_COMPLETE"  # Phase 5: Enhancement done
 
 
 class SessionStatus(str, Enum):
@@ -73,6 +79,16 @@ class Speaker(str, Enum):
 
     USER = "User"
     INTERVIEWER = "Interviewer"
+
+
+class EnhancementType(str, Enum):
+    """Types of answer enhancement available."""
+    
+    ADD_DETAIL = "add_detail"  # Re-query RAG with higher limit, add more context
+    MAKE_SPECIFIC = "make_specific"  # Add metrics, examples, specifics
+    SUGGEST_STAR = "suggest_star"  # Link a relevant STAR story from memory
+    ADJUST_TONE = "adjust_tone"  # Rewrite with different tone
+    SHORTEN = "shorten"  # Compress to key points
 
 
 @dataclass
@@ -360,5 +376,49 @@ def create_extraction_complete_message(
             "filename": filename,
             "success": success,
             "summary": summary
+        }
+    )
+
+
+# Answer Enhancement Helper Functions
+
+def create_enhanced_answer_start_message(
+    enhancement_type: EnhancementType,
+    original_question: str
+) -> Message:
+    """Create an ENHANCED_ANSWER_START message."""
+    return Message(
+        type=MessageType.ENHANCED_ANSWER_START,
+        data={
+            "enhancementType": enhancement_type.value,
+            "originalQuestion": original_question
+        }
+    )
+
+
+def create_enhanced_answer_chunk_message(
+    chunk: str,
+    complete: bool = False
+) -> Message:
+    """Create an ENHANCED_ANSWER_CHUNK message."""
+    return Message(
+        type=MessageType.ENHANCED_ANSWER_CHUNK,
+        data={
+            "chunk": chunk,
+            "complete": complete
+        }
+    )
+
+
+def create_enhanced_answer_complete_message(
+    enhancement_type: EnhancementType,
+    success: bool = True
+) -> Message:
+    """Create an ENHANCED_ANSWER_COMPLETE message."""
+    return Message(
+        type=MessageType.ENHANCED_ANSWER_COMPLETE,
+        data={
+            "enhancementType": enhancement_type.value,
+            "success": success
         }
     )

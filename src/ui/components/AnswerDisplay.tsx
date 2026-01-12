@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSessionStore } from '../store/sessionStore';
+import EnhanceButton from './EnhanceButton';
 
 type CombinedHistoryItem =
   | {
@@ -23,6 +24,9 @@ const AnswerDisplay: React.FC = () => {
   const currentAnswer = useSessionStore((state) => state.currentAnswer);
   const transcriptionHistory = useSessionStore((state) => state.transcriptionHistory);
   const answerHistory = useSessionStore((state) => state.answerHistory);
+  const enhancement = useSessionStore((state) => state.enhancement);
+  const applyEnhancement = useSessionStore((state) => state.applyEnhancement);
+  const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -155,7 +159,10 @@ const AnswerDisplay: React.FC = () => {
         </div>
 
         <div className="p-4 bg-green-50 rounded-lg min-h-[300px]">
-          <h3 className="font-medium text-sm text-gray-600 mb-2">Answer:</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium text-sm text-gray-600">Answer:</h3>
+            <EnhanceButton disabled={!currentAnswer?.isComplete} />
+          </div>
           <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
             {currentAnswer?.answerText || 'AI-generated answer will stream here...'}
           </p>
@@ -164,6 +171,56 @@ const AnswerDisplay: React.FC = () => {
           )}
           <div ref={scrollRef} />
         </div>
+
+        {/* Enhanced Answer Panel - Shows when enhancement is in progress or complete */}
+        {(enhancement.isEnhancing || enhancement.enhancedText) && (
+          <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-sm text-blue-700 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Enhanced Answer
+                {enhancement.enhancementType && (
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
+                    {enhancement.enhancementType.replace('_', ' ')}
+                  </span>
+                )}
+              </h3>
+              {enhancement.isEnhancing && (
+                <span className="flex items-center gap-1 text-xs text-blue-500">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                  Generating...
+                </span>
+              )}
+            </div>
+            
+            <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
+              {enhancement.enhancedText || 'Generating enhanced answer...'}
+            </p>
+            {enhancement.isEnhancing && (
+              <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1" />
+            )}
+
+            {/* Action buttons when enhancement is complete */}
+            {!enhancement.isEnhancing && enhancement.enhancedText && (
+              <div className="flex gap-2 mt-4 pt-3 border-t border-blue-200">
+                <button
+                  onClick={applyEnhancement}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Use This Answer
+                </button>
+                <button
+                  onClick={cancelEnhancement}
+                  className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  Keep Original
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between text-sm mt-auto pt-4 border-t border-gray-100">
           <div className="flex items-center group relative cursor-help">

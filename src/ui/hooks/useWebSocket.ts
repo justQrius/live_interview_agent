@@ -36,7 +36,12 @@ export type MessageType =
   | 'STORY_SUGGESTION'
   | 'STRUCTURE_SUGGESTION'
   | 'CONSISTENCY_WARNING'
-  | 'INTERIM_TRANSCRIPTION';
+  | 'INTERIM_TRANSCRIPTION'
+  // Answer Enhancement (Phase 5)
+  | 'ENHANCE_ANSWER'
+  | 'ENHANCED_ANSWER_START'
+  | 'ENHANCED_ANSWER_CHUNK'
+  | 'ENHANCED_ANSWER_COMPLETE';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -216,6 +221,23 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       if (data.speaker === 'Interviewer') {
         store.setInterimTranscript(data.text);
       }
+      break;
+    }
+
+    // Enhancement messages (Phase 5)
+    case 'ENHANCED_ANSWER_START': {
+      // Enhancement already started via UI, this confirms server received
+      break;
+    }
+
+    case 'ENHANCED_ANSWER_CHUNK': {
+      const data = message.data as { chunk: string; complete: boolean };
+      store.appendEnhancedText(data.chunk);
+      break;
+    }
+
+    case 'ENHANCED_ANSWER_COMPLETE': {
+      store.completeEnhancement();
       break;
     }
 
