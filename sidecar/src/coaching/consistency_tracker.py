@@ -225,3 +225,58 @@ class ConsistencyTracker:
             return float(s) * multiplier
         except ValueError:
             return None
+    
+    def get_preflight_constraints(self) -> Dict[str, Any]:
+        """
+        Get all established claims for preflight injection into LLM prompts.
+        
+        This allows the LLM to see what facts have been established in prior
+        answers, enabling it to maintain consistency proactively.
+        
+        Returns:
+            Dict containing established claims grouped by type with summary.
+        """
+        if not self.session_id:
+            return {"claims": [], "summary": ""}
+        
+        existing_claims = self.store.get_claims(self.session_id)
+        if not existing_claims:
+            return {"claims": [], "summary": ""}
+        
+        # Group claims by type
+        by_type: Dict[str, List[str]] = {}
+        for claim in existing_claims:
+            claim_type = claim.get("claim_type", "unknown")
+            value = claim.get("value", "")
+            if claim_type not in by_type:
+                by_type[claim_type] = []
+            if value not in by_type[claim_type]:  # Dedupe
+                by_type[claim_type].append(value)
+        
+        # Build human-readable summary
+        summaries = []
+        type_labels = {
+            "experience_years": "Years of experience",
+            "team_size": "Team size",
+            "metric_percent": "Percentage metrics",
+            "metric_money": "Financial figures",
+            "metric_scale": "Scale metrics"
+        }
+        
+        for claim_type, values in by_type.items():
+            label = type_labels.get(claim_type, claim_type)
+            summaries.append(f"- {label}: {', '.join(values)}")
+        
+        summary_text = ""
+        if summaries:
+            summary_text = (
+                "CONSISTENCY REQUIREMENTS - You have previously stated:\n" +
+                "\n".join(summaries) +
+                "\n\nMaintain consistency with these established facts."
+            )
+        
+        return {
+            "claims": existing_claims,
+            "by_type": by_type,
+            "summary": summary_text
+        }

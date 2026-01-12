@@ -6,17 +6,23 @@ This module provides:
 - CRUD operations for documents, facts, stories, profiles
 - Session claim management for consistency tracking
 - Thread-safe concurrent access via connection pooling
+- Async wrappers for non-blocking access from async code
 """
 
+import asyncio
 import sqlite3
 import json
 import logging
 import threading
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable, TypeVar
 from contextlib import contextmanager
 from queue import Queue
+from functools import wraps
+
+# Type variable for generic async wrapper
+T = TypeVar('T')
 
 from .models import (
     ExtractedFacts,
@@ -115,6 +121,37 @@ CREATE INDEX IF NOT EXISTS idx_facts_document_id ON facts(document_id);
 CREATE INDEX IF NOT EXISTS idx_facts_type ON facts(fact_type);
 CREATE INDEX IF NOT EXISTS idx_stories_tags ON stories(tags);
 CREATE INDEX IF NOT EXISTS idx_claims_session ON session_claims(session_id);
+
+-- FTS5 virtual table for full-text story search (Phase 4.1 optimization)
+CREATE VIRTUAL TABLE IF NOT EXISTS stories_fts USING fts5(
+    id UNINDEXED,
+    title,
+    situation,
+    task,
+    action,
+    result,
+    tags,
+    content='stories',
+    content_rowid='rowid'
+);
+
+-- Triggers to keep FTS in sync with stories table
+CREATE TRIGGER IF NOT EXISTS stories_ai AFTER INSERT ON stories BEGIN
+    INSERT INTO stories_fts(rowid, id, title, situation, task, action, result, tags)
+    VALUES (NEW.rowid, NEW.id, NEW.title, NEW.situation, NEW.task, NEW.action, NEW.result, NEW.tags);
+END;
+
+CREATE TRIGGER IF NOT EXISTS stories_ad AFTER DELETE ON stories BEGIN
+    INSERT INTO stories_fts(stories_fts, rowid, id, title, situation, task, action, result, tags)
+    VALUES('delete', OLD.rowid, OLD.id, OLD.title, OLD.situation, OLD.task, OLD.action, OLD.result, OLD.tags);
+END;
+
+CREATE TRIGGER IF NOT EXISTS stories_au AFTER UPDATE ON stories BEGIN
+    INSERT INTO stories_fts(stories_fts, rowid, id, title, situation, task, action, result, tags)
+    VALUES('delete', OLD.rowid, OLD.id, OLD.title, OLD.situation, OLD.task, OLD.action, OLD.result, OLD.tags);
+    INSERT INTO stories_fts(rowid, id, title, situation, task, action, result, tags)
+    VALUES (NEW.rowid, NEW.id, NEW.title, NEW.situation, NEW.task, NEW.action, NEW.result, NEW.tags);
+END;
 """
 
 
@@ -510,6 +547,62 @@ class MemoryStore:
 
             return [self._row_to_story(row) for row in rows]
 
+    def search_stories_fts(self, query: str, limit: int = 10) -> List[STARStory]:
+        """
+        Full-text search for stories using FTS5.
+        
+        This is much faster than LIKE queries for text search.
+        Uses SQLite FTS5 with BM25 ranking.
+        
+        Args:
+            query: Search query (supports FTS5 syntax like "python OR java")
+            limit: Maximum number of results
+            
+        Returns:
+            List of matching stories, ranked by relevance
+        """
+        if not query or not query.strip():
+            return []
+            
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                # Use FTS5 MATCH with BM25 ranking
+                cursor.execute(
+                    """
+                    SELECT stories.* FROM stories
+                    JOIN stories_fts ON stories.id = stories_fts.id
+                    WHERE stories_fts MATCH ?
+                    ORDER BY bm25(stories_fts) 
+                    LIMIT ?
+                    """,
+                    (query, limit)
+                )
+                rows = cursor.fetchall()
+                return [self._row_to_story(row) for row in rows]
+            except sqlite3.OperationalError as e:
+                # FTS table might not exist (old database), fallback to LIKE
+                logger.warning(f"FTS5 search failed, falling back to LIKE: {e}")
+                return self._search_stories_fallback(query, limit)
+
+    def _search_stories_fallback(self, query: str, limit: int = 10) -> List[STARStory]:
+        """Fallback story search using LIKE when FTS5 is unavailable."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            pattern = f"%{query}%"
+            cursor.execute(
+                """
+                SELECT * FROM stories 
+                WHERE title LIKE ? OR situation LIKE ? OR task LIKE ? 
+                      OR action LIKE ? OR result LIKE ? OR tags LIKE ?
+                ORDER BY confidence DESC
+                LIMIT ?
+                """,
+                (pattern, pattern, pattern, pattern, pattern, pattern, limit)
+            )
+            rows = cursor.fetchall()
+            return [self._row_to_story(row) for row in rows]
+
     def delete_story(self, story_id: str) -> bool:
         """Delete a story by ID."""
         with self._get_connection() as conn:
@@ -767,3 +860,153 @@ class MemoryStore:
                 stats[table] = row["count"] if row else 0
 
             return stats
+
+
+class AsyncMemoryStore:
+    """
+    Async wrapper for MemoryStore.
+    
+    Provides non-blocking access to all MemoryStore operations by running
+    them in a thread pool via asyncio.to_thread(). This prevents blocking
+    the event loop in async WebSocket handlers.
+    
+    Usage:
+        async_store = AsyncMemoryStore(memory_store)
+        profile = await async_store.get_profile()
+    """
+    
+    def __init__(self, store: MemoryStore):
+        """
+        Initialize async wrapper.
+        
+        Args:
+            store: The underlying MemoryStore instance
+        """
+        self._store = store
+    
+    @property
+    def sync_store(self) -> MemoryStore:
+        """Access the underlying synchronous store."""
+        return self._store
+    
+    # ===================
+    # Document Operations
+    # ===================
+    
+    async def save_document_summary(self, summary: DocumentSummary) -> str:
+        """Save a document summary (async)."""
+        return await asyncio.to_thread(self._store.save_document_summary, summary)
+    
+    async def get_document_summary(self, document_id: str) -> Optional[DocumentSummary]:
+        """Get a document summary by ID (async)."""
+        return await asyncio.to_thread(self._store.get_document_summary, document_id)
+    
+    async def get_all_document_summaries(self) -> List[DocumentSummary]:
+        """Get all document summaries (async)."""
+        return await asyncio.to_thread(self._store.get_all_document_summaries)
+    
+    async def delete_document(self, document_id: str) -> bool:
+        """Delete a document and its associated facts (async)."""
+        return await asyncio.to_thread(self._store.delete_document, document_id)
+    
+    # ===================
+    # Facts Operations
+    # ===================
+    
+    async def save_facts(self, document_id: str, facts: ExtractedFacts) -> None:
+        """Save extracted facts for a document (async)."""
+        return await asyncio.to_thread(self._store.save_facts, document_id, facts)
+    
+    async def get_facts_for_document(self, document_id: str) -> Optional[ExtractedFacts]:
+        """Get extracted facts for a specific document (async)."""
+        return await asyncio.to_thread(self._store.get_facts_for_document, document_id)
+    
+    async def get_all_facts(self) -> ExtractedFacts:
+        """Get all facts merged from all documents (async)."""
+        return await asyncio.to_thread(self._store.get_all_facts)
+    
+    # ===================
+    # Story Operations
+    # ===================
+    
+    async def save_story(self, story: STARStory) -> str:
+        """Save a STAR story (async)."""
+        return await asyncio.to_thread(self._store.save_story, story)
+    
+    async def get_story(self, story_id: str) -> Optional[STARStory]:
+        """Get a story by ID (async)."""
+        return await asyncio.to_thread(self._store.get_story, story_id)
+    
+    async def get_all_stories(self) -> List[STARStory]:
+        """Get all STAR stories (async)."""
+        return await asyncio.to_thread(self._store.get_all_stories)
+    
+    async def get_stories_by_tag(self, tag: str) -> List[STARStory]:
+        """Get stories that have a specific tag (async)."""
+        return await asyncio.to_thread(self._store.get_stories_by_tag, tag)
+    
+    async def delete_story(self, story_id: str) -> bool:
+        """Delete a story by ID (async)."""
+        return await asyncio.to_thread(self._store.delete_story, story_id)
+    
+    # ===================
+    # Profile Operations
+    # ===================
+    
+    async def save_profile(self, profile: CandidateProfile) -> str:
+        """Save or update the candidate profile (async)."""
+        return await asyncio.to_thread(self._store.save_profile, profile)
+    
+    async def get_profile(self) -> Optional[CandidateProfile]:
+        """Get the current candidate profile (async)."""
+        return await asyncio.to_thread(self._store.get_profile)
+    
+    async def delete_profile(self) -> bool:
+        """Delete the candidate profile (async)."""
+        return await asyncio.to_thread(self._store.delete_profile)
+    
+    # ===================
+    # Session Claims
+    # ===================
+    
+    async def add_claim(
+        self,
+        session_id: str,
+        claim_text: str,
+        claim_value: str,
+        claim_type: ClaimType = ClaimType.OTHER,
+        context: str = ""
+    ) -> str:
+        """Log a claim made during an interview session (async)."""
+        return await asyncio.to_thread(
+            self._store.add_claim,
+            session_id, claim_text, claim_value, claim_type, context
+        )
+    
+    async def get_session_claims(self, session_id: str) -> List[SessionClaim]:
+        """Get all claims for a session (async)."""
+        return await asyncio.to_thread(self._store.get_session_claims, session_id)
+    
+    async def clear_session_claims(self, session_id: str) -> int:
+        """Clear all claims for a session (async)."""
+        return await asyncio.to_thread(self._store.clear_session_claims, session_id)
+    
+    async def get_claims_by_type(self, session_id: str, claim_type: ClaimType) -> List[SessionClaim]:
+        """Get claims of a specific type for a session (async)."""
+        return await asyncio.to_thread(self._store.get_claims_by_type, session_id, claim_type)
+    
+    # ===================
+    # Utility Methods
+    # ===================
+    
+    async def clear_all(self) -> None:
+        """Clear all data from the memory store (async)."""
+        return await asyncio.to_thread(self._store.clear_all)
+    
+    async def get_stats(self) -> Dict[str, int]:
+        """Get statistics about stored data (async)."""
+        return await asyncio.to_thread(self._store.get_stats)
+    
+    def close(self) -> None:
+        """Close all database connections."""
+        self._store.close()
