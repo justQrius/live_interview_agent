@@ -21,8 +21,8 @@ class TestNoiseReducerWithVAD:
     @pytest.mark.asyncio
     async def test_noise_reducer_processes_vad_output(self):
         """NoiseReducer should process speech segments from VAD."""
-        from audio.noise_reduction import NoiseReducer
-        from audio.vad import SpeechSegment
+        from src.audio.noise_reduction import NoiseReducer
+        from src.audio.vad import SpeechSegment
 
         reducer = NoiseReducer()
 
@@ -44,8 +44,8 @@ class TestNoiseReducerWithVAD:
     @pytest.mark.asyncio
     async def test_noise_reducer_with_multiple_segments(self):
         """NoiseReducer should handle multiple VAD segments."""
-        from audio.noise_reduction import NoiseReducer
-        from audio.vad import SpeechSegment
+        from src.audio.noise_reduction import NoiseReducer
+        from src.audio.vad import SpeechSegment
 
         reducer = NoiseReducer()
 
@@ -76,7 +76,7 @@ class TestNoiseReducerWithServerPipeline:
     @pytest.mark.asyncio
     async def test_server_can_use_noise_reducer(self):
         """Server should be able to integrate NoiseReducer into pipeline."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         # This test validates that NoiseReducer can be instantiated in server context
         reducer = NoiseReducer(enabled=True)
@@ -90,7 +90,7 @@ class TestNoiseReducerWithServerPipeline:
     @pytest.mark.asyncio
     async def test_server_can_disable_noise_reducer(self):
         """Server should be able to disable noise reduction via config."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         # Initialize with disabled mode (for users who don't want noise reduction)
         reducer = NoiseReducer(enabled=False)
@@ -110,7 +110,7 @@ class TestNoiseReducerLatencyInPipeline:
         """Pipeline with NoiseReducer should meet <5sec latency target."""
         import time
 
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -130,7 +130,7 @@ class TestNoiseReducerLatencyInPipeline:
         """Pipeline without NoiseReducer should have minimal overhead."""
         import time
 
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(enabled=False)
 
@@ -149,7 +149,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_default_config(self):
         """NoiseReducer should have sensible defaults for server use."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -163,7 +163,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_aggressive_config(self):
         """NoiseReducer should support aggressive mode for very noisy environments."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(prop_decrease=1.5, stationary=False)
 
@@ -172,7 +172,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_gentle_config(self):
         """NoiseReducer should support gentle mode to preserve voice characteristics."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(prop_decrease=0.5)
 
@@ -184,7 +184,7 @@ class TestNoiseReducerMemoryUsage:
 
     def test_noise_reducer_does_not_accumulate_memory(self):
         """NoiseReducer should not accumulate memory across calls."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -198,7 +198,7 @@ class TestNoiseReducerMemoryUsage:
 
     def test_disabled_reducer_has_minimal_memory_footprint(self):
         """Disabled NoiseReducer should have minimal memory usage."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(enabled=False)
 

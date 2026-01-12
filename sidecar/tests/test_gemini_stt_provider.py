@@ -11,14 +11,14 @@ import os
 # Add sidecar/src to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from providers.base import STTProvider, TranscriptionResult
-from providers.stt.gemini import GeminiSTTProvider, GeminiSTTProviderError
+from src.providers.base import STTProvider, TranscriptionResult
+from src.providers.stt.gemini import GeminiSTTProvider, GeminiSTTProviderError
 
 
 class TestGeminiSTTProviderInit:
     """Test GeminiSTTProvider initialization."""
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_init_success(self, mock_genai):
         """Test successful initialization."""
         provider = GeminiSTTProvider(api_key="test_key")
@@ -38,13 +38,13 @@ class TestGeminiSTTProviderInit:
         with pytest.raises(ValueError, match="API key is required"):
             GeminiSTTProvider(api_key=None)
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_implements_stt_provider(self, mock_genai):
         """Test that GeminiSTTProvider implements STTProvider interface."""
         provider = GeminiSTTProvider(api_key="test_key")
         assert isinstance(provider, STTProvider)
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_custom_model_name(self, mock_genai):
         """Test initialization with custom model name."""
         provider = GeminiSTTProvider(api_key="test_key", model_name="custom-model")
@@ -55,13 +55,13 @@ class TestGeminiSTTProviderInit:
 class TestGeminiSTTProviderAvailability:
     """Test is_available method."""
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_is_available_true(self, mock_genai):
         """Test is_available returns True when initialized properly."""
         provider = GeminiSTTProvider(api_key="test_key")
         assert provider.is_available() is True
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_is_available_false_after_error(self, mock_genai):
         """Test is_available returns False after initialization error."""
         mock_genai.GenerativeModel.side_effect = Exception("API Error")
@@ -75,7 +75,7 @@ class TestGeminiSTTProviderTranscribe:
 
     @pytest.fixture
     def mock_genai(self):
-        with patch("providers.stt.gemini.genai") as mock:
+        with patch("src.providers.stt.gemini.genai") as mock:
             yield mock
 
     @pytest.fixture
@@ -155,7 +155,7 @@ class TestGeminiSTTProviderTranscribe:
 class TestGeminiSTTProviderPCMToWAV:
     """Test PCM to WAV conversion."""
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_pcm_to_wav_creates_valid_wav(self, mock_genai):
         """Test that PCM to WAV conversion creates valid WAV header."""
         provider = GeminiSTTProvider(api_key="test_key")
@@ -172,7 +172,7 @@ class TestGeminiSTTProviderPCMToWAV:
         # Check fmt chunk
         assert wav_data[12:16] == b"fmt "
 
-    @patch("providers.stt.gemini.genai")
+    @patch("src.providers.stt.gemini.genai")
     def test_pcm_to_wav_preserves_data(self, mock_genai):
         """Test that PCM data is preserved in WAV."""
         provider = GeminiSTTProvider(api_key="test_key")
@@ -191,7 +191,7 @@ class TestGeminiSTTProviderBackwardsCompatibility:
 
     @pytest.fixture
     def mock_genai(self):
-        with patch("providers.stt.gemini.genai") as mock:
+        with patch("src.providers.stt.gemini.genai") as mock:
             yield mock
 
     @pytest.fixture

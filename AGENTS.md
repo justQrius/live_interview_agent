@@ -36,7 +36,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Run standalone (development)
-python src/server.py
+python -m src.server
 ```
 
 ### Run Tests

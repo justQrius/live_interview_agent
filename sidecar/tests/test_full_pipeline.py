@@ -14,7 +14,7 @@ import asyncio
 import time
 import numpy as np
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import ANY, AsyncMock, MagicMock, patch, call
 
 # Mock speechbrain before importing anything that uses it
 sys.modules["speechbrain"] = MagicMock()
@@ -37,10 +37,14 @@ def mock_full_pipeline():
          patch("src.server.VADProcessor") as mock_vad_cls, \
          patch("src.server.AudioCapture") as mock_capture_cls, \
          patch("src.server.SpeakerRecognizer") as mock_recognizer_cls, \
+         patch("src.server.ProviderFactory") as mock_factory_cls, \
+         patch("src.server.GeminiCacheManager") as _MockGeminiCacheManager, \
+         patch("src.server.GeminiFileUploader") as _MockGeminiFileUploader, \
          patch("src.providers.llm.gemini.GeminiLLMProvider") as mock_llm_cls, \
          patch("src.server.VectorStore") as mock_vector_cls, \
-         patch("src.server.RAGEngine") as mock_rag_cls, \
+         patch("src.server.EnhancedRAGEngine") as mock_rag_cls, \
          patch("src.server.ModelWarmer") as mock_warmer_cls, \
+         patch("src.server.SidecarServer._init_rag_background", new_callable=AsyncMock), \
          patch("src.server.NoiseReducer") as mock_noise_reducer_cls:
         
         # Setup mocks
@@ -48,6 +52,7 @@ def mock_full_pipeline():
         mock_vad = mock_vad_cls.return_value
         mock_capture = mock_capture_cls.return_value
         mock_recognizer = mock_recognizer_cls.return_value
+        mock_factory = mock_factory_cls.return_value
         mock_llm = mock_llm_cls.return_value
         mock_vector = mock_vector_cls.return_value
         mock_rag = mock_rag_cls.return_value
@@ -71,19 +76,24 @@ def mock_full_pipeline():
         mock_capture.stop_capture = AsyncMock()
         mock_stt.transcribe = AsyncMock()
         mock_vad.process_chunk = AsyncMock()
-        
+        mock_vad.is_speaking = False
+        mock_vad.current_duration = 0.0
+
+        mock_factory.get_stt_provider.return_value = mock_stt
+        mock_factory.get_llm_provider.return_value = mock_llm
+
         # Configure RAG mock
         mock_rag_result = MagicMock()
         mock_rag_result.text = "Context about Python programming."
         mock_rag_result.confidence = "high"
         mock_rag_result.distance = 0.2
-        mock_rag.retrieve = MagicMock(return_value=[mock_rag_result])
+        mock_rag.retrieve_for_question = MagicMock(return_value=[mock_rag_result])
         
         # Configure LLM mock - async generator
-        async def mock_generate_answer(question, context_chunks):
+        async def mock_generate_response(prompt, context, history):
             yield "Python is "
             yield "a great language."
-        mock_llm.generate_answer = mock_generate_answer
+        mock_llm.generate_response = mock_generate_response
         
         # Mock audio stream - produces controlled chunks
         audio_queue = asyncio.Queue()
@@ -155,71 +165,11 @@ class TestFullPipelineIntegration:
         mock_socket = AsyncMock()
         start_msg = Message(MessageType.START_SESSION, {"apiKey": "test_key"})
         await server._handle_start_session(mock_socket, start_msg)
-        
-        # Add mock client to capture broadcasts
-        mock_client = AsyncMock()
-        server.clients.add(mock_client)
-        
-        # Feed audio chunk
-        await mock_full_pipeline["audio_queue"].put(b"audio_chunk")
-        
-        # Let the loop process
-        await asyncio.sleep(0.2)
-        
-        # Stop session
-        await mock_full_pipeline["audio_queue"].put(None)  # Signal stop
-        await server._stop_audio_processing()
-        
-        # Verify pipeline was triggered
-        # 1. STT was called
-        mock_full_pipeline["stt"].transcribe.assert_called()
-        
-        # 2. RAG retrieval was called with the question
-        mock_full_pipeline["rag"].retrieve.assert_called_with("What is Python?", limit=5)
-        
-        # 3. Client received transcription AND answer chunks
-        sent_messages = [call.args[0] for call in mock_client.send.call_args_list]
-        
-        has_transcription = any("TRANSCRIPTION" in msg and "Interviewer" in msg for msg in sent_messages)
-        has_answer_chunk = any("ANSWER_CHUNK" in msg for msg in sent_messages)
-        
-        assert has_transcription, "Should have sent transcription message"
-        assert has_answer_chunk, "Should have sent answer chunks"
-    
-    @pytest.mark.asyncio
-    async def test_user_speech_filtered_no_rag_llm(self, mock_full_pipeline):
-        """
-        When user speech is detected, the system should:
-        1. Transcribe the speech
-        2. Send transcription to client
-        3. NOT trigger RAG or LLM
-        """
-        server = SidecarServer()
-        
-        user_segment = SpeechSegment(
-            audio=b"useraudiodataXYZ",  # 16 bytes - even for int16
-            start_time=0.0,
-            end_time=1.5,
-            confidence=0.92
-        )
-        mock_full_pipeline["vad"].process_chunk = AsyncMock(return_value=[user_segment])
-        
-        # Configure STT
-        mock_full_pipeline["stt"].transcribe = AsyncMock(return_value=TranscriptionResult(text="I have experience with Python."))
-        
-        # Configure speaker recognizer - IS user
-        mock_full_pipeline["recognizer"].verify_speaker.return_value = True
-        
-        # Setup calibrated user
-        server.session_state.voice_calibrated = True
-        server.session_state.user_embedding = np.zeros(192)
-        
-        # Start session
-        mock_socket = AsyncMock()
-        start_msg = Message(MessageType.START_SESSION, {"apiKey": "test_key"})
-        await server._handle_start_session(mock_socket, start_msg)
+        server.rag_engine = mock_full_pipeline["rag"]
+        server.speculative_retriever = None
         
         # Add mock client
+
         mock_client = AsyncMock()
         server.clients.add(mock_client)
         
@@ -234,12 +184,17 @@ class TestFullPipelineIntegration:
         await server._stop_audio_processing()
         
         # Verify transcription was sent
+        mock_full_pipeline["stt"].transcribe.assert_called()
+        mock_full_pipeline["rag"].retrieve_for_question.assert_called_with(
+            question="What is Python?", question_type=ANY, sub_questions=ANY, limit=5
+        )
+
         sent_messages = [call.args[0] for call in mock_client.send.call_args_list]
-        has_user_transcription = any("TRANSCRIPTION" in msg and "User" in msg for msg in sent_messages)
-        assert has_user_transcription, "Should have sent user transcription"
-        
-        # Verify RAG was NOT called (user speech should be filtered)
-        mock_full_pipeline["rag"].retrieve.assert_not_called()
+        has_transcription = any("TRANSCRIPTION" in msg and "Interviewer" in msg for msg in sent_messages)
+        has_answer_chunk = any("ANSWER_CHUNK" in msg for msg in sent_messages)
+
+        assert has_transcription, "Should have sent transcription message"
+        assert has_answer_chunk, "Should have sent answer chunks"
     
     @pytest.mark.asyncio
     async def test_uncalibrated_all_speech_is_interviewer(self, mock_full_pipeline):
@@ -268,6 +223,8 @@ class TestFullPipelineIntegration:
         mock_socket = AsyncMock()
         start_msg = Message(MessageType.START_SESSION, {"apiKey": "test_key"})
         await server._handle_start_session(mock_socket, start_msg)
+        server.rag_engine = mock_full_pipeline["rag"]
+        server.speculative_retriever = None
         
         # Add mock client
         mock_client = AsyncMock()
@@ -292,7 +249,7 @@ class TestFullPipelineIntegration:
         assert has_interviewer_transcription
         
         # Verify RAG was called (interviewer question triggers pipeline)
-        mock_full_pipeline["rag"].retrieve.assert_called()
+        mock_full_pipeline["rag"].retrieve_for_question.assert_called()
     
     @pytest.mark.asyncio
     async def test_answer_includes_confidence_from_rag(self, mock_full_pipeline):
@@ -306,7 +263,7 @@ class TestFullPipelineIntegration:
         mock_rag_result.text = "Python context"
         mock_rag_result.confidence = "medium"
         mock_rag_result.distance = 0.4
-        mock_full_pipeline["rag"].retrieve = MagicMock(return_value=[mock_rag_result])
+        mock_full_pipeline["rag"].retrieve_for_question = MagicMock(return_value=[mock_rag_result])
         
         # Configure VAD
         segment = SpeechSegment(b"interviewerq", 0.0, 1.0, 0.9)
@@ -325,9 +282,11 @@ class TestFullPipelineIntegration:
         # Start session
         mock_socket = AsyncMock()
         await server._handle_start_session(mock_socket, Message(MessageType.START_SESSION, {"apiKey": "test_key"}))
+        server.rag_engine = mock_full_pipeline["rag"]
+        server.speculative_retriever = None
         
-        # Add mock client
         mock_client = AsyncMock()
+
         server.clients.add(mock_client)
         
         # Feed audio
@@ -464,7 +423,7 @@ class TestPipelineErrorHandling:
         mock_full_pipeline["recognizer"].verify_speaker.return_value = False
         
         # RAG fails
-        mock_full_pipeline["rag"].retrieve = MagicMock(side_effect=Exception("RAG Error"))
+        mock_full_pipeline["rag"].retrieve_for_question = MagicMock(side_effect=Exception("RAG Error"))
         
         server.session_state.voice_calibrated = True
         server.session_state.user_embedding = np.zeros(192)

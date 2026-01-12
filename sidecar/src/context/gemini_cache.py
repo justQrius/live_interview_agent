@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 import datetime
 
 from src.providers.gemini_client import GeminiClient
-from src.context.enhanced_manager import EnhancedContextManager
+from .enhanced_manager import EnhancedContextManager
 
 logger = logging.getLogger(__name__)
 

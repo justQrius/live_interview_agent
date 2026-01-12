@@ -64,7 +64,7 @@ In development, you need to run both the Tauri frontend/backend and the Python s
     ```bash
     cd sidecar
     # Activate virtual environment first (see installation steps above)
-    python src/server.py
+    python -m src.server
     ```
 
 2. **Start the Tauri App**:

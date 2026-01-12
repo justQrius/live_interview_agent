@@ -6,20 +6,20 @@ import os
 # Add sidecar/src to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from providers.base import STTProvider, TranscriptionResult
+from src.providers.base import STTProvider, TranscriptionResult
 # This import will fail until I create the file, but that's part of the process
 try:
-    from providers.stt.groq import GroqSTTProvider
+    from src.providers.stt.groq import GroqSTTProvider
 except ImportError:
     pass
 
 class TestGroqSTTProviderInit:
     """Test GroqSTTProvider initialization."""
 
-    @patch("providers.stt.groq.Groq")
+    @patch("src.providers.stt.groq.Groq")
     def test_init_success(self, mock_groq):
         """Test successful initialization."""
-        from providers.stt.groq import GroqSTTProvider
+        from src.providers.stt.groq import GroqSTTProvider
         provider = GroqSTTProvider(api_key="test_key")
 
         mock_groq.assert_called_once_with(api_key="test_key")
@@ -28,7 +28,7 @@ class TestGroqSTTProviderInit:
 
     def test_init_requires_api_key(self):
         """Test that API key is required."""
-        from providers.stt.groq import GroqSTTProvider
+        from src.providers.stt.groq import GroqSTTProvider
         with pytest.raises(ValueError, match="API key is required"):
             GroqSTTProvider(api_key="")
 
@@ -37,14 +37,14 @@ class TestGroqSTTProviderTranscribe:
 
     @pytest.fixture
     def mock_groq_client(self):
-        with patch("providers.stt.groq.Groq") as mock_class:
+        with patch("src.providers.stt.groq.Groq") as mock_class:
             mock_client = MagicMock()
             mock_class.return_value = mock_client
             yield mock_client
 
     @pytest.fixture
     def provider(self, mock_groq_client):
-        from providers.stt.groq import GroqSTTProvider
+        from src.providers.stt.groq import GroqSTTProvider
         return GroqSTTProvider(api_key="test_key")
 
     @pytest.mark.asyncio

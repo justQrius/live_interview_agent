@@ -16,7 +16,7 @@ from typing import Union
 import numpy as np
 
 # Import SAMPLE_RATE from capture module (single source of truth)
-from audio.capture import SAMPLE_RATE
+from src.audio.capture import SAMPLE_RATE
 
 # Configure logging
 logger = logging.getLogger(__name__)

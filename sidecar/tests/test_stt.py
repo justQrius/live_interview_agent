@@ -1,10 +1,12 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-import sys
 import os
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Add sidecar/src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from stt.gemini_stt import GeminiSTT, GeminiSTTError
 

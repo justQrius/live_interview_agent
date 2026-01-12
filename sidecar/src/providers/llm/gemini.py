@@ -9,9 +9,9 @@ import asyncio
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 
-from src.providers.gemini_client import GeminiClient
-from src.providers.base import LLMProvider
-from src.providers.llm.prompts import build_system_prompt, format_context_for_prompt
+from ..gemini_client import GeminiClient
+from ..base import LLMProvider
+from .prompts import build_system_prompt, format_context_for_prompt
 
 logger = logging.getLogger(__name__)
 

@@ -29,7 +29,7 @@ class TestModelWarmer(unittest.TestCase):
         import warmup
         warmer = warmup.ModelWarmer.get_instance()
         
-        with patch('warmup.threading.Thread') as mock_thread:
+        with patch('src.warmup.threading.Thread') as mock_thread:
             warmer.start_warming()
             
             mock_thread.assert_called_once()

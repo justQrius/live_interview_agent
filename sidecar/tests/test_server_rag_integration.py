@@ -16,14 +16,14 @@ from src.protocol import Message, MessageType
 class TestServerRagIntegration:
     @pytest.fixture
     def mock_vector_store(self):
-        with patch('src.server.VectorStore') as mock_cls:
+        with patch("src.server.VectorStore") as mock_cls:
             instance = MagicMock()
             mock_cls.return_value = instance
             yield instance
 
     @pytest.fixture
     def mock_context_manager(self):
-        with patch('src.server.ContextManager') as mock_cls:
+        with patch("src.server.ContextManager") as mock_cls:
             instance = MagicMock()
             # Setup process_file to return some chunks count (default)
             instance.process_file = AsyncMock(return_value=2)
@@ -40,14 +40,9 @@ class TestServerRagIntegration:
     @pytest_asyncio.fixture
     async def server(self):
         # We need to mock Audio things to prevent server startup failure or errors
-        with patch('src.server.SpeakerRecognizer'), \
-             patch('src.server.GeminiSTTProvider'), \
-             patch('src.server.VADProcessor'), \
-             patch('src.server.AudioCapture'):
+        with patch("src.server.SpeakerRecognizer"),              patch("src.server.GeminiSTTProvider"),              patch("src.server.VADProcessor"),              patch("src.server.AudioCapture"),              patch("src.server.ModelWarmer"):
             s = SidecarServer()
             yield s
-            # Cleaning up any running tasks if necessary, though stop() is not awaited in existing code?
-            # Looking at SidecarServer.stop(), it is async.
             await s.stop()
 
     async def test_start_session_initializes_vector_store(self, server, mock_vector_store):
@@ -58,16 +53,13 @@ class TestServerRagIntegration:
             data={"apiKey": "test-key"}
         )
         
-        # Patch _start_audio_processing to avoid side effects
-        with patch.object(server, '_start_audio_processing', new_callable=AsyncMock):
+        # Patch _start_audio_processing and _init_rag_background to avoid side effects
+        with patch.object(server, "_start_audio_processing", new_callable=AsyncMock),              patch.object(server, "_init_rag_background", new_callable=AsyncMock) as mock_init_rag:
             await server._handle_start_session(websocket, message)
             
-            # Check VectorStore initialized with API key
-            from src.server import VectorStore as VSClass
-            VSClass.assert_called_with(api_key="test-key")
-            
-            # Check server holds reference
-            assert server.vector_store == mock_vector_store
+            # Verify RAG initialization was scheduled
+            mock_init_rag.assert_called_with("test-key")
+
 
     async def test_stop_session_clears_vector_store(self, server, mock_vector_store):
         websocket = AsyncMock()
