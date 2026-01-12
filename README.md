@@ -4,19 +4,37 @@ A cross-platform desktop application that provides real-time AI assistance durin
 
 ## Key Features
 
-- **Multi-Provider Support**: Choose from **Groq** (ultra-fast), **Deepgram**, or **OpenAI** for STT, and **OpenAI** or **Anthropic** for LLM reasoning.
-- **Intelligent Question Detection**: Real-time classification of interview questions (behavioral, technical, etc.) with <10ms latency.
-- **Conversational Intelligence**: Advanced query reformulation and question splitting for complex, multi-part, or follow-up interview questions.
-- **Enhanced Context Preparation**: Multi-document support (Resume, JD, Company Info) with automated pre-interview briefing and STAR story generation.
-- **Low-Latency Architecture**:
-  - **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.
-  - **Model Pre-warming**: ML models load at app startup for <1s session starts.
-  - **Intelligence Pipeline**: Optimized classification and reformulation with <15ms combined overhead.
-  - **Parallel Processing**: Audio pipeline optimized for <1.5s end-to-end latency.
+### Core Capabilities
+- **Multi-Provider Support**: Choose from **Groq** (ultra-fast), **Deepgram**, or **Gemini** for STT, and **OpenAI**, **Anthropic**, or **Gemini** for LLM reasoning.
 - **Real-time Audio Capture & Transcription**: High-accuracy speech recognition with speaker diarization.
 - **Context-Aware Assistance**: RAG-powered answers grounded in your resume and job description.
 - **Stealth Mode**: Invisible during screen shares.
 - **Cross-Platform**: Windows, macOS, and Linux support.
+
+### Intelligence Pipeline (Phase 3)
+- **Intelligent Question Detection**: Multi-tier classification of interview questions (behavioral, technical, etc.) with <10ms latency.
+- **Conversational Intelligence**: Advanced query reformulation and question splitting for complex, multi-part, or follow-up questions.
+- **Session History**: Persistent session storage with export capabilities (Markdown, JSON, TXT).
+
+### Interview Coach (Phase 4)
+- **Persistent Memory**: The AI "learns" your background from documents and maintains understanding across all answers.
+- **STAR Story Bank**: Automatic extraction of 8-12 achievement stories from your resume in STAR format.
+- **Real-time Story Recall**: When behavioral questions are detected, relevant stories surface within 1 second.
+- **Answer Structure Hints**: Suggests optimal frameworks (STAR, PREP, Pyramid) based on question type.
+- **Consistency Tracking**: Prevents contradictions between answers during the interview.
+- **Document Extraction Pipeline**: Automatic extraction of skills, timeline, achievements, and metrics from uploaded documents.
+
+### Gemini Integration (Phase 5)
+- **Context Caching**: Reduced latency and cost through Gemini context caching for long sessions.
+- **Answer Enhancement**: On-demand answer refinement (add detail, make specific, suggest STAR, adjust tone, shorten).
+- **Enhanced RAG**: Hierarchical chunking with child-to-parent expansion for richer context.
+- **Google Search Grounding**: Real-time web search for company news, interviewer research, and industry trends.
+
+### Low-Latency Architecture
+- **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.
+- **Model Pre-warming**: ML models load at app startup for <1s session starts.
+- **Speculative Retrieval**: RAG queries begin before the interviewer finishes speaking.
+- **Parallel Processing**: Audio pipeline optimized for <1.5s end-to-end latency.
 
 ## Getting Started
 
@@ -49,7 +67,7 @@ A cross-platform desktop application that provides real-time AI assistance durin
     python -m venv venv
     
     # Activate virtual environment
-    # Windows: venv\Scripts\activate #source venv/Scripts/activate (if bash)
+    # Windows: venv\Scripts\activate
     # macOS/Linux: source venv/bin/activate
 
     pip install -r requirements.txt
@@ -82,11 +100,11 @@ npm run tauri build
 
 1.  Launch the app and click the **Settings** icon.
 2.  Enter API keys for your preferred providers:
-    -   **Groq**: Ultra-fast transcription (Recommended).
+    -   **Groq**: Ultra-fast transcription (Recommended for STT).
     -   **OpenAI**: GPT-4o for high-quality answers.
     -   **Anthropic**: Claude 3.5 Sonnet for complex reasoning.
     -   **Deepgram**: Alternative high-speed STT.
-    -   **Gemini**: Fallback provider.
+    -   **Gemini**: Full-stack provider (STT, LLM, Embeddings, Caching).
 3.  Select your preferred **STT** and **LLM** providers from the dropdowns.
 4.  Keys are stored securely in your OS keychain.
 
@@ -109,7 +127,7 @@ graph TB
             Deepgram[Deepgram STT]
             OpenAI[OpenAI STT/LLM]
             Anthropic[Anthropic LLM]
-            Gemini[Gemini STT/LLM]
+            Gemini[Gemini STT/LLM/Cache]
         end
         
         Models[Pre-warmed Models<br/>(VAD/Diarization)]
@@ -120,7 +138,19 @@ graph TB
             Splitter[Question Splitter]
         end
         
-        RAG[RAG Engine]
+        subgraph "Memory & Extraction"
+            Memory[Memory Store]
+            Extraction[Extraction Pipeline]
+            Profile[Candidate Profile]
+        end
+        
+        subgraph "Coaching Engine"
+            StoryRecall[Story Recaller]
+            Structure[Structure Suggester]
+            Consistency[Consistency Tracker]
+        end
+        
+        RAG[Enhanced RAG Engine]
     end
 
     UI --> BrowserVAD
@@ -132,16 +162,18 @@ graph TB
     Detector --> Reformulator
     Reformulator --> Splitter
     Splitter --> RAG
-    RAG --> Providers
+    RAG --> Memory
+    Memory --> StoryRecall
+    StoryRecall --> Providers
 ```
 
 ## Development
 
 ### Project Structure
 
-- **`src/`**: React frontend (UI, Hooks, VAD, Context UI).
+- **`src/`**: React frontend (UI, Hooks, VAD, Coaching UI).
 - **`src-tauri/`**: Rust backend (OS integration, Keyring).
-- **`sidecar/`**: Python engine (Audio processing, Classification, Providers, RAG).
+- **`sidecar/`**: Python engine (Audio, Classification, Providers, RAG, Memory, Coaching).
 - **`_prism/`**: SDLC documentation.
 
 ### Testing
@@ -150,6 +182,17 @@ graph TB
 - **Backend**: `cd src-tauri && cargo test`
 - **Sidecar**: `cd sidecar && pytest`
 - **E2E**: `cd sidecar && pytest tests/test_e2e_scenarios.py`
+- **Latency Benchmark**: `cd sidecar && python scripts/benchmark_latency.py`
+
+## Phase Status
+
+| Phase | Description | Stories | Status |
+|-------|-------------|---------|--------|
+| Phase 1 | MVP Foundation | 20/20 | ✅ Complete |
+| Phase 2 | Multi-Provider & Optimization | 13/13 | ✅ Complete |
+| Phase 3 | Intelligence Pipeline | 19/19 | ✅ Complete |
+| Phase 4 | Interview Coach Evolution | In Progress | 🟡 Implemented |
+| Phase 5 | Gemini Integration | In Progress | 🟡 Implemented |
 
 ## License
 

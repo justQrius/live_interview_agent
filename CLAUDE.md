@@ -2,9 +2,9 @@
 
 ## Quick Reference
 
-**Status**: Implementation Complete (Phase 1: 19/20, Phase 2: 13/13, Phase 3: 19/19)
-**Project**: AI-powered live interview agent that provides real-time contextual answers
-**Architecture**: `_prism/architecture/architecture-phase2.md`
+**Status**: Phase 1-3 Complete, Phase 4-5 Implemented
+**Project**: AI-powered live interview agent that provides real-time contextual answers and proactive coaching
+**Architecture**: `_prism/architecture/architecture-phase4.md`
 **Tasks**: `_prism/tasks.md`
 **SDLC Constitution**: [docs/SDLC_BEST_PRACTICES.md](docs/SDLC_BEST_PRACTICES.md)
 
@@ -100,7 +100,7 @@ DECISIONS: [Key choices made]
 | UI Framework | Tauri 1.5+ (Rust + WebView) | ~10MB bundle, native OS integration |
 | Frontend | React 18.3 + TypeScript 5.3 + Tailwind CSS | Vite for build |
 | State Management | Zustand 4.5+ | Lightweight store |
-| Python Sidecar | Python 3.11+ | Handles audio/ML/RAG |
+| Python Sidecar | Python 3.11+ | Handles audio/ML/RAG/Coaching |
 | IPC | WebSocket (localhost:8765) | JSON message protocol |
 | Audio Capture | WASAPI / Core Audio / PulseAudio | Platform-specific |
 | VAD | Silero VAD v4 / Browser VAD (ONNX) | Hybrid (Client + Server) |
@@ -109,29 +109,26 @@ DECISIONS: [Key choices made]
 | Embeddings | Gemini text-embedding-004 | 768-dim vectors |
 | Vector DB | ChromaDB 0.4.22+ | Local persistent storage |
 | Speaker Diarization | ECAPA-TDNN (speechbrain) | Voice embeddings |
+| Memory Store | SQLite | Persistent candidate profile |
 
 ## Architecture
 
-**Sidecar Pattern**: Tauri app handles UI and OS features, Python sidecar handles audio/ML processing.
+**Sidecar Pattern**: Tauri app handles UI and OS features, Python sidecar handles audio/ML/RAG/Coaching.
 
 ```
-┌─────────────────────┐    WebSocket    ┌─────────────────────┐
-│  Tauri (Rust + UI)  │◄───────────────►│   Python Sidecar    │
-│  - React frontend   │  localhost:8765 │  - Audio capture    │
-│  - Window manager   │                 │  - Silero VAD       │
-│  - Keyring (API key)│                 │  - Gemini STT/LLM   │
-└─────────────────────┘                 │  - ChromaDB RAG     │
-                                        └─────────────────────┘
+┌─────────────────────┐    WebSocket    ┌─────────────────────────────────────┐
+│  Tauri (Rust + UI)  │◄───────────────►│         Python Sidecar              │
+│  - React frontend   │  localhost:8765 │  - Audio capture & VAD              │
+│  - Window manager   │                 │  - Multi-provider STT/LLM           │
+│  - Keyring (API key)│                 │  - ChromaDB RAG + Enhanced Engine   │
+│  - Coaching UI      │                 │  - Memory Store (SQLite)            │
+└─────────────────────┘                 │  - Extraction Pipeline              │
+                                        │  - Coaching (Story/Structure/Cons.) │
+                                        │  - Gemini Cache & Search Grounding  │
+                                        └─────────────────────────────────────┘
 ```
 
-See `_prism/architecture/architecture-phase2.md` for full details.
-
-## Workflow
-
-1. `/prism-plan` - Define requirements → PRD ✓
-2. `/prism-solution` - Design architecture ✓
-3. `/prism-implement` - Build with TDD ✓
-4. `/prism-verify` - Test and document ✓ (Ready for Manual Verification)
+See `_prism/architecture/architecture-phase4.md` for full Phase 4 details.
 
 ## Project Structure
 
@@ -140,26 +137,60 @@ live_interview_agent/
 ├── src/                    # React UI (TypeScript)
 │   └── ui/
 │       ├── components/     # React components
+│       │   ├── AnswerDisplay.tsx
+│       │   ├── CoachingPanel.tsx       # Phase 4: Coaching hints container
+│       │   ├── ConsistencyPanel.tsx    # Phase 4: Claim tracking
+│       │   ├── StorySuggestionCard.tsx # Phase 4: STAR story recall
+│       │   ├── StructureHintCard.tsx   # Phase 4: Answer frameworks
+│       │   └── ...
 │       ├── store/          # Zustand state
-│       └── hooks/          # Custom hooks
+│       └── hooks/          # Custom hooks (useWebSocket, useVADFilter)
 ├── src-tauri/             # Tauri backend (Rust)
 │   └── src/
 │       ├── commands/       # Tauri IPC commands
 │       └── utils/          # Keyring, platform utils
 ├── sidecar/               # Python sidecar
 │   └── src/
-│       ├── audio/          # Capture, VAD, diarization
+│       ├── audio/          # Capture, VAD, diarization, noise reduction
 │       ├── classification/ # Question detection, reformulation, splitting
+│       ├── coaching/       # Phase 4: Story recall, structure, consistency
+│       ├── context/        # Document parsing, chunking, Gemini cache
+│       ├── extraction/     # Phase 4: Fact/story extraction pipeline
+│       ├── memory/         # Phase 4: Persistent candidate profile
+│       ├── playbook/       # Phase 4: Interview preparation generator
 │       ├── providers/      # STT/LLM Provider implementations
-│       ├── context/        # Document parsing, chunking, preparation
-│       ├── rag/            # ChromaDB + retrieval
+│       ├── rag/            # ChromaDB + enhanced retrieval engine
 │       ├── storage/        # Session and context persistence
 │       └── server.py       # WebSocket server
 └── _prism/                # SDLC artifacts
-    ├── planning/           # PRD
-    ├── architecture/       # Architecture docs
+    ├── planning/           # PRDs (phase1-4)
+    ├── architecture/       # Architecture docs (phase1-4)
     └── tasks.md            # Story tracking
 ```
+
+## Phase Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | MVP Foundation | ✅ Complete (20/20 stories) |
+| Phase 2 | Multi-Provider & Optimization | ✅ Complete (13/13 stories) |
+| Phase 3 | Intelligence Pipeline | ✅ Complete (19/19 stories) |
+| Phase 4 | Interview Coach Evolution | 🟡 Implemented |
+| Phase 5 | Gemini Integration | 🟡 Implemented |
+
+### Phase 4 Features (Interview Coach)
+- **Persistent Memory**: SQLite-backed candidate profile (~1000 tokens)
+- **Extraction Pipeline**: Summarize → Extract Facts → Extract Stories → Generate Profile
+- **STAR Story Bank**: 8-12 tagged stories from resume
+- **Story Recaller**: Embedding similarity matching (<1s latency)
+- **Structure Suggester**: STAR, PREP, Pyramid frameworks
+- **Consistency Tracker**: Claim logging and contradiction detection
+
+### Phase 5 Features (Gemini Integration)
+- **Context Caching**: 2-hour TTL cache for reduced latency
+- **Answer Enhancement**: 5 enhancement types (detail, specific, STAR, tone, shorten)
+- **Enhanced RAG**: Child-to-parent expansion, question-type awareness
+- **Google Search Grounding**: Real-time web research
 
 ## Conventions
 
@@ -177,13 +208,14 @@ live_interview_agent/
 ### Python (Sidecar)
 - Python 3.11+ with type hints
 - Async/await for WebSocket server
-- One module per concern (audio, stt, rag, llm)
+- One module per concern (audio, stt, rag, llm, coaching, memory)
 - pytest for testing
+- Use `src.` prefix for all imports (e.g., `from src.audio.vad import VADProcessor`)
 
 ### IPC Protocol
 - WebSocket on localhost:8765
 - JSON messages with `type` discriminator
-- Message types: `START_SESSION`, `STOP_SESSION`, `TRANSCRIPTION`, `ANSWER_CHUNK`, etc.
+- See AGENTS.md for complete message type reference
 
 ## Testing
 
@@ -192,7 +224,8 @@ live_interview_agent/
 | React UI | Vitest | `npm run test` |
 | Rust | cargo test | `cd src-tauri && cargo test` |
 | Python | pytest | `cd sidecar && pytest` |
-| E2E | Manual | 2-hour stability, screen invisibility |
+| E2E | pytest | `cd sidecar && pytest tests/test_e2e_scenarios.py` |
+| Latency | benchmark | `cd sidecar && python scripts/benchmark_latency.py` |
 
 ## Don't Do This
 
@@ -202,16 +235,26 @@ live_interview_agent/
 - **Don't skip voice calibration** - Diarization accuracy drops significantly
 - **Don't expose WebSocket to network** - localhost only (127.0.0.1)
 - **Don't store API keys in plaintext** - Use OS keychain via keyring crate
+- **Don't use `from audio.xxx` imports** - Always use `from src.audio.xxx`
 
 ## Key NFRs
 
 | Requirement | Target |
 |-------------|--------|
 | End-to-end latency | <1.5 seconds (P50) |
+| Story recall latency | <1 second |
 | RAM usage | <500MB |
 | CPU (idle) | <5% |
 | Session stability | 2 hours, zero crashes |
 | Setup time | <5 minutes |
+| Profile size | <1500 tokens |
+
+## Workflow
+
+1. `/prism-plan` - Define requirements → PRD ✓
+2. `/prism-solution` - Design architecture ✓
+3. `/prism-implement` - Build with TDD ✓
+4. `/prism-verify` - Test and document ✓
 
 ## Next Step
 
