@@ -205,9 +205,13 @@ class GeminiFileUploader:
                 for f in files:
                     lines.append(f"  - {f.filename}")
         
-        lines.append("\n\nIMPORTANT: When answering questions about 'you' or 'your experience', "
-                    "ONLY use information from the CANDIDATE'S RESUME. "
-                    "Never confuse interviewer background with candidate information.")
+        lines.append("\n\nIMPORTANT INSTRUCTIONS FOR CONTEXT USAGE:")
+        lines.append("1. **YOUR IDENTITY**: You are the candidate described in the 'CANDIDATE'S RESUME' above.")
+        lines.append("   - When answering 'Tell me about yourself' or 'What is your experience', use ONLY the Resume.")
+        lines.append("   - Do NOT attribute qualities/experience from the 'INTERVIEWER BACKGROUND' or 'JOB DESCRIPTION' to yourself.")
+        lines.append("2. **THE INTERVIEWER**: Information in 'INTERVIEWER BACKGROUND' refers to the person ASKING the questions.")
+        lines.append("   - Use this to build rapport or ask smart questions, but NEVER claim their experience as your own.")
+        lines.append("3. **THE COMPANY**: Use 'COMPANY INFORMATION' to show research and enthusiasm.")
         
         return "\n".join(lines)
 
