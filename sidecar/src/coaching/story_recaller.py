@@ -89,7 +89,7 @@ class StoryRecaller:
                     None, 
                     lambda t=text: self.vector_store.embed_query(t)
                 )
-                if embedding:
+                if embedding is not None and len(embedding) > 0:
                     self.story_embeddings[story.id] = embedding
             except Exception as e:
                 logger.error(f"Failed to embed story {story.id}: {e}")
@@ -133,7 +133,7 @@ class StoryRecaller:
             logger.error(f"Failed to embed question for story recall: {e}")
             return None
             
-        if not question_embedding:
+        if question_embedding is None or len(question_embedding) == 0:
             return None
             
         # Find best match
@@ -161,7 +161,9 @@ class StoryRecaller:
         
     def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Calculate cosine similarity."""
-        if not vec1 or not vec2:
+        if vec1 is None or vec2 is None:
+            return 0.0
+        if len(vec1) == 0 or len(vec2) == 0:
             return 0.0
             
         a = np.array(vec1)

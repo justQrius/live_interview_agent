@@ -107,8 +107,8 @@ class CareerEntry:
             role=data["role"],
             start_date=data["start_date"],
             end_date=data.get("end_date"),
-            highlights=data.get("highlights", []),
-            metrics=data.get("metrics", []),
+            highlights=data.get("highlights") or [],
+            metrics=data.get("metrics") or [],
             location=data.get("location"),
             is_current=data.get("is_current", False),
         )
@@ -136,9 +136,9 @@ class Achievement:
     def from_dict(cls, data: Dict[str, Any]) -> "Achievement":
         return cls(
             description=data["description"],
-            metrics=data.get("metrics", []),
-            context=data.get("context", ""),
-            tags=data.get("tags", []),
+            metrics=data.get("metrics") or [],
+            context=data.get("context") or "",
+            tags=data.get("tags") or [],
             impact_level=data.get("impact_level"),
         )
 
@@ -217,16 +217,16 @@ class ExtractedFacts:
             extracted_at = datetime.fromisoformat(extracted_at)
 
         return cls(
-            skills=[SkillEntry.from_dict(s) for s in data.get("skills", [])],
-            timeline=[CareerEntry.from_dict(t) for t in data.get("timeline", [])],
-            achievements=[Achievement.from_dict(a) for a in data.get("achievements", [])],
-            education=[Education.from_dict(e) for e in data.get("education", [])],
-            certifications=data.get("certifications", []),
-            total_experience_years=data.get("total_experience_years", 0),
-            current_role=data.get("current_role", ""),
-            current_company=data.get("current_company", ""),
-            industries=data.get("industries", []),
-            languages=data.get("languages", []),
+            skills=[SkillEntry.from_dict(s) for s in (data.get("skills") or [])],
+            timeline=[CareerEntry.from_dict(t) for t in (data.get("timeline") or [])],
+            achievements=[Achievement.from_dict(a) for a in (data.get("achievements") or [])],
+            education=[Education.from_dict(e) for e in (data.get("education") or [])],
+            certifications=data.get("certifications") or [],
+            total_experience_years=data.get("total_experience_years") or 0,
+            current_role=data.get("current_role") or "",
+            current_company=data.get("current_company") or "",
+            industries=data.get("industries") or [],
+            languages=data.get("languages") or [],
             document_id=data.get("document_id"),
             extracted_at=extracted_at,
         )
@@ -340,20 +340,20 @@ class STARStory:
             updated_at = datetime.fromisoformat(updated_at)
 
         return cls(
-            id=data.get("id", str(uuid.uuid4())),
-            title=data.get("title", ""),
-            situation=data.get("situation", ""),
-            task=data.get("task", ""),
-            action=data.get("action", ""),
-            result=data.get("result", ""),
-            metrics=data.get("metrics", []),
-            tags=data.get("tags", []),
-            source_company=data.get("source_company", ""),
-            source_role=data.get("source_role", ""),
-            opening_line=data.get("opening_line", ""),
-            twenty_second_version=data.get("twenty_second_version", ""),
-            full_version=data.get("full_version", ""),
-            confidence=data.get("confidence", 0.0),
+            id=data.get("id") or str(uuid.uuid4()),
+            title=data.get("title") or "",
+            situation=data.get("situation") or "",
+            task=data.get("task") or "",
+            action=data.get("action") or "",
+            result=data.get("result") or "",
+            metrics=data.get("metrics") or [],
+            tags=data.get("tags") or [],
+            source_company=data.get("source_company") or "",
+            source_role=data.get("source_role") or "",
+            opening_line=data.get("opening_line") or "",
+            twenty_second_version=data.get("twenty_second_version") or "",
+            full_version=data.get("full_version") or "",
+            confidence=data.get("confidence") or 0.0,
             created_at=created_at,
             updated_at=updated_at,
         )
@@ -419,18 +419,18 @@ class CandidateProfile:
             generated_at = datetime.fromisoformat(generated_at)
 
         return cls(
-            id=data.get("id", str(uuid.uuid4())),
-            profile_text=data.get("profile_text", ""),
-            current_role=data.get("current_role", ""),
-            total_experience_years=data.get("total_experience_years", 0),
-            core_skills=data.get("core_skills", []),
-            key_achievements=data.get("key_achievements", []),
-            target_role=data.get("target_role", ""),
-            target_company=data.get("target_company", ""),
-            strengths=data.get("strengths", []),
-            gaps=data.get("gaps", []),
+            id=data.get("id") or str(uuid.uuid4()),
+            profile_text=data.get("profile_text") or "",
+            current_role=data.get("current_role") or "",
+            total_experience_years=data.get("total_experience_years") or 0,
+            core_skills=data.get("core_skills") or [],
+            key_achievements=data.get("key_achievements") or [],
+            target_role=data.get("target_role") or "",
+            target_company=data.get("target_company") or "",
+            strengths=data.get("strengths") or [],
+            gaps=data.get("gaps") or [],
             generated_at=generated_at,
-            source_documents=data.get("source_documents", []),
+            source_documents=data.get("source_documents") or [],
         )
 
     @classmethod
@@ -563,12 +563,12 @@ class DocumentSummary:
                 doc_type = DocumentType.OTHER
 
         return cls(
-            document_id=data.get("document_id", str(uuid.uuid4())),
+            document_id=data.get("document_id") or str(uuid.uuid4()),
             document_type=doc_type,
-            filename=data.get("filename", ""),
-            document_summary=data.get("document_summary", ""),
-            section_summaries=data.get("section_summaries", {}),
-            key_points=data.get("key_points", []),
+            filename=data.get("filename") or "",
+            document_summary=data.get("document_summary") or "",
+            section_summaries=data.get("section_summaries") or {},
+            key_points=data.get("key_points") or [],
             uploaded_at=uploaded_at,
             generated_at=generated_at,
         )
@@ -624,19 +624,19 @@ class DraftedAnswer:
             created_at = datetime.fromisoformat(created_at)
 
         return cls(
-            id=data.get("id", str(uuid.uuid4())),
-            question_id=data.get("question_id", ""),
-            suggested_answer=data.get("suggested_answer", ""),
-            key_points=data.get("key_points", []),
-            opening_line=data.get("opening_line", ""),
+            id=data.get("id") or str(uuid.uuid4()),
+            question_id=data.get("question_id") or "",
+            suggested_answer=data.get("suggested_answer") or "",
+            key_points=data.get("key_points") or [],
+            opening_line=data.get("opening_line") or "",
             story_id=data.get("story_id"),
             story_title=data.get("story_title"),
-            framework_used=data.get("framework_used", "STAR"),
-            word_count=data.get("word_count", 0),
-            estimated_duration_seconds=data.get("estimated_duration_seconds", 0),
-            metrics_used=data.get("metrics_used", []),
-            grounded_in=data.get("grounded_in", []),
-            confidence=data.get("confidence", 0.0),
+            framework_used=data.get("framework_used") or "STAR",
+            word_count=data.get("word_count") or 0,
+            estimated_duration_seconds=data.get("estimated_duration_seconds") or 0,
+            metrics_used=data.get("metrics_used") or [],
+            grounded_in=data.get("grounded_in") or [],
+            confidence=data.get("confidence") or 0.0,
             created_at=created_at,
         )
 

@@ -5,6 +5,7 @@ Implements LLMProvider interface using Google's Gemini model
 for generating high-quality interview answers.
 """
 
+import asyncio
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 
@@ -14,6 +15,8 @@ from ..base import LLMProvider
 from .prompts import build_system_prompt, format_context_for_prompt
 
 logger = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT_SECONDS = 60
 
 
 class GeminiLLMProviderError(Exception):
@@ -166,7 +169,14 @@ class GeminiLLMProvider(LLMProvider):
                 raise GeminiLLMProviderError("Gemini model is not initialized")
 
             model = cast(Any, self._model)
-            response = await model.generate_content_async(full_prompt, stream=True)
+            try:
+                response = await asyncio.wait_for(
+                    model.generate_content_async(full_prompt, stream=True),
+                    timeout=REQUEST_TIMEOUT_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Gemini request timed out after {REQUEST_TIMEOUT_SECONDS}s")
+                raise GeminiLLMProviderError(f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s")
 
             async for chunk in response:
                 if chunk.text:

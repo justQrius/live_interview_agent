@@ -171,7 +171,9 @@ class SpeculativeRetriever:
 
     def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Calculate cosine similarity between two vectors."""
-        if not vec1 or not vec2:
+        if vec1 is None or vec2 is None:
+            return 0.0
+        if len(vec1) == 0 or len(vec2) == 0:
             return 0.0
         
         a = np.array(vec1)
