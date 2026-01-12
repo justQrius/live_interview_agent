@@ -71,7 +71,7 @@ class GeminiSearchProvider(LLMProvider):
         print("Sources:", response.sources)
     """
 
-    DEFAULT_MODEL = "gemini-2.5-flash"
+    DEFAULT_MODEL = "gemini-3-flash-preview"  # Centralized in config.py as GeminiModels.DEFAULT_SEARCH
     
     def __init__(self, api_key: str, model_name: Optional[str] = None):
         """
@@ -79,7 +79,7 @@ class GeminiSearchProvider(LLMProvider):
 
         Args:
             api_key: Google AI API key
-            model_name: Model to use (default: gemini-2.5-flash)
+            model_name: Model to use (default: gemini-3-flash-preview)
 
         Raises:
             ValueError: If API key is empty

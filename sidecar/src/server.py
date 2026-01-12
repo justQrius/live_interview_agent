@@ -71,7 +71,7 @@ from src.coaching.consistency_tracker import ConsistencyTracker
 
 # Phase 5: Gemini Features
 from src.context.gemini_cache import GeminiCacheManager
-from src.context.file_uploader import GeminiFileUploader
+from src.context.file_uploader import GeminiFileUploader, DocumentType as FileDocumentType
 from src.rag.gemini_embeddings import GeminiEmbeddingFunction
 from src.context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
 
@@ -334,6 +334,12 @@ class SidecarServer:
             
             try:
                 self.llm = self.provider_factory.get_llm_provider()
+                
+                # Phase 4: Set LLM for Extraction Pipeline
+                if self.extraction_pipeline:
+                    self.extraction_pipeline.set_llm_provider(self.llm)
+                    logger.info("Set LLM provider for Extraction Pipeline")
+
                 # Phase 4: Load existing profile for context injection
                 if self.memory_store:
                     existing_profile = self.memory_store.get_profile()
@@ -446,6 +452,29 @@ class SidecarServer:
         data = message.data or {}
         files = data.get("files", [])
 
+        # Feature: Auto-initialize providers if apiKeys present in upload message
+        if "apiKeys" in data and not self.llm:
+            try:
+                logger.info("Found API keys in upload message, initializing providers...")
+                config = ProviderConfig.from_dict(data)
+                self.provider_factory = ProviderFactory(config)
+                self.llm = self.provider_factory.get_llm_provider()
+                if self.extraction_pipeline:
+                    self.extraction_pipeline.set_llm_provider(self.llm)
+                
+                # Also init STT if needed (though less critical for upload)
+                if not self.stt:
+                    self.stt = self.provider_factory.get_stt_provider()
+                
+                # Init Gemini managers
+                if config.gemini_api_key and not self.gemini_cache_manager:
+                    self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
+                    self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
+                
+                logger.info("Providers initialized from upload message")
+            except Exception as e:
+                logger.warning(f"Failed to auto-init providers from upload: {e}")
+
         if not files:
             logger.warning("No files provided in context upload")
             error_msg = create_error_message(
@@ -493,9 +522,19 @@ class SidecarServer:
                     "interviewer_info": MemoryDocumentType.INTERVIEWER_INFO,
                 }
                 memory_doc_type = memory_doc_type_map.get(doc_type_str, MemoryDocumentType.OTHER)
+                
+                # Map for Gemini File Upload (FileDocumentType)
+                file_doc_type_map = {
+                    "resume": FileDocumentType.RESUME,
+                    "job_description": FileDocumentType.JOB_DESCRIPTION,
+                    "company_info": FileDocumentType.COMPANY_INFO,
+                    "interviewer_info": FileDocumentType.INTERVIEWER_INFO,
+                    "sample_qa": FileDocumentType.SAMPLE_QA,
+                }
+                file_doc_type = file_doc_type_map.get(doc_type_str, FileDocumentType.CUSTOM)
                     
                 try:
-                    # Process through context manager for RAG chunks
+                    # Process through context manager for RAG chunks (secondary)
                     # IMPORTANT: Pass document_type for proper filtering fix
                     new_chunks = await self.context_manager.process_file(filename, content, document_type=context_doc_type)
                     
@@ -506,6 +545,18 @@ class SidecarServer:
                             self.vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
                         except Exception as e:
                             logger.error(f"Failed to add chunks to vector store: {e}")
+                    
+                    # Phase 5 Cache-First: Upload raw file to Gemini File API
+                    if self.gemini_file_uploader:
+                        try:
+                            await self.gemini_file_uploader.upload_from_base64_async(
+                                content_b64=content,
+                                filename=filename,
+                                document_type=file_doc_type
+                            )
+                            logger.info(f"Uploaded {filename} to Gemini File API ({file_doc_type.value})")
+                        except Exception as e:
+                            logger.warning(f"Failed to upload {filename} to Gemini: {e}")
                     
                     total_chunks += len(new_chunks)
                     
@@ -550,23 +601,43 @@ class SidecarServer:
                 if errors:
                     logger.warning(f"Some files failed: {errors}")
                 
-                # Phase 5: Create/Update Gemini Context Cache if managers available
-                if self.gemini_cache_manager and self.llm:
-                    # Only if LLM supports caching (check for set_cached_content method)
+                # Phase 5 Cache-First: Create Gemini Cache from uploaded files
+                # This provides FULL document context with proper attribution
+                if self.gemini_cache_manager and self.gemini_file_uploader and self.llm:
                     if hasattr(self.llm, 'set_cached_content'):
-                        try:
-                            logger.info("Updating Gemini Context Cache...")
-                            cache_name = self.gemini_cache_manager.create_cache_from_context(
-                                self.context_manager,
-                                ttl_seconds=7200, # 2 hours
-                                model="gemini-3-pro-preview",
-                                system_instruction="You are an expert interview coach. Use the provided context (Resume, JD, Company Info) to answer questions accurately. Always prioritize the candidate's resume for personal questions."
-                            )
-                            if cache_name:
-                                self.llm.set_cached_content(cache_name)
-                                logger.info(f"LLM updated with cached context: {cache_name}")
-                        except Exception as e:
-                            logger.error(f"Failed to update Gemini cache: {e}")
+                        if self.gemini_file_uploader.has_files():
+                            try:
+                                logger.info("Creating Gemini Cache from uploaded files (Cache-First)...")
+                                uploaded_files = self.gemini_file_uploader.get_uploaded_files()
+                                document_manifest = self.gemini_file_uploader.get_document_manifest()
+                                
+                                cache_name = await self.gemini_cache_manager.create_cache_from_files_async(
+                                    uploaded_files=uploaded_files,
+                                    document_manifest=document_manifest,
+                                    ttl_seconds=7200,  # 2 hours
+                                    model="gemini-3-flash-preview",
+                                )
+                                if cache_name:
+                                    if hasattr(self.llm, 'set_cached_content'):
+                                        self.llm.set_cached_content(cache_name)
+                                        logger.info(f"LLM using file-based cache: {cache_name}")
+                                    logger.info(f"Document manifest:\n{document_manifest[:500]}...")
+                            except Exception as e:
+                                logger.error(f"Failed to create file-based cache: {e}")
+                                # Fallback to chunk-based cache
+                                logger.info("Falling back to chunk-based cache...")
+                                try:
+                                    cache_name = self.gemini_cache_manager.create_cache_from_context(
+                                        self.context_manager,
+                                        ttl_seconds=7200,
+                                        model="gemini-3-flash-preview",
+                                    )
+                                    if cache_name:
+                                        if hasattr(self.llm, 'set_cached_content'):
+                                            self.llm.set_cached_content(cache_name)
+                                            logger.info(f"LLM using fallback chunk cache: {cache_name}")
+                                except Exception as fallback_err:
+                                    logger.error(f"Fallback cache also failed: {fallback_err}")
         
         except Exception as e:
             logger.error(f"Context upload fatal error: {e}")
@@ -606,7 +677,33 @@ class SidecarServer:
             # Phase 4: Inject updated profile into LLM if available
             if result.profile and self.llm:
                 logger.info(f"Injecting updated candidate profile ({len(result.profile.profile_text)} chars)")
-                self.llm.set_candidate_profile(result.profile.get_prompt_injection())
+                profile_injection = result.profile.get_prompt_injection()
+                self.llm.set_candidate_profile(profile_injection)
+                
+                # Phase 5 Cache-First: Refresh Gemini cache with updated profile
+                if self.gemini_cache_manager:
+                    if self.gemini_cache_manager.needs_refresh(profile_injection):
+                        logger.info("Profile changed, refreshing Gemini cache...")
+                        try:
+                            # Prefer file-based cache if files are available
+                            if self.gemini_file_uploader and self.gemini_file_uploader.has_files():
+                                uploaded_files = self.gemini_file_uploader.get_uploaded_files()
+                                document_manifest = self.gemini_file_uploader.get_document_manifest()
+                                await self.gemini_cache_manager.create_cache_from_files_async(
+                                    uploaded_files=uploaded_files,
+                                    document_manifest=document_manifest,
+                                    profile_text=profile_injection
+                                )
+                                logger.info("Gemini file-based cache refreshed with updated profile")
+                            elif self.context_manager:
+                                # Fallback to chunk-based cache
+                                await self.gemini_cache_manager.create_cache_from_context_async(
+                                    context_manager=self.context_manager,
+                                    profile_text=profile_injection
+                                )
+                                logger.info("Gemini chunk-based cache refreshed with updated profile")
+                        except Exception as cache_err:
+                            logger.warning(f"Failed to refresh Gemini cache: {cache_err}")
             
             complete_msg = create_extraction_complete_message(
                 document_id=doc_id,
@@ -1905,9 +2002,24 @@ Provide a concise, punchy version that hits the key points quickly."""
             await self.broadcast(error_msg)
 
     def _retrieve_context(self, question: str) -> tuple[list[str], ConfidenceLevel]:
-        """Retrieve context chunks from RAG engine for the given question."""
+        """
+        Retrieve context chunks from RAG engine for the given question.
+        
+        Cache-First Architecture:
+        - If Gemini cache is available (file-based), skip RAG entirely
+        - Cache contains full documents with proper attribution
+        - RAG would be redundant and could cause context confusion
+        """
         context_chunks = []
         rag_confidence = ConfidenceLevel.LOW
+        
+        # Cache-First: Skip RAG if LLM has cached content
+        # The Gemini cache contains full documents, RAG chunks are redundant
+        if self.llm and hasattr(self.llm, '_cached_content_name'):
+            cached_content = getattr(self.llm, '_cached_content_name', None)
+            if cached_content:
+                logger.info("Cache-First: Skipping RAG retrieval (using Gemini file cache)")
+                return [], ConfidenceLevel.HIGH  # High confidence because cache has full docs
         
         if not self.rag_engine:
             return context_chunks, rag_confidence

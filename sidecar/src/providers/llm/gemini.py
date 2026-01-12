@@ -34,7 +34,7 @@ class GeminiLLMProvider(LLMProvider):
     - System Instructions
     """
 
-    DEFAULT_MODEL = "gemini-3-pro-preview"  # Updated to latest capable model as per user request
+    DEFAULT_MODEL = "gemini-3-pro-preview"  # Centralized in config.py as GeminiModels.DEFAULT_LLM
     
     def __init__(self, api_key: str, model_name: Optional[str] = None, thinking_budget: Optional[int] = None):
         """
@@ -81,6 +81,10 @@ class GeminiLLMProvider(LLMProvider):
         """
         Build prompt and system instruction.
         
+        Cache-First Architecture:
+        - When file-based cache is available, skip RAG context (cache has full docs)
+        - When no cache, include RAG context for grounding
+        
         Returns:
             Tuple of (full_prompt_content, system_instruction)
         """
@@ -89,19 +93,18 @@ class GeminiLLMProvider(LLMProvider):
             candidate_profile=self._candidate_profile or ""
         )
         
-        # If using cache, we might not need to include context in the prompt again
-        # But if the cache is the FULL raw documents, we might still want RAG chunks 
-        # for specific focus.
-        # However, the prompt says "Check if RAG filtering needed... Otherwise use full cached context".
-        
         parts = []
         
-        # If we have context chunks (from RAG) AND cached content (Full Docs),
-        # we can include RAG chunks as "Focus Area".
-        if context:
-             formatted_context = format_context_for_prompt(context, question_type)
-             if formatted_context:
-                 parts.append(f"Relevant Context:\n{formatted_context}")
+        # Cache-First: Only include RAG context if NO cache is set
+        # When cache is available, it contains full documents with proper attribution
+        # RAG chunks would be redundant and could cause confusion
+        if context and not self._cached_content_name:
+            formatted_context = format_context_for_prompt(context, question_type)
+            if formatted_context:
+                parts.append(f"Relevant Context:\n{formatted_context}")
+        elif self._cached_content_name:
+            # Cache is set - remind model to use cached documents
+            parts.append("(Use the uploaded documents in cache for context. Resume = YOUR background.)")
 
         if history:
             parts.append("\n## Conversation History:")
@@ -141,8 +144,10 @@ class GeminiLLMProvider(LLMProvider):
             
             loop = asyncio.get_running_loop()
             
+            client = self._client
+            
             def run_generate():
-                return self._client.generate_content(
+                return client.generate_content(
                     model=self._model_name,
                     contents=full_prompt,
                     cached_content_name=self._cached_content_name,

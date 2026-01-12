@@ -1,16 +1,18 @@
 """
 Gemini STT Provider.
 
-Implements STTProvider interface using Google's Gemini 1.5 Flash model
-for speech-to-text transcription.
+Implements STTProvider interface using Google's Gemini model
+for speech-to-text transcription via the unified google-genai SDK.
 """
 
 import io
 import logging
 import wave
-from typing import Any, Optional, cast
+import base64
+from typing import Any, Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from ..base import STTProvider, TranscriptionResult
 
@@ -34,6 +36,7 @@ class GeminiSTTProvider(STTProvider):
     Speech-to-Text provider using Google Gemini.
 
     Implements the STTProvider interface for the provider factory system.
+    Uses the unified google-genai SDK (consistent with GeminiClient).
 
     Usage:
         provider = GeminiSTTProvider(api_key="...")
@@ -61,13 +64,12 @@ class GeminiSTTProvider(STTProvider):
         self._api_key = api_key
         self._model_name = model_name or self.DEFAULT_MODEL
         self._available = False
-        self._model = None
+        self._client = None
 
         try:
-            genai_any = cast(Any, genai)
-            genai_any.configure(api_key=api_key)
-            self._model = genai_any.GenerativeModel(self._model_name)
+            self._client = genai.Client(api_key=api_key)
             self._available = True
+            logger.info(f"Initialized Gemini STT provider with model {self._model_name}")
         except Exception as e:
             raise GeminiSTTProviderError(f"Failed to initialize Gemini client: {e}")
 
@@ -133,19 +135,19 @@ class GeminiSTTProvider(STTProvider):
                 "Just the text."
             )
 
-            if not self._model:
-                raise GeminiSTTProviderError("Gemini model is not initialized")
+            if not self._client:
+                raise GeminiSTTProviderError("Gemini client is not initialized")
 
-            # Generate content asynchronously
-            model = cast(Any, self._model)
-            response = await model.generate_content_async(
-                [
-                    prompt,
-                    {
-                        "mime_type": "audio/wav",
-                        "data": wav_data,
-                    },
-                ]
+            # Create inline audio data part using google-genai SDK
+            audio_part = types.Part.from_bytes(
+                data=wav_data,
+                mime_type="audio/wav"
+            )
+
+            # Generate content using the unified SDK
+            response = self._client.models.generate_content(
+                model=self._model_name,
+                contents=[prompt, audio_part]
             )
 
             text = ""
