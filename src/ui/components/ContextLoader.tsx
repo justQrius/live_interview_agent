@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useSessionStore } from '../store/sessionStore';
 import DocumentTypeSelector, { detectDocumentType } from './DocumentTypeSelector';
@@ -75,9 +76,31 @@ const ContextLoader: React.FC = () => {
     }
 
     if (filesData.length > 0) {
+      // Fetch API keys to allow sidecar to auto-initialize extraction
+      const apiKeys: Record<string, string> = {};
+      const providers = ['gemini', 'groq', 'openai', 'anthropic', 'deepgram'];
+      
+      try {
+        await Promise.all(providers.map(async (provider) => {
+          try {
+            const key = await invoke<string>('get_api_key', { provider });
+            if (key) {
+              apiKeys[provider] = key;
+            }
+          } catch (e) {
+            // Ignore missing keys
+          }
+        }));
+      } catch (e) {
+        console.warn('Failed to fetch API keys for upload:', e);
+      }
+
       sendMessage({
         type: 'UPLOAD_CONTEXT',
-        data: { files: filesData }
+        data: { 
+          files: filesData,
+          apiKeys // Include keys so sidecar can extract metadata immediately
+        }
       });
     }
     setIsUploading(false);
