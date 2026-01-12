@@ -584,30 +584,33 @@ class SidecarServer:
                     
                     total_chunks += len(new_chunks)
                     
-                    # Phase 4: Run extraction pipeline in background
-                    if self.extraction_enabled and self.extraction_pipeline:
-                        import uuid
-                        doc_id = str(uuid.uuid4())
-                        
-                        async def extraction_progress(stage: str, progress: float, msg: str = ""):
-                            try:
-                                progress_msg = create_extraction_progress_message(
-                                    stage=stage,
-                                    progress=progress,
-                                    message=msg
-                                )
-                                await websocket.send(progress_msg.to_json())
-                            except Exception as e:
-                                logger.debug(f"Failed to send progress: {e}")
-                        
-                        # Set LLM provider for extraction if available
-                        if self.llm:
-                            self.extraction_pipeline.set_llm_provider(self.llm)
-                        
+                # Phase 4: Run extraction pipeline in background
+                # ONLY if we have an LLM (requires apiKeys). If not, we defer extraction.
+                if self.extraction_enabled and self.extraction_pipeline and self.llm:
+                    import uuid
+                    doc_id = str(uuid.uuid4())
+                    
+                    async def extraction_progress(stage: str, progress: float, msg: str = ""):
+                        try:
+                            progress_msg = create_extraction_progress_message(
+                                stage=stage,
+                                progress=progress,
+                                message=msg
+                            )
+                            await websocket.send(progress_msg.to_json())
+                        except Exception as e:
+                            logger.debug(f"Failed to send progress: {e}")
+                    
+                    # Set LLM provider for extraction if available
+                    if self.llm:
+                        self.extraction_pipeline.set_llm_provider(self.llm)
+                    
                         # Run extraction (non-blocking for UI responsiveness)
                         self._create_background_task(self._run_extraction(
                             websocket, doc_id, content, memory_doc_type, filename, extraction_progress
                         ))
+                    elif self.extraction_enabled and not self.llm:
+                        logger.warning(f"Skipping extraction for {filename} - No LLM provider available yet")
                     
                     processed_count += 1
                 except Exception as e:

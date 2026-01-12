@@ -76,12 +76,28 @@ class VectorStore:
         logger.info(f"Adding {len(chunks)} documents to vector store")
         
         try:
+            # Flatten metadata lists to strings for ChromaDB compatibility
+            # ChromaDB only supports str, int, float, bool in metadata values
+            processed_metadatas = []
+            if metadatas:
+                for meta in metadatas:
+                    processed_meta = {}
+                    for k, v in meta.items():
+                        if isinstance(v, list):
+                            # Join list items with comma
+                            processed_meta[k] = ", ".join(str(item) for item in v)
+                        else:
+                            processed_meta[k] = v
+                    processed_metadatas.append(processed_meta)
+            
             self.collection.add(
                 documents=chunks,
-                metadatas=metadatas,
+                metadatas=processed_metadatas,
                 ids=ids
             )
         except Exception as e:
+            logger.error(f"Failed to add documents to ChromaDB: {e}")
+            raise
             logger.error(f"Failed to add documents to ChromaDB: {e}")
             raise
 

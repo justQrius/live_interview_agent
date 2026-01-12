@@ -79,8 +79,8 @@ class DocumentSummarizer:
     plus extracting key points for interview preparation.
     """
     
-    # Maximum characters to send to LLM (roughly 4k tokens)
-    MAX_DOCUMENT_LENGTH = 15000
+    # Maximum characters to send to LLM (roughly 8k tokens - doubled for pro models)
+    MAX_DOCUMENT_LENGTH = 30000
     
     def __init__(
         self, 
