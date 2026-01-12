@@ -7,6 +7,8 @@ Wraps the google-genai SDK (v1.57+) to provide a simplified interface for:
 - Content Generation (with Thinking & System Instructions)
 - Embeddings
 - Web Search (Grounding)
+
+Includes built-in retry logic with exponential backoff for resilience.
 """
 
 import logging
@@ -18,6 +20,92 @@ from google import genai
 from google.genai import types
 
 logger = logging.getLogger(__name__)
+
+
+# Retry configuration constants
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_INITIAL_DELAY = 1.0  # seconds
+DEFAULT_MAX_DELAY = 60.0  # seconds
+DEFAULT_BACKOFF_MULTIPLIER = 2.0
+RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
+# Timeout configurations by operation type
+OPERATION_TIMEOUTS = {
+    "upload": 120,  # File uploads can be slow
+    "cache": 60,    # Cache creation
+    "generate": 30, # Content generation
+    "embed": 10,    # Embeddings
+}
+
+
+def _should_retry(exception: Exception) -> bool:
+    """Check if an exception is retryable."""
+    error_str = str(exception).lower()
+    
+    # Check for rate limiting or transient errors
+    if "429" in error_str or "rate" in error_str:
+        return True
+    if "503" in error_str or "unavailable" in error_str:
+        return True
+    if "500" in error_str or "internal" in error_str:
+        return True
+    if "timeout" in error_str:
+        return True
+    if "connection" in error_str:
+        return True
+    
+    return False
+
+
+def _retry_with_backoff(
+    operation_name: str,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    initial_delay: float = DEFAULT_INITIAL_DELAY,
+    max_delay: float = DEFAULT_MAX_DELAY,
+    backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER
+):
+    """
+    Decorator for retrying operations with exponential backoff.
+    
+    Args:
+        operation_name: Name of the operation for logging
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay between retries in seconds
+        max_delay: Maximum delay between retries
+        backoff_multiplier: Multiplier for exponential backoff
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    
+                    if attempt >= max_retries:
+                        logger.error(f"{operation_name} failed after {max_retries + 1} attempts: {e}")
+                        raise
+                    
+                    if not _should_retry(e):
+                        logger.error(f"{operation_name} failed with non-retryable error: {e}")
+                        raise
+                    
+                    logger.warning(
+                        f"{operation_name} attempt {attempt + 1} failed: {e}. "
+                        f"Retrying in {delay:.1f}s..."
+                    )
+                    time.sleep(delay)
+                    delay = min(delay * backoff_multiplier, max_delay)
+            
+            # Should not reach here, but just in case
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
+
 
 class GeminiClient:
     """
@@ -46,33 +134,36 @@ class GeminiClient:
         Returns:
             Uploaded File object
         """
-        try:
-            config = types.UploadFileConfig(mime_type=mime_type) if mime_type else None
-            file_obj = self.client.files.upload(path=file_path, config=config)
+        return self._upload_file_with_retry(file_path, mime_type)
+    
+    @_retry_with_backoff("file_upload", max_retries=3, initial_delay=2.0)
+    def _upload_file_with_retry(self, file_path: str, mime_type: Optional[str] = None) -> types.File:
+        """Internal file upload with retry logic."""
+        config = types.UploadFileConfig(mime_type=mime_type) if mime_type else None
+        file_obj = self.client.files.upload(path=file_path, config=config)
+        
+        logger.info(f"Uploaded file {file_path} as {file_obj.name} ({file_obj.mime_type})")
+        
+        # Wait for processing to complete for video/audio
+        if file_obj.state.name == "PROCESSING":
+            logger.info(f"Waiting for {file_obj.name} to process...")
+            max_wait = 120  # Maximum wait time in seconds
+            waited = 0
+            while file_obj.state.name == "PROCESSING" and waited < max_wait:
+                time.sleep(2)
+                waited += 2
+                file_obj = self.client.files.get(name=file_obj.name)
+        
+        if file_obj.state.name == "FAILED":
+            raise ValueError(f"File processing failed: {file_obj.error.message}")
             
-            logger.info(f"Uploaded file {file_path} as {file_obj.name} ({file_obj.mime_type})")
-            
-            # Wait for processing to complete for video/audio
-            if file_obj.state.name == "PROCESSING":
-                logger.info(f"Waiting for {file_obj.name} to process...")
-                while file_obj.state.name == "PROCESSING":
-                    time.sleep(2)
-                    file_obj = self.client.files.get(name=file_obj.name)
-            
-            if file_obj.state.name == "FAILED":
-                raise ValueError(f"File processing failed: {file_obj.error.message}")
-                
-            return file_obj
-            
-        except Exception as e:
-            logger.error(f"Failed to upload file {file_path}: {e}")
-            raise
+        return file_obj
 
     def create_cache(
         self,
         contents: List[Any],
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-pro-preview",
+        model: str = "gemini-3-flash-preview",
         system_instruction: Optional[str] = None
     ) -> types.CachedContent:
         """
@@ -81,30 +172,36 @@ class GeminiClient:
         Args:
             contents: List of contents (text strings, File objects, or Content objects)
             ttl_seconds: Time to live in seconds (default 2 hours)
-            model: Model to use (must support caching, e.g. gemini-3-pro-preview)
+            model: Model to use (must support caching)
             system_instruction: Optional system instruction to bake into cache
             
         Returns:
             CachedContent object
         """
-        try:
-            config = types.CreateCachedContentConfig(
-                contents=contents,
-                ttl=f"{ttl_seconds}s",
-                system_instruction=system_instruction
-            )
-            
-            cache = self.client.caches.create(
-                model=model,
-                config=config
-            )
-            
-            logger.info(f"Created context cache {cache.name} (exp: {cache.expire_time})")
-            return cache
-            
-        except Exception as e:
-            logger.error(f"Failed to create cache: {e}")
-            raise
+        return self._create_cache_with_retry(contents, ttl_seconds, model, system_instruction)
+    
+    @_retry_with_backoff("cache_creation", max_retries=3, initial_delay=2.0)
+    def _create_cache_with_retry(
+        self,
+        contents: List[Any],
+        ttl_seconds: int,
+        model: str,
+        system_instruction: Optional[str]
+    ) -> types.CachedContent:
+        """Internal cache creation with retry logic."""
+        config = types.CreateCachedContentConfig(
+            contents=contents,
+            ttl=f"{ttl_seconds}s",
+            system_instruction=system_instruction
+        )
+        
+        cache = self.client.caches.create(
+            model=model,
+            config=config
+        )
+        
+        logger.info(f"Created context cache {cache.name} (exp: {cache.expire_time})")
+        return cache
 
     def get_cache(self, name: str) -> types.CachedContent:
         """Get an existing cache by name."""
@@ -134,7 +231,7 @@ class GeminiClient:
         Generate content using Gemini.
         
         Args:
-            model: Model name (e.g. 'gemini-2.0-flash-thinking-exp')
+            model: Model name (e.g. 'gemini-3-flash-preview-thinking-exp')
             contents: Prompt contents
             cached_content_name: Optional name of cached context to use
             system_instruction: System prompt (overrides cached one if provided)
@@ -201,22 +298,27 @@ class GeminiClient:
         Returns:
             List of embedding vectors
         """
-        try:
-            config = types.EmbedContentConfig(
-                output_dimensionality=output_dimensionality
-            ) if output_dimensionality else None
-            
-            result = self.client.models.embed_content(
-                model=model,
-                contents=contents,
-                config=config
-            )
-            
-            # Normalize to list of lists
-            if hasattr(result, 'embeddings'):
-                return [e.values for e in result.embeddings]
-            return []
-            
-        except Exception as e:
-            logger.error(f"Embedding generation failed: {e}")
-            raise
+        return self._embed_content_with_retry(model, contents, output_dimensionality)
+    
+    @_retry_with_backoff("embedding", max_retries=3, initial_delay=1.0)
+    def _embed_content_with_retry(
+        self,
+        model: str,
+        contents: Union[str, List[str]],
+        output_dimensionality: Optional[int]
+    ) -> List[List[float]]:
+        """Internal embedding with retry logic."""
+        config = types.EmbedContentConfig(
+            output_dimensionality=output_dimensionality
+        ) if output_dimensionality else None
+        
+        result = self.client.models.embed_content(
+            model=model,
+            contents=contents,
+            config=config
+        )
+        
+        # Normalize to list of lists
+        if hasattr(result, 'embeddings'):
+            return [e.values for e in result.embeddings]
+        return []

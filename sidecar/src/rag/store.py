@@ -39,7 +39,19 @@ class VectorStore:
         self.embedding_function = GeminiEmbeddingFunction(api_key=api_key)
         
         self.collection_name = "interview_context"
-        self._get_collection()
+        try:
+            self._get_collection()
+        except Exception as e:
+            logger.error(f"Failed to load collection: {e}. Resetting database...")
+            try:
+                self.client.reset()
+                self._get_collection()
+            except Exception as reset_error:
+                logger.error(f"Failed to reset database: {reset_error}")
+                # Fallback: Try to use a different collection name or just fail gracefully
+                # If reset fails, we might need to manually delete files, but that's risky.
+                # Re-raising original error if reset fails.
+                raise e
         
     def _get_collection(self):
         """Get or create the collection."""
@@ -199,3 +211,70 @@ class VectorStore:
                 self._get_collection()
             except:
                 pass
+
+    def get_by_id(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a specific document by its ID.
+        
+        Used for parent chunk expansion - when a child chunk matches,
+        retrieve its parent chunk for richer context.
+        
+        Args:
+            doc_id: The document ID to retrieve.
+            
+        Returns:
+            Dict with 'document', 'metadata', 'id' or None if not found.
+        """
+        try:
+            result = self.collection.get(
+                ids=[doc_id],
+                include=["documents", "metadatas"]
+            )
+            
+            if result and result.get("ids") and len(result["ids"]) > 0:
+                return {
+                    "id": result["ids"][0],
+                    "document": result["documents"][0] if result.get("documents") else None,
+                    "metadata": result["metadatas"][0] if result.get("metadatas") else None
+                }
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to get document by ID {doc_id}: {e}")
+            return None
+
+    def get_by_ids(self, doc_ids: List[str]) -> List[Dict[str, Any]]:
+        """
+        Retrieve multiple documents by their IDs.
+        
+        Batch version of get_by_id for efficiency when expanding
+        multiple parent chunks.
+        
+        Args:
+            doc_ids: List of document IDs to retrieve.
+            
+        Returns:
+            List of dicts with 'document', 'metadata', 'id'.
+        """
+        if not doc_ids:
+            return []
+            
+        try:
+            result = self.collection.get(
+                ids=doc_ids,
+                include=["documents", "metadatas"]
+            )
+            
+            docs = []
+            if result and result.get("ids"):
+                for i, doc_id in enumerate(result["ids"]):
+                    docs.append({
+                        "id": doc_id,
+                        "document": result["documents"][i] if result.get("documents") else None,
+                        "metadata": result["metadatas"][i] if result.get("metadatas") else None
+                    })
+            return docs
+            
+        except Exception as e:
+            logger.error(f"Failed to get documents by IDs: {e}")
+            return []

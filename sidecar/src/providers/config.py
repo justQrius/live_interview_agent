@@ -1,12 +1,55 @@
 """
 Provider Configuration for multi-provider support.
 
-Manages API keys and preferences for STT, LLM, and Embedding providers.
+Manages API keys, preferences, and model constants for STT, LLM, and Embedding providers.
 """
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+
+# =============================================================================
+# MODEL CONSTANTS
+# Centralized model name definitions - update here when models change
+# =============================================================================
+
+class GeminiModels:
+    """Gemini model identifiers."""
+    # Primary models
+    FLASH = "gemini-3-flash-preview"  # Fast, cost-effective for most tasks
+    PRO = "gemini-3-pro-preview"      # Higher capability for complex tasks
+    
+    # Specialized
+    EMBEDDING = "text-embedding-004"
+    
+    # Default choices by use case
+    DEFAULT_LLM = PRO
+    DEFAULT_STT = FLASH
+    DEFAULT_CACHE = FLASH
+    DEFAULT_SEARCH = FLASH
+
+
+class OpenAIModels:
+    """OpenAI model identifiers."""
+    GPT4O = "gpt-4o"
+    GPT4O_MINI = "gpt-4o-mini"
+    
+    # Default
+    DEFAULT_LLM = GPT4O
+
+
+class AnthropicModels:
+    """Anthropic model identifiers."""
+    CLAUDE_35_SONNET = "claude-3-5-sonnet-20240620"
+    CLAUDE_3_OPUS = "claude-3-opus-20240229"
+    
+    # Default
+    DEFAULT_LLM = CLAUDE_35_SONNET
+
+
+# =============================================================================
+# PROVIDER CONFIGURATION
+# =============================================================================
 
 class ProviderType(Enum):
     """Enum for supported AI provider types."""
