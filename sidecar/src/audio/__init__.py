@@ -3,7 +3,7 @@
 Contains audio capture, VAD, and speaker diarization components.
 """
 
-from audio.capture import (
+from src.audio.capture import (
     # Constants
     SAMPLE_RATE,
     CHANNELS,
@@ -22,7 +22,7 @@ from audio.capture import (
     bytes_to_samples,
 )
 
-from audio.vad import (
+from src.audio.vad import (
     # Constants
     DEFAULT_VAD_THRESHOLD,
     DEFAULT_VAD_WINDOW_SIZE,
@@ -32,7 +32,7 @@ from audio.vad import (
     SpeechSegment,
 )
 
-from audio.noise_reduction import (
+from src.audio.noise_reduction import (
     # Constants
     DEFAULT_PROP_DECREASE,
     # Classes

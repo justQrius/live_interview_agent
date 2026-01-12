@@ -16,16 +16,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src'
 
 class TestSpeakerRecognizer(unittest.TestCase):
     
-    @patch('audio.diarization.EncoderClassifier')
+    @patch('src.audio.diarization.EncoderClassifier')
     def test_initialization(self, mock_encoder):
-        from audio.diarization import SpeakerRecognizer
+        from src.audio.diarization import SpeakerRecognizer
         recognizer = SpeakerRecognizer()
         self.assertIsNotNone(recognizer)
         mock_encoder.from_hparams.assert_called_once()
 
-    @patch('audio.diarization.EncoderClassifier')
+    @patch('src.audio.diarization.EncoderClassifier')
     def test_create_embedding(self, mock_encoder):
-        from audio.diarization import SpeakerRecognizer
+        from src.audio.diarization import SpeakerRecognizer
         
         # Setup mock
         mock_model = MagicMock()
@@ -48,9 +48,9 @@ class TestSpeakerRecognizer(unittest.TestCase):
         self.assertEqual(embedding.shape, (192,))
         mock_model.encode_batch.assert_called()
 
-    @patch('audio.diarization.EncoderClassifier')
+    @patch('src.audio.diarization.EncoderClassifier')
     def test_verify_speaker(self, mock_encoder):
-        from audio.diarization import SpeakerRecognizer
+        from src.audio.diarization import SpeakerRecognizer
         
         # Setup mock for initialization
         mock_model = MagicMock()
@@ -78,9 +78,9 @@ class TestSpeakerRecognizer(unittest.TestCase):
         # For this we need create_embedding to return something else.
         # But since we mocked the class method, we can't easily change it mid-test without side effects unless we use side_effect
         
-    @patch('audio.diarization.EncoderClassifier')
+    @patch('src.audio.diarization.EncoderClassifier')
     def test_verify_speaker_mismatch(self, mock_encoder):
-        from audio.diarization import SpeakerRecognizer
+        from src.audio.diarization import SpeakerRecognizer
         
         mock_model = MagicMock()
         mock_encoder.from_hparams.return_value = mock_model

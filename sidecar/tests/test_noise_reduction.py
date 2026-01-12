@@ -22,7 +22,7 @@ class TestNoiseReducerInitialization:
 
     def test_noise_reducer_creation_with_defaults(self):
         """NoiseReducer should be created with default settings."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -30,7 +30,7 @@ class TestNoiseReducerInitialization:
 
     def test_noise_reducer_has_sample_rate(self):
         """NoiseReducer should have 16kHz sample rate configured."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -38,7 +38,7 @@ class TestNoiseReducerInitialization:
 
     def test_noise_reducer_enabled_by_default(self):
         """NoiseReducer should be enabled by default."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -46,7 +46,7 @@ class TestNoiseReducerInitialization:
 
     def test_noise_reducer_can_be_disabled(self):
         """NoiseReducer should accept enabled=False parameter."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(enabled=False)
 
@@ -54,7 +54,7 @@ class TestNoiseReducerInitialization:
 
     def test_noise_reducer_custom_sample_rate(self):
         """NoiseReducer should accept custom sample rate."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(sample_rate=48000)
 
@@ -66,7 +66,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_stationary_mode(self):
         """NoiseReducer should support stationary noise reduction."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(stationary=True)
 
@@ -74,7 +74,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_nonstationary_mode(self):
         """NoiseReducer should support non-stationary noise reduction."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(stationary=False)
 
@@ -82,7 +82,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_default_is_stationary(self):
         """NoiseReducer should use stationary mode by default."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -90,7 +90,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_prop_decrease_parameter(self):
         """NoiseReducer should accept prop_decrease parameter (aggressiveness)."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(prop_decrease=0.8)
 
@@ -98,7 +98,7 @@ class TestNoiseReducerConfiguration:
 
     def test_noise_reducer_default_prop_decrease(self):
         """NoiseReducer should have sensible default prop_decrease."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -111,7 +111,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_accepts_numpy_array(self):
         """reduce_noise should accept numpy array input."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -124,7 +124,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_accepts_bytes(self):
         """reduce_noise should accept bytes input."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -137,7 +137,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_preserves_dtype(self):
         """reduce_noise should preserve int16 dtype."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -149,7 +149,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_preserves_shape(self):
         """reduce_noise should preserve array shape (mono audio)."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -161,7 +161,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_with_silent_audio(self):
         """reduce_noise should handle silent audio without errors."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -176,7 +176,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_with_noisy_audio(self):
         """reduce_noise should process noisy audio."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -193,7 +193,7 @@ class TestNoiseReducerProcessing:
 
     def test_reduce_noise_with_speech_signal(self):
         """reduce_noise should preserve speech while reducing noise."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -214,7 +214,7 @@ class TestNoiseReducerDisabledMode:
 
     def test_disabled_reducer_returns_input_unchanged(self):
         """When disabled, reduce_noise should return input unchanged."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(enabled=False)
 
@@ -229,7 +229,7 @@ class TestNoiseReducerDisabledMode:
         """When disabled, reduce_noise should have minimal overhead."""
         import time
 
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer(enabled=False)
 
@@ -250,7 +250,7 @@ class TestNoiseReducerLatency:
         """reduce_noise should process 500ms audio in <100ms."""
         import time
 
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -268,7 +268,7 @@ class TestNoiseReducerLatency:
         """reduce_noise should handle 1 second audio reasonably fast."""
         import time
 
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -288,7 +288,7 @@ class TestNoiseReducerEdgeCases:
 
     def test_reduce_noise_empty_array(self):
         """reduce_noise should handle empty array gracefully."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -301,7 +301,7 @@ class TestNoiseReducerEdgeCases:
 
     def test_reduce_noise_very_short_audio(self):
         """reduce_noise should handle very short audio (< 100 samples)."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -313,7 +313,7 @@ class TestNoiseReducerEdgeCases:
 
     def test_reduce_noise_with_clipping(self):
         """reduce_noise should handle audio with clipping (max values)."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -332,7 +332,7 @@ class TestNoiseReducerThreadSafety:
 
     def test_reduce_noise_is_stateless(self):
         """reduce_noise should be stateless (safe to call concurrently)."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -352,16 +352,16 @@ class TestNoiseReducerIntegrationWithAudioModule:
 
     def test_noise_reducer_uses_same_sample_rate_as_audio_capture(self):
         """NoiseReducer should use the same 16kHz sample rate as AudioCapture."""
-        from audio.capture import SAMPLE_RATE
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.capture import SAMPLE_RATE
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
         assert reducer.sample_rate == SAMPLE_RATE
 
     def test_noise_reducer_is_exported_from_audio_module(self):
-        """NoiseReducer should be exported from audio module."""
-        from audio import NoiseReducer
+        """NoiseReducer should be exported from src.audio module."""
+        from src.audio import NoiseReducer
 
         # Should not raise ImportError
         assert NoiseReducer is not None
@@ -372,7 +372,7 @@ class TestNoiseReducerConstants:
 
     def test_default_prop_decrease_constant_exists(self):
         """DEFAULT_PROP_DECREASE constant should exist."""
-        from audio.noise_reduction import DEFAULT_PROP_DECREASE
+        from src.audio.noise_reduction import DEFAULT_PROP_DECREASE
 
         assert DEFAULT_PROP_DECREASE is not None
         assert 0.0 <= DEFAULT_PROP_DECREASE <= 1.5
@@ -392,7 +392,7 @@ class TestNoiseReducerWithRealNoisereduceLibrary:
 
     def test_reduce_noise_calls_noisereduce(self):
         """reduce_noise should call noisereduce.reduce_noise."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 
@@ -413,7 +413,7 @@ class TestNoiseReducerAccuracyImprovement:
 
     def test_noise_reducer_improves_snr(self):
         """reduce_noise should improve Signal-to-Noise Ratio."""
-        from audio.noise_reduction import NoiseReducer
+        from src.audio.noise_reduction import NoiseReducer
 
         reducer = NoiseReducer()
 

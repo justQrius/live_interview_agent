@@ -16,7 +16,7 @@ import numpy as np
 import websockets
 from websockets.asyncio.server import serve, ServerConnection
 
-from protocol import (
+from src.protocol import (
     Message,
     MessageType,
     SessionStatus,
@@ -42,35 +42,38 @@ from protocol import (
     create_enhanced_answer_chunk_message,
     create_enhanced_answer_complete_message,
 )
-from audio.diarization import SpeakerRecognizer
-from audio.capture import AudioCapture, AudioCaptureError
-from audio.vad import VADProcessor, SpeechSegment
-from audio.noise_reduction import NoiseReducer
-from providers.base import STTProvider, LLMProvider
-from providers.factory import ProviderFactory
-from providers.config import ProviderConfig
-from context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
-from rag.store import VectorStore
-from rag.enhanced_engine import EnhancedRAGEngine
-from rag.speculative import SpeculativeRetriever
-from warmup import ModelWarmer
-from classification.question_detector import QuestionDetector
-from classification.query_reformulator import QueryReformulator
-from classification.question_splitter import QuestionSplitter
-from storage.session_store import SessionHistoryStore
-from storage.exporter import SessionExporter, ExportFormat
-from memory.store import MemoryStore
-from memory.models import DocumentType as MemoryDocumentType
-from extraction.pipeline import ExtractionPipeline
-from coaching.story_recaller import StoryRecaller
-from coaching.structure_suggester import StructureSuggester
-from coaching.consistency_tracker import ConsistencyTracker
+from src.audio.diarization import SpeakerRecognizer
+from src.audio.capture import AudioCapture, AudioCaptureError
+from src.audio.vad import VADProcessor, SpeechSegment
+from src.audio.noise_reduction import NoiseReducer
+from src.providers.base import STTProvider, LLMProvider
+from src.providers.factory import ProviderFactory
+from src.providers.config import ProviderConfig
+from src.context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
+from src.context.manager import ContextManager
+from src.rag.store import VectorStore
+from src.rag.engine import RAGEngine
+from src.rag.enhanced_engine import EnhancedRAGEngine
+from src.providers.stt.gemini import GeminiSTTProvider
+from src.rag.speculative import SpeculativeRetriever
+from src.warmup import ModelWarmer
+from src.classification.question_detector import QuestionDetector
+from src.classification.query_reformulator import QueryReformulator
+from src.classification.question_splitter import QuestionSplitter
+from src.storage.session_store import SessionHistoryStore
+from src.storage.exporter import SessionExporter, ExportFormat
+from src.memory.store import MemoryStore
+from src.memory.models import DocumentType as MemoryDocumentType
+from src.extraction.pipeline import ExtractionPipeline
+from src.coaching.story_recaller import StoryRecaller
+from src.coaching.structure_suggester import StructureSuggester
+from src.coaching.consistency_tracker import ConsistencyTracker
 
 # Phase 5: Gemini Features
-from context.gemini_cache import GeminiCacheManager
-from context.file_uploader import GeminiFileUploader
-from rag.gemini_embeddings import GeminiEmbeddingFunction
-from context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
+from src.context.gemini_cache import GeminiCacheManager
+from src.context.file_uploader import GeminiFileUploader
+from src.rag.gemini_embeddings import GeminiEmbeddingFunction
+from src.context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
 
 # Configure logging
 logging.basicConfig(
@@ -113,6 +116,8 @@ class SidecarServer:
         """
         self.host = host
         self.port = port
+        self._audio_task: Optional[asyncio.Task] = None
+        self._background_tasks: Set[asyncio.Task] = set()
         self.clients: Set[ServerConnection] = set()
         self.session_state = SessionState()
         self._server: Optional[Any] = None
@@ -162,6 +167,13 @@ class SidecarServer:
         self.extraction_pipeline = ExtractionPipeline(memory_store=self.memory_store)
         self.extraction_enabled = True  # Feature flag for rollout
 
+    def _create_background_task(self, coro) -> asyncio.Task:
+        """Create and track a background task."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
     async def start(self) -> None:
         """Start the WebSocket server."""
         self._running = True
@@ -180,14 +192,27 @@ class SidecarServer:
         """Stop the WebSocket server."""
         self._running = False
 
+        # Stop audio processing first
+        await self._stop_audio_processing()
+
+        # Cancel all background tasks
+        if self._background_tasks:
+            # Create a copy of the set to avoid "Set size changed during iteration"
+            tasks = list(self._background_tasks)
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            self._background_tasks.clear()
+
         if self.clients:
             await asyncio.gather(
                 *[client.close() for client in self.clients],
                 return_exceptions=True
             )
             self.clients.clear()
-            
-        await self._stop_audio_processing()
 
         if self._server:
             self._server.close()
@@ -374,7 +399,7 @@ class SidecarServer:
         # Initialize RAG in background - don't block audio processing
         # Session works even if RAG fails (graceful degradation)
         rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
-        asyncio.create_task(self._init_rag_background(rag_key))
+        self._create_background_task(self._init_rag_background(rag_key))
 
     async def _handle_stop_session(
         self,
@@ -505,7 +530,7 @@ class SidecarServer:
                             self.extraction_pipeline.set_llm_provider(self.llm)
                         
                         # Run extraction (non-blocking for UI responsiveness)
-                        asyncio.create_task(self._run_extraction(
+                        self._create_background_task(self._run_extraction(
                             websocket, doc_id, content, memory_doc_type, filename, extraction_progress
                         ))
                     
@@ -1237,16 +1262,25 @@ Provide a concise, punchy version that hits the key points quickly."""
     # Session History Helper Methods
 
     def _session_summary_to_dict(self, session) -> dict:
-        """Convert a SessionSummary object to a summary dict for list responses."""
-        from storage.session_store import SessionSummary
-        s: SessionSummary = session
+        """Convert a SessionSummary or SessionData object to a summary dict."""
+        from storage.session_store import SessionSummary, SessionData
+        
+        # Determine counts based on object type
+        if isinstance(session, SessionSummary):
+            trans_count = session.transcription_count
+            ans_count = session.answer_count
+        else:
+            # Assume SessionData
+            trans_count = len(getattr(session, "transcriptions", []))
+            ans_count = len(getattr(session, "answers", []))
+            
         return {
-            "id": s.id,
-            "startedAt": int(s.started_at.timestamp() * 1000) if s.started_at else None,
-            "endedAt": int(s.ended_at.timestamp() * 1000) if s.ended_at else None,
-            "contextFiles": s.context_files,
-            "transcriptionCount": s.transcription_count,
-            "answerCount": s.answer_count
+            "id": session.id,
+            "startedAt": int(session.started_at.timestamp() * 1000) if session.started_at else None,
+            "endedAt": int(session.ended_at.timestamp() * 1000) if session.ended_at else None,
+            "contextFiles": session.context_files,
+            "transcriptionCount": trans_count,
+            "answerCount": ans_count
         }
 
     def _session_to_full_dict(self, session) -> dict:
@@ -1338,7 +1372,7 @@ Provide a concise, punchy version that hits the key points quickly."""
             if self.memory_store:
                 self.story_recaller = StoryRecaller(self.memory_store, self.vector_store)
                 # Warm up stories in background
-                asyncio.create_task(self.story_recaller.warm_up())
+                self._create_background_task(self.story_recaller.warm_up())
             
             self.structure_suggester = StructureSuggester()
             
@@ -1421,7 +1455,7 @@ Provide a concise, punchy version that hits the key points quickly."""
                     now - last_speculation_time > 2.0):
                     
                     # Run in background to avoid blocking audio loop
-                    asyncio.create_task(self._run_speculative_cycle())
+                    self._create_background_task(self._run_speculative_cycle())
                     last_speculation_time = now
                         
         except asyncio.CancelledError:
@@ -1522,7 +1556,7 @@ Provide a concise, punchy version that hits the key points quickly."""
         if speaker == Speaker.INTERVIEWER:
             # Phase 3: Question detection before answer generation
             if self.question_detection_enabled:
-                is_question, confidence, q_type = await self.question_detector.is_actionable_question(
+                is_question, confidence, q_type = await self.question_detector.is_actionable_question_async(
                     text,
                     self.session_state.conversation_history
                 )
@@ -1766,7 +1800,7 @@ Provide a concise, punchy version that hits the key points quickly."""
             full_answer = "".join(full_answer_parts)
             
             # Phase 4E: Check consistency
-            asyncio.create_task(self._check_consistency(full_answer))
+            self._create_background_task(self._check_consistency(full_answer))
             
             self.session_state.conversation_history.append({
                 "role": "user",
@@ -1836,7 +1870,7 @@ Provide a concise, punchy version that hits the key points quickly."""
             full_answer = "".join(full_answer_parts)
             
             # Phase 4E: Check consistency
-            asyncio.create_task(self._check_consistency(full_answer))
+            self._create_background_task(self._check_consistency(full_answer))
             
             self.session_state.conversation_history.append({
                 "role": "user",

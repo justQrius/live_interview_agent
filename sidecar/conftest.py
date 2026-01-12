@@ -1,5 +1,11 @@
 import sys
-import os
+from pathlib import Path
 
-# Add src to python path for tests
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "src")))
+ROOT = Path(__file__).resolve().parent
+SRC = ROOT / "src"
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))

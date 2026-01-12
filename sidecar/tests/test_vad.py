@@ -24,7 +24,7 @@ class TestSpeechSegmentDataclass:
 
     def test_speech_segment_has_required_fields(self):
         """SpeechSegment should have audio, start_time, end_time, confidence fields."""
-        from audio.vad import SpeechSegment
+        from src.audio.vad import SpeechSegment
 
         # Check field names
         field_names = {f.name for f in fields(SpeechSegment)}
@@ -33,7 +33,7 @@ class TestSpeechSegmentDataclass:
 
     def test_speech_segment_creation(self):
         """SpeechSegment should be created with correct values."""
-        from audio.vad import SpeechSegment
+        from src.audio.vad import SpeechSegment
 
         audio_data = b"\x00\x01\x02\x03"
         segment = SpeechSegment(
@@ -50,7 +50,7 @@ class TestSpeechSegmentDataclass:
 
     def test_speech_segment_types(self):
         """SpeechSegment fields should have correct types."""
-        from audio.vad import SpeechSegment
+        from src.audio.vad import SpeechSegment
 
         segment = SpeechSegment(
             audio=b"\x00\x01",
@@ -70,7 +70,7 @@ class TestVADProcessorInitialization:
 
     def test_vad_processor_creation_with_defaults(self):
         """VADProcessor should be created with default threshold=0.5, window_size=512."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -79,7 +79,7 @@ class TestVADProcessorInitialization:
 
     def test_vad_processor_custom_threshold(self):
         """VADProcessor should accept custom threshold."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor(threshold=0.7)
 
@@ -87,15 +87,16 @@ class TestVADProcessorInitialization:
 
     def test_vad_processor_custom_window_size(self):
         """VADProcessor should accept custom window size."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
-        processor = VADProcessor(window_size=256)
+        processor = VADProcessor(window_size=256, sample_rate=8000)
 
         assert processor.window_size == 256
+        assert processor.sample_rate == 8000
 
     def test_vad_processor_loads_model(self):
         """VADProcessor should load Silero VAD model on creation."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -103,7 +104,7 @@ class TestVADProcessorInitialization:
 
     def test_vad_processor_has_sample_rate(self):
         """VADProcessor should have 16kHz sample rate configured."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -115,7 +116,7 @@ class TestVADThresholdConfiguration:
 
     def test_threshold_must_be_between_0_and_1(self):
         """Threshold should be validated to be between 0 and 1."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         # Valid thresholds
         processor = VADProcessor(threshold=0.0)
@@ -129,14 +130,14 @@ class TestVADThresholdConfiguration:
 
     def test_threshold_below_zero_raises(self):
         """Threshold below 0 should raise ValueError."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         with pytest.raises(ValueError, match="threshold"):
             VADProcessor(threshold=-0.1)
 
     def test_threshold_above_one_raises(self):
         """Threshold above 1 should raise ValueError."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         with pytest.raises(ValueError, match="threshold"):
             VADProcessor(threshold=1.1)
@@ -147,7 +148,7 @@ class TestVADWindowSize:
 
     def test_window_size_512_for_16khz(self):
         """Window size of 512 samples at 16kHz = 32ms."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor(window_size=512)
 
@@ -157,11 +158,12 @@ class TestVADWindowSize:
 
     def test_window_size_256_for_8khz(self):
         """Window size of 256 samples at 8kHz = 32ms (not used but valid)."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
-        processor = VADProcessor(window_size=256)
+        processor = VADProcessor(window_size=256, sample_rate=8000)
 
         assert processor.window_size == 256
+        assert processor.sample_rate == 8000
 
 
 class TestVADProcessChunk:
@@ -170,7 +172,7 @@ class TestVADProcessChunk:
     @pytest.mark.asyncio
     async def test_process_chunk_returns_list(self):
         """process_chunk should return a list of SpeechSegment."""
-        from audio.vad import SpeechSegment, VADProcessor
+        from src.audio.vad import SpeechSegment, VADProcessor
 
         processor = VADProcessor()
 
@@ -184,7 +186,7 @@ class TestVADProcessChunk:
     @pytest.mark.asyncio
     async def test_process_chunk_filters_silence(self):
         """process_chunk should return empty list for pure silence."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -199,7 +201,7 @@ class TestVADProcessChunk:
     @pytest.mark.asyncio
     async def test_process_chunk_detects_speech(self):
         """process_chunk should detect speech in audio with voice content."""
-        from audio.vad import SpeechSegment, VADProcessor
+        from src.audio.vad import SpeechSegment, VADProcessor
 
         processor = VADProcessor()
 
@@ -231,7 +233,7 @@ class TestVADProcessChunk:
     @pytest.mark.asyncio
     async def test_process_chunk_segment_has_valid_times(self):
         """Speech segments should have valid start/end times within chunk duration."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -258,7 +260,7 @@ class TestVADProcessChunk:
     @pytest.mark.asyncio
     async def test_process_chunk_segment_has_valid_confidence(self):
         """Speech segments should have confidence between 0 and 1."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -282,7 +284,7 @@ class TestVADEmptyInput:
     @pytest.mark.asyncio
     async def test_process_empty_bytes(self):
         """process_chunk should handle empty bytes gracefully."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -294,7 +296,7 @@ class TestVADEmptyInput:
     @pytest.mark.asyncio
     async def test_process_very_short_audio(self):
         """process_chunk should handle audio shorter than window size."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor(window_size=512)
 
@@ -312,7 +314,7 @@ class TestVADReset:
 
     def test_reset_clears_internal_state(self):
         """reset() should clear any internal state for new session."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -325,7 +327,7 @@ class TestVADReset:
     @pytest.mark.asyncio
     async def test_reset_between_sessions(self):
         """reset() should allow processing new audio sessions cleanly."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -349,7 +351,7 @@ class TestVADContinuousSpeech:
     @pytest.mark.asyncio
     async def test_continuous_speech_tracking(self):
         """VAD should track speech state across multiple process_chunk calls."""
-        from audio.vad import VADProcessor
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
@@ -370,16 +372,16 @@ class TestVADIntegrationWithAudioModule:
 
     def test_vad_uses_same_sample_rate_as_audio_capture(self):
         """VAD should use the same 16kHz sample rate as AudioCapture."""
-        from audio.capture import SAMPLE_RATE
-        from audio.vad import VADProcessor
+        from src.audio.capture import SAMPLE_RATE
+        from src.audio.vad import VADProcessor
 
         processor = VADProcessor()
 
         assert processor.sample_rate == SAMPLE_RATE
 
     def test_vad_processor_is_exported_from_audio_module(self):
-        """VADProcessor and SpeechSegment should be exported from audio module."""
-        from audio import SpeechSegment, VADProcessor
+        """VADProcessor and SpeechSegment should be exported from src.audio module."""
+        from src.audio import SpeechSegment, VADProcessor
 
         # Should not raise ImportError
         assert VADProcessor is not None
@@ -391,13 +393,13 @@ class TestVADConstants:
 
     def test_default_threshold_constant(self):
         """DEFAULT_VAD_THRESHOLD should be 0.5."""
-        from audio.vad import DEFAULT_VAD_THRESHOLD
+        from src.audio.vad import DEFAULT_VAD_THRESHOLD
 
         assert DEFAULT_VAD_THRESHOLD == 0.5
 
     def test_default_window_size_constant(self):
         """DEFAULT_VAD_WINDOW_SIZE should be 512."""
-        from audio.vad import DEFAULT_VAD_WINDOW_SIZE
+        from src.audio.vad import DEFAULT_VAD_WINDOW_SIZE
 
         assert DEFAULT_VAD_WINDOW_SIZE == 512
 
@@ -407,13 +409,13 @@ class TestVADModelLoading:
 
     def test_model_loading_error_is_handled(self):
         """VADProcessor should raise clear error if model fails to load."""
-        from audio.vad import VADModelError
+        from src.audio.vad import VADModelError
 
         # VADModelError should be defined
         assert VADModelError is not None
 
     def test_vad_model_error_is_exception(self):
         """VADModelError should be an Exception subclass."""
-        from audio.vad import VADModelError
+        from src.audio.vad import VADModelError
 
         assert issubclass(VADModelError, Exception)

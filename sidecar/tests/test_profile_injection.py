@@ -143,19 +143,22 @@ class TestAnthropicLLMProvider:
 
 class TestGeminiLLMProvider:
     """Test Gemini provider integration."""
-    
-    @patch('src.providers.llm.gemini.genai')
-    def test_build_prompt_includes_profile(self, mock_genai):
-        """Test that built prompt includes profile."""
+
+    @patch("src.providers.llm.gemini.GeminiClient")
+    def test_build_prompt_includes_profile(self, mock_client_cls):
+        mock_client_cls.return_value = MagicMock()
+
         provider = GeminiLLMProvider(api_key="test-key")
         profile = "## Candidate Profile\nTest Content"
         provider.set_candidate_profile(profile)
-        
-        prompt = provider._build_prompt(
+
+        full_prompt, system_prompt = provider._build_prompt(
             prompt="Test question",
             context="Context",
-            history=[]
+            history=[],
         )
-        
-        assert profile in prompt
-        assert "You are an expert interview coach" in prompt
+
+        assert "Test question" in full_prompt
+        assert profile in system_prompt
+        assert system_prompt.startswith(profile)
+        assert "You are an expert interview coach" in system_prompt

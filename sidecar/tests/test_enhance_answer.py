@@ -236,7 +236,7 @@ class TestEnhancementHandlerValidation:
     @pytest.mark.asyncio
     async def test_missing_original_question_error(self, server, mock_websocket):
         """Should return error when originalQuestion is missing."""
-        from protocol import Message, MessageType
+        from src.protocol import Message, MessageType
         
         message = Message(
             type=MessageType.ENHANCE_ANSWER,
@@ -256,7 +256,7 @@ class TestEnhancementHandlerValidation:
     @pytest.mark.asyncio
     async def test_missing_original_answer_error(self, server, mock_websocket):
         """Should return error when originalAnswer is missing."""
-        from protocol import Message, MessageType
+        from src.protocol import Message, MessageType
         
         message = Message(
             type=MessageType.ENHANCE_ANSWER,
@@ -275,7 +275,7 @@ class TestEnhancementHandlerValidation:
     @pytest.mark.asyncio
     async def test_invalid_enhancement_type_error(self, server, mock_websocket):
         """Should return error for invalid enhancement type."""
-        from protocol import Message, MessageType
+        from src.protocol import Message, MessageType
         
         message = Message(
             type=MessageType.ENHANCE_ANSWER,
@@ -295,7 +295,7 @@ class TestEnhancementHandlerValidation:
     @pytest.mark.asyncio
     async def test_llm_not_initialized_error(self, server, mock_websocket):
         """Should return error when LLM is not initialized."""
-        from protocol import Message, MessageType
+        from src.protocol import Message, MessageType
         
         # Ensure LLM is None
         server.llm = None
@@ -350,7 +350,7 @@ class TestEnhancementFlow:
     @pytest.mark.asyncio
     async def test_successful_enhancement_sends_all_messages(self, server_with_llm, mock_websocket):
         """Successful enhancement should send start, chunks, and complete messages."""
-        from protocol import Message, MessageType
+        from src.protocol import Message, MessageType
         
         message = Message(
             type=MessageType.ENHANCE_ANSWER,
@@ -382,7 +382,7 @@ class TestEnhancementFlow:
     @pytest.mark.asyncio
     async def test_enhancement_with_rag_for_add_detail(self, server_with_llm, mock_websocket):
         """ADD_DETAIL enhancement should try to fetch more RAG context."""
-        from protocol import Message, MessageType
+        from src.protocol import Message, MessageType
         
         # Mock RAG engine
         mock_rag = MagicMock()

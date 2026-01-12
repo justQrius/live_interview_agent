@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 # Add src to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from rag.engine import RAGEngine
-from rag.retrieval import RetrievalResult, confidence_from_distance
-from protocol import ConfidenceLevel
+from src.rag.engine import RAGEngine
+from src.rag.retrieval import RetrievalResult, confidence_from_distance
+from src.protocol import ConfidenceLevel
 
 def test_confidence_from_distance():
     # Test High confidence (< 0.35)

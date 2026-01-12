@@ -13,9 +13,9 @@ import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
-from memory.store import MemoryStore
-from memory.models import STARStory
-from rag.store import VectorStore
+from src.memory.store import MemoryStore
+from src.memory.models import STARStory
+from src.rag.store import VectorStore
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ import re
 from datetime import datetime
 from typing import Optional, Dict, List, Any, Protocol, AsyncGenerator
 
-from memory.models import (
+from src.memory.models import (
     ExtractedFacts,
     SkillEntry,
     CareerEntry,

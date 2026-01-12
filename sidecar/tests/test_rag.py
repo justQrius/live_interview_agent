@@ -10,18 +10,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 
 # Import modules under test
 # We will mock dependencies inside the tests or using patch decorators
-from rag.embeddings import GeminiEmbeddingFunction
-from rag.store import VectorStore
+from src.rag.embeddings import GeminiEmbeddingFunction
+from src.rag.store import VectorStore
 
 class TestGeminiEmbeddingFunction:
-    @patch('rag.embeddings.genai')
+    @patch('src.rag.embeddings.genai')
     def test_init(self, mock_genai):
         api_key = "test_key"
         ef = GeminiEmbeddingFunction(api_key)
         assert ef.api_key == api_key
         mock_genai.configure.assert_called_with(api_key=api_key)
 
-    @patch('rag.embeddings.genai')
+    @patch('src.rag.embeddings.genai')
     def test_call(self, mock_genai):
         api_key = "test_key"
         ef = GeminiEmbeddingFunction(api_key)
@@ -44,14 +44,14 @@ class TestGeminiEmbeddingFunction:
 class TestVectorStore:
     @pytest.fixture
     def mock_chroma_client(self):
-        with patch('rag.store.chromadb.PersistentClient') as mock_cls:
+        with patch('src.rag.store.chromadb.PersistentClient') as mock_cls:
             mock_client = MagicMock()
             mock_cls.return_value = mock_client
             yield mock_client
 
     @pytest.fixture
     def mock_embedding_function(self):
-        with patch('rag.store.GeminiEmbeddingFunction') as mock_cls:
+        with patch('src.rag.store.GeminiEmbeddingFunction') as mock_cls:
             # Create a mock instance that returns valid embeddings when called
             mock_ef = MagicMock()
             mock_ef.return_value = [[0.1, 0.2], [0.1, 0.2]] # For list input
@@ -62,7 +62,7 @@ class TestVectorStore:
         api_key = "test_key"
         
         # Mock pathlib.Path.home to return tmp_path
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch('src.rag.store.pathlib.Path.home', return_value=tmp_path):
             store = VectorStore(api_key)
             
             # Verify client init
@@ -74,7 +74,7 @@ class TestVectorStore:
             assert call_args[1]['embedding_function'] == mock_embedding_function
 
     def test_add_documents(self, mock_chroma_client, mock_embedding_function, tmp_path):
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch('src.rag.store.pathlib.Path.home', return_value=tmp_path):
             store = VectorStore("key")
             # store.collection is the return value of get_or_create_collection
             mock_collection = store.collection
@@ -88,7 +88,7 @@ class TestVectorStore:
             assert len(call_kwargs['ids']) == 2
 
     def test_query(self, mock_chroma_client, mock_embedding_function, tmp_path):
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch('src.rag.store.pathlib.Path.home', return_value=tmp_path):
             store = VectorStore("key")
             mock_collection = store.collection
             
@@ -109,7 +109,7 @@ class TestVectorStore:
             assert results == ['doc1', 'doc2']
 
     def test_clear(self, mock_chroma_client, mock_embedding_function, tmp_path):
-        with patch('pathlib.Path.home', return_value=tmp_path):
+        with patch('src.rag.store.pathlib.Path.home', return_value=tmp_path):
             store = VectorStore("key")
             
             store.clear()

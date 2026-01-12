@@ -14,7 +14,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from protocol import (
+from src.protocol import (
     Message,
     MessageType,
     SessionStatus,
@@ -150,22 +150,38 @@ class TestWebSocketServer:
     async def server(self, server_host, server_port):
         """Start the server for testing."""
         from server import SidecarServer
+        from unittest.mock import AsyncMock, MagicMock, patch
 
-        srv = SidecarServer(host=server_host, port=server_port)
-        server_task = asyncio.create_task(srv.start())
+        with (
+            patch("server.ModelWarmer"),
+            patch("server.VADProcessor"),
+            patch("server.SpeakerRecognizer"),
+            patch("server.AudioCapture"),
+            patch("server.GeminiCacheManager"),
+            patch("server.GeminiFileUploader"),
+            patch("server.ProviderFactory") as MockFactory,
+            patch("server.SidecarServer._start_audio_processing", new_callable=AsyncMock),
+            patch("server.SidecarServer._stop_audio_processing", new_callable=AsyncMock),
+        ):
+            mock_factory = MockFactory.return_value
+            mock_factory.get_stt_provider.return_value = MagicMock()
+            mock_factory.get_llm_provider.return_value = MagicMock()
 
-        # Wait for server to be ready
-        await asyncio.sleep(0.1)
+            srv = SidecarServer(host=server_host, port=server_port)
+            server_task = asyncio.create_task(srv.start())
 
-        yield srv
+            # Wait for server to be ready
+            await asyncio.sleep(0.1)
 
-        # Cleanup
-        await srv.stop()
-        server_task.cancel()
-        try:
-            await server_task
-        except asyncio.CancelledError:
-            pass
+            yield srv
+
+            # Cleanup
+            await srv.stop()
+            server_task.cancel()
+            try:
+                await server_task
+            except asyncio.CancelledError:
+                pass
 
     @pytest.mark.asyncio
     async def test_server_starts_on_correct_port(self, server, server_port):
@@ -296,32 +312,35 @@ class TestQuestionDetectionIntegration:
         assert server.question_detection_enabled is True
         assert server.question_confidence_threshold == 0.7
 
-    def test_question_detector_classifies_questions(self):
+    @pytest.mark.asyncio
+    async def test_question_detector_classifies_questions(self):
         """QuestionDetector in server should classify questions correctly."""
         from server import SidecarServer
         server = SidecarServer()
         
         # Test interview question
-        is_q, conf, q_type = server.question_detector.is_actionable_question(
+        is_q, conf, q_type = await server.question_detector.is_actionable_question_async(
             "What is your experience with Python?"
         )
         assert is_q is True
         assert conf >= 0.7
         assert q_type == "interview_question"
 
-    def test_question_detector_classifies_statements(self):
+    @pytest.mark.asyncio
+    async def test_question_detector_classifies_statements(self):
         """QuestionDetector in server should classify statements correctly."""
         from server import SidecarServer
         server = SidecarServer()
         
         # Test acknowledgment
-        is_q, conf, q_type = server.question_detector.is_actionable_question(
+        is_q, conf, q_type = await server.question_detector.is_actionable_question_async(
             "Okay, that makes sense"
         )
         assert is_q is False
         assert q_type == "acknowledgment"
 
-    def test_question_detector_with_history(self):
+    @pytest.mark.asyncio
+    async def test_question_detector_with_history(self):
         """QuestionDetector in server should work with conversation history."""
         from server import SidecarServer
         server = SidecarServer()
@@ -331,7 +350,7 @@ class TestQuestionDetectionIntegration:
             {"speaker": "Candidate", "text": "I have 5 years of experience..."},
         ]
         
-        is_q, conf, q_type = server.question_detector.is_actionable_question(
+        is_q, conf, q_type = await server.question_detector.is_actionable_question_async(
             "What about testing?",
             history
         )
@@ -470,7 +489,7 @@ class TestSessionHistoryProtocol:
 
     def test_create_session_list_message(self):
         """Session list messages should be created correctly."""
-        from protocol import create_session_list_message
+        from src.protocol import create_session_list_message
         
         sessions = [
             {
@@ -492,7 +511,7 @@ class TestSessionHistoryProtocol:
 
     def test_create_session_data_message(self):
         """Session data messages should be created correctly."""
-        from protocol import create_session_data_message
+        from src.protocol import create_session_data_message
         
         session_data = {
             "id": "sess_abc123",
@@ -511,7 +530,7 @@ class TestSessionHistoryProtocol:
 
     def test_create_session_export_message(self):
         """Session export messages should be created correctly."""
-        from protocol import create_session_export_message
+        from src.protocol import create_session_export_message
         
         content = "# Interview Session\n\n**Date**: 2024-01-09..."
         
@@ -523,7 +542,7 @@ class TestSessionHistoryProtocol:
 
     def test_create_session_deleted_message(self):
         """Session deleted messages should be created correctly."""
-        from protocol import create_session_deleted_message
+        from src.protocol import create_session_deleted_message
         
         msg = create_session_deleted_message(session_id="sess_abc123", success=True)
         

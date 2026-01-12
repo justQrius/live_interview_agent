@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
-from protocol import ConfidenceLevel
+from src.protocol import ConfidenceLevel
 
 @dataclass
 class RetrievalResult:

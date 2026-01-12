@@ -17,12 +17,42 @@ Classification Types:
 import re
 import logging
 import time
-from typing import Dict, List, Optional, Pattern, Tuple, Any
+from typing import Any, Dict, List, Optional, Pattern, Tuple, cast
 
 # Type alias for classification result
 ClassificationResult = Tuple[bool, float, str]
 
+
+class _AwaitableClassificationResult:
+    def __init__(self, value: ClassificationResult):
+        self._value = value
+
+    def __iter__(self):
+        return iter(self._value)
+
+    def __getitem__(self, index: int):
+        return self._value[index]
+
+    def __len__(self):
+        return len(self._value)
+
+    def __await__(self):
+        async def _wrap():
+            return self._value
+
+        return _wrap().__await__()
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _AwaitableClassificationResult):
+            return self._value == other._value
+        return self._value == other
+
+    def __repr__(self) -> str:
+        return repr(self._value)
+
+
 logger = logging.getLogger(__name__)
+
 
 TIER3_PROMPT = """Determine if this is an interview question requiring a response.
 
@@ -176,11 +206,11 @@ class QuestionDetector:
             re.compile(r"^\s*$"),
         ]
 
-    async def is_actionable_question(
+    def is_actionable_question(
         self,
         text: Optional[str],
         conversation_history: Optional[List[Dict[str, str]]] = None,
-    ) -> ClassificationResult:
+    ) -> Any:
         """
         Determine if text is an actionable question requiring a response.
         
@@ -188,46 +218,38 @@ class QuestionDetector:
         - Tier 1: Fast rule-based (<2ms) - handles obvious cases with high confidence
         - Tier 2: Context-aware (<10ms) - uses history for ambiguous cases
         - Tier 3: LLM verification (~150ms) - uses LLM for low-confidence triggers
-        
-        Args:
-            text: The utterance text to classify
-            conversation_history: Optional list of previous conversation turns
-                Each turn should have "speaker" and "text" keys
-        
-        Returns:
-            Tuple of (is_actionable_question, confidence, classification_type)
-            - is_actionable_question: True if this requires a response
-            - confidence: 0.0-1.0 confidence in the classification
-            - classification_type: One of interview_question, follow_up,
-                clarification, small_talk, statement, acknowledgment
         """
         # Tier 1: Rule-based (fast, handles obvious cases)
         result = self._rule_based_classification(text)
-        
+
         # If high confidence, return immediately
         if result[1] >= 0.80:
-            return result
-        
+            return _AwaitableClassificationResult(result)
+
         # Tier 2: Context-aware (use history for ambiguous cases)
         if conversation_history and len(conversation_history) > 0:
             context_result = self._context_aware_classification(text, conversation_history, result)
-            if context_result[1] > result[1]:  # Only use if more confident
+            if context_result[1] > result[1]:
                 result = context_result
-        
-        # If still high confidence after Tier 2, return
-        if result[1] >= 0.75:
-            return result
-            
-        # Tier 3: LLM Verification (for ambiguous cases)
-        # Only trigger if we have an LLM, the text is substantive, and it's not clearly junk
-        if (self.llm_provider and 
-            text and 
-            len(text.split()) >= 3 and 
-            0.4 <= result[1] < 0.75 and
-            result[2] not in ("acknowledgment", "small_talk", "filler")):
-            
+
+        return _AwaitableClassificationResult(result)
+
+    async def is_actionable_question_async(
+        self,
+        text: Optional[str],
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+    ) -> ClassificationResult:
+        result = tuple(self.is_actionable_question(text, conversation_history))
+
+        if (
+            self.llm_provider
+            and text
+            and len(text.split()) >= 3
+            and 0.4 <= result[1] < 0.75
+            and result[2] not in ("acknowledgment", "small_talk", "filler")
+        ):
             return await self._tier3_llm_classification(text, conversation_history or [])
-        
+
         return result
 
     async def _tier3_llm_classification(
@@ -235,16 +257,11 @@ class QuestionDetector:
         text: str,
         history: List[Dict[str, str]]
     ) -> ClassificationResult:
-        """
-        Tier 3: LLM-based verification for ambiguous utterances.
-        
-        Args:
-            text: Text to classify
-            history: Conversation context
-            
-        Returns:
-            ClassificationResult
-        """
+        if self.llm_provider is None:
+            return (False, 0.5, "statement")
+
+        llm_provider = cast(Any, self.llm_provider)
+
         try:
             # Build context (last 3 turns)
             context_lines = []
@@ -263,7 +280,7 @@ class QuestionDetector:
             
             # Use generate_response (stream) but just get first chunk(s)
             response_text = ""
-            async for chunk in self.llm_provider.generate_response(prompt, "", []):
+            async for chunk in llm_provider.generate_response(prompt, "", []):
                 response_text += chunk
                 # We only need a short response
                 if len(response_text) > 20:

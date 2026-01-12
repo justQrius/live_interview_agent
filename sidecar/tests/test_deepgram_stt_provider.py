@@ -1,16 +1,17 @@
 import unittest
-from unittest.mock import MagicMock, patch, AsyncMock
-import sys
 import os
+import sys
+import unittest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Mock deepgram module before importing the provider
 sys.modules['deepgram'] = MagicMock()
 
 # Add sidecar/src to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from providers.stt.deepgram import DeepgramSTTProvider
 from providers.base import TranscriptionResult
+from providers.stt.deepgram import DeepgramSTTProvider
 
 class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
     
@@ -41,8 +42,8 @@ class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
         # Make transcribe_file async
         self.mock_v1.transcribe_file = AsyncMock(return_value=self.mock_response)
 
-    @patch('sidecar.src.providers.stt.deepgram.DeepgramClient')
-    @patch('sidecar.src.providers.stt.deepgram.PrerecordedOptions')
+    @patch('providers.stt.deepgram.DeepgramClient')
+    @patch('providers.stt.deepgram.PrerecordedOptions')
     async def test_transcribe_success(self, MockOptions, MockClient):
         # Arrange
         MockClient.return_value = self.mock_client
@@ -72,13 +73,13 @@ class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
             language="en"
         )
 
-    @patch('sidecar.src.providers.stt.deepgram.DeepgramClient')
+    @patch('providers.stt.deepgram.DeepgramClient')
     async def test_transcribe_empty_audio(self, MockClient):
         provider = DeepgramSTTProvider(self.api_key)
         result = await provider.transcribe(b"")
         self.assertEqual(result.text, "")
 
-    @patch('sidecar.src.providers.stt.deepgram.DeepgramClient')
+    @patch('providers.stt.deepgram.DeepgramClient')
     async def test_init_raises_error_without_api_key(self, MockClient):
         with self.assertRaises(ValueError):
             DeepgramSTTProvider("")

@@ -11,9 +11,9 @@ from typing import List, Dict, AsyncGenerator
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from providers.base import STTProvider, LLMProvider, EmbeddingProvider, TranscriptionResult
-from providers.config import ProviderConfig, ProviderType
-from providers.factory import ProviderFactory, ProviderError
+from src.providers.base import STTProvider, LLMProvider, EmbeddingProvider, TranscriptionResult
+from src.providers.config import ProviderConfig, ProviderType
+from src.providers.factory import ProviderFactory, ProviderError
 
 
 # =============================================================================

@@ -27,7 +27,7 @@ async def test_tier1_high_confidence(mock_llm_provider):
     detector = QuestionDetector(llm_provider=mock_llm_provider)
     
     # "What is..." is a strong pattern (>0.80)
-    is_q, conf, q_type = await detector.is_actionable_question("What is the difference between TCP and UDP?")
+    is_q, conf, q_type = await detector.is_actionable_question_async("What is the difference between TCP and UDP?")
     
     assert is_q is True
     assert conf >= 0.80
@@ -55,7 +55,7 @@ async def test_tier3_trigger_condition(mock_llm_provider):
         yield "NOT_QUESTION"
     mock_llm_provider.generate_response = MagicMock(side_effect=async_gen_not_question)
     
-    is_q, conf, q_type = await detector.is_actionable_question(text)
+    is_q, conf, q_type = await detector.is_actionable_question_async(text)
     
     assert is_q is False
     assert conf == 0.85
@@ -77,7 +77,7 @@ async def test_tier3_identifies_question(mock_llm_provider):
         yield "QUESTION"
     mock_llm_provider.generate_response = MagicMock(side_effect=async_gen_question)
     
-    is_q, conf, q_type = await detector.is_actionable_question(text)
+    is_q, conf, q_type = await detector.is_actionable_question_async(text)
     
     assert is_q is True
     assert conf == 0.85
@@ -92,7 +92,7 @@ async def test_tier3_skips_short_text(mock_llm_provider):
     
     text = "No way."  # Too short (< 3 words)
     
-    is_q, conf, q_type = await detector.is_actionable_question(text)
+    is_q, conf, q_type = await detector.is_actionable_question_async(text)
     
     # Should use rule-based result
     assert is_q is False
@@ -105,7 +105,7 @@ async def test_tier3_skips_without_llm():
     
     text = "The system crashed when we scaled up."
     
-    is_q, conf, q_type = await detector.is_actionable_question(text)
+    is_q, conf, q_type = await detector.is_actionable_question_async(text)
     
     # Should return low confidence statement
     assert is_q is False

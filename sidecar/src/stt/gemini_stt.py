@@ -13,7 +13,7 @@ from typing import Optional
 import google.generativeai as genai
 
 # Import SAMPLE_RATE from capture module (single source of truth)
-from audio.capture import SAMPLE_RATE
+from src.audio.capture import SAMPLE_RATE
 
 # Configure logging
 logger = logging.getLogger(__name__)
