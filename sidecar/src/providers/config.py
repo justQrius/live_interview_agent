@@ -40,6 +40,9 @@ class ProviderConfig:
     # Fallback settings
     fallback_enabled: bool = True
     fallback_timeout: float = 5.0  # seconds before trying next provider
+    
+    # Advanced settings (Phase 5)
+    thinking_budget: Optional[int] = 1024 # Default token budget for thinking models
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProviderConfig":
@@ -50,22 +53,14 @@ class ProviderConfig:
         {
             "apiKeys": {
                 "gemini": "...",
-                "groq": "...",
-                "deepgram": "...",
-                "openai": "...",
-                "anthropic": "..."
+                ...
             },
             "preferences": {
-                "sttProvider": "groq",  # or "auto"
-                "llmProvider": "openai"  # or "auto"
+                "sttProvider": "groq",
+                "llmProvider": "openai",
+                "thinkingBudget": 2048  # Optional
             }
         }
-
-        Args:
-            data: Dictionary with API keys and preferences
-
-        Returns:
-            ProviderConfig instance
         """
         api_keys = data.get("apiKeys", {})
         preferences = data.get("preferences", {})
@@ -96,6 +91,7 @@ class ProviderConfig:
             anthropic_api_key=api_keys.get("anthropic"),
             preferred_stt=preferred_stt,
             preferred_llm=preferred_llm,
+            thinking_budget=preferences.get("thinkingBudget")
         )
 
     def has_api_key(self, provider_type: ProviderType) -> bool:

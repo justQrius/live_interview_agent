@@ -1,18 +1,17 @@
 """
 Gemini LLM Provider.
 
-Implements LLMProvider interface using Google's Gemini model
-for generating high-quality interview answers.
+Implements LLMProvider interface using the unified GeminiClient (google-genai SDK)
+for generating high-quality interview answers with advanced features like Caching and Thinking.
 """
 
 import asyncio
 import logging
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 
-import google.generativeai as genai
-
-from ..base import LLMProvider
-from .prompts import build_system_prompt, format_context_for_prompt
+from src.providers.gemini_client import GeminiClient
+from src.providers.base import LLMProvider
+from src.providers.llm.prompts import build_system_prompt, format_context_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -26,43 +25,25 @@ class GeminiLLMProviderError(Exception):
 
 class GeminiLLMProvider(LLMProvider):
     """
-    LLM provider using Google Gemini.
-
-    Implements the LLMProvider interface for the provider factory system.
-    Uses enhanced prompting for high-quality, conversational interview answers.
-    Also provides backwards-compatible generate_answer() method for
-    existing server.py integration.
-
-    Usage:
-        provider = GeminiLLMProvider(api_key="...")
-        async for chunk in provider.generate_response(prompt, context, history):
-            print(chunk, end="")
-
-        # Or backwards-compatible method:
-        async for chunk in provider.generate_answer(question, context_chunks):
-            print(chunk, end="")
+    LLM provider using Google Gemini via Unified Client.
+    
+    Features:
+    - Context Caching
+    - Thinking Mode
+    - Grounding (Web Search)
+    - System Instructions
     """
 
-    DEFAULT_MODEL = "gemini-3-pro-preview"
+    DEFAULT_MODEL = "gemini-3-pro-preview"  # Updated to latest capable model as per user request
     
-    # Gemini generation config - optimized for natural responses
-    GENERATION_CONFIG = {
-        "temperature": 0.45,  # Balanced: natural variation + consistency
-        "top_p": 0.9,  # Nucleus sampling for quality
-        "top_k": 40,  # Reasonable diversity
-    }
-
-    def __init__(self, api_key: str, model_name: Optional[str] = None):
+    def __init__(self, api_key: str, model_name: Optional[str] = None, thinking_budget: Optional[int] = None):
         """
         Initialize Gemini LLM provider.
 
         Args:
             api_key: Google AI API key
-            model_name: Model to use (default: gemini-2.0-flash)
-
-        Raises:
-            ValueError: If API key is empty
-            GeminiLLMProviderError: If client initialization fails
+            model_name: Model to use
+            thinking_budget: Optional token budget for thinking
         """
         super().__init__()
         
@@ -72,59 +53,55 @@ class GeminiLLMProvider(LLMProvider):
         self._api_key = api_key
         self._model_name = model_name or self.DEFAULT_MODEL
         self._available = False
-        self._model = None
+        self._client: Optional[GeminiClient] = None
+        self._cached_content_name: Optional[str] = None
+        self._thinking_budget: int = thinking_budget or 1024 
 
         try:
-            genai_any = cast(Any, genai)
-            genai_any.configure(api_key=api_key)
-            self._model = genai_any.GenerativeModel(
-                self._model_name,
-                generation_config=self.GENERATION_CONFIG
-            )
+            self._client = GeminiClient(api_key=api_key)
             self._available = True
         except Exception as e:
             raise GeminiLLMProviderError(f"Failed to initialize Gemini client: {e}")
 
     def is_available(self) -> bool:
-        """
-        Check if the provider is available.
-
-        Returns:
-            True if the provider is ready to accept requests
-        """
+        """Check availability."""
         return self._available
+    
+    def set_cached_content(self, cache_name: str) -> None:
+        """Set the cached content resource name to use for requests."""
+        self._cached_content_name = cache_name
+        logger.info(f"Gemini provider switched to cached context: {cache_name}")
 
     def _build_prompt(
         self,
         prompt: str,
         context: str,
         history: List[Dict]
-    ) -> str:
+    ) -> tuple[str, str]:
         """
-        Build the full prompt including system instructions, context, and history.
-
-        Uses dynamic prompt construction based on question classification
-        (behavioral, intro, technical, etc.) for optimal responses.
-
-        Args:
-            prompt: The user's question/prompt
-            context: Retrieved context from RAG
-            history: Conversation history
-
+        Build prompt and system instruction.
+        
         Returns:
-            Formatted prompt string
+            Tuple of (full_prompt_content, system_instruction)
         """
         system_content, question_type = build_system_prompt(
             prompt,
             candidate_profile=self._candidate_profile or ""
         )
         
-        formatted_context = format_context_for_prompt(context, question_type)
+        # If using cache, we might not need to include context in the prompt again
+        # But if the cache is the FULL raw documents, we might still want RAG chunks 
+        # for specific focus.
+        # However, the prompt says "Check if RAG filtering needed... Otherwise use full cached context".
         
-        parts = [system_content]
-
-        if formatted_context:
-            parts.append(f"\n{formatted_context}")
+        parts = []
+        
+        # If we have context chunks (from RAG) AND cached content (Full Docs),
+        # we can include RAG chunks as "Focus Area".
+        if context:
+             formatted_context = format_context_for_prompt(context, question_type)
+             if formatted_context:
+                 parts.append(f"Relevant Context:\n{formatted_context}")
 
         if history:
             parts.append("\n## Conversation History:")
@@ -137,7 +114,7 @@ class GeminiLLMProvider(LLMProvider):
 
         parts.append(f"\n## Current Question:\n{prompt}")
 
-        return "\n".join(parts)
+        return "\n".join(parts), system_content
 
     async def generate_response(
         self,
@@ -146,76 +123,62 @@ class GeminiLLMProvider(LLMProvider):
         history: List[Dict]
     ) -> AsyncGenerator[str, None]:
         """
-        Generate a streaming response from the LLM.
-
-        Implements the LLMProvider interface with enhanced prompting
-        for high-quality interview answers.
-
-        Args:
-            prompt: The user query or current prompt
-            context: Retrieved context from RAG
-            history: Conversation history (list of dicts with 'role' and 'content')
-
-        Yields:
-            String chunks of the response
-
-        Raises:
-            GeminiLLMProviderError: If generation fails
+        Generate streaming response.
         """
-        full_prompt = self._build_prompt(prompt, context, history)
+        full_prompt, system_instruction = self._build_prompt(prompt, context, history)
 
         try:
-            if not self._model:
-                raise GeminiLLMProviderError("Gemini model is not initialized")
-
-            model = cast(Any, self._model)
-            try:
-                response = await asyncio.wait_for(
-                    model.generate_content_async(full_prompt, stream=True),
-                    timeout=REQUEST_TIMEOUT_SECONDS
+            if not self._client:
+                raise GeminiLLMProviderError("Gemini client is not initialized")
+            
+            # Determine thinking budget - disable for simple queries if needed
+            # For now, always enable if model supports it (Gemini 2.0 Flash Thinking)
+            thinking = self._thinking_budget if "thinking" in self._model_name else None
+            
+            # Run generation in executor to avoid blocking loop (SDK might be sync or async?)
+            # My GeminiClient wrapper uses standard sync client.
+            # So I need to wrap it in run_in_executor.
+            
+            loop = asyncio.get_running_loop()
+            
+            def run_generate():
+                return self._client.generate_content(
+                    model=self._model_name,
+                    contents=full_prompt,
+                    cached_content_name=self._cached_content_name,
+                    system_instruction=system_instruction,
+                    thinking_budget=thinking,
+                    stream=True
                 )
-            except asyncio.TimeoutError:
-                logger.error(f"Gemini request timed out after {REQUEST_TIMEOUT_SECONDS}s")
-                raise GeminiLLMProviderError(f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s")
-
-            async for chunk in response:
-                if chunk.text:
+            
+            response = await loop.run_in_executor(None, run_generate)
+            
+            # The response is a synchronous iterator/generator
+            # We need to iterate it in a way that yields back to asyncio
+            
+            for chunk in response:
+                if hasattr(chunk, 'text') and chunk.text:
                     yield chunk.text
-
-        except GeminiLLMProviderError:
-            raise
+                elif hasattr(chunk, 'candidates') and chunk.candidates:
+                     # Fallback for structured response access
+                     parts = chunk.candidates[0].content.parts
+                     for part in parts:
+                         if part.text:
+                             yield part.text
+                             
+                # Give other tasks a chance to run
+                await asyncio.sleep(0)
+            
         except Exception as e:
-            logger.error(f"Gemini LLM error: {e}")
-            raise GeminiLLMProviderError(f"Generation failed: {e}")
+             logger.error(f"Gemini LLM error: {e}")
+             raise GeminiLLMProviderError(f"Generation failed: {e}")
 
     async def generate_answer(
         self,
         question: str,
         context_chunks: List[str]
     ) -> AsyncGenerator[str, None]:
-        """
-        Generate an answer for the given question and context.
-
-        This is a backwards-compatible method that matches the old GeminiLLM interface.
-        It delegates to generate_response() internally.
-
-        Args:
-            question: The user's question
-            context_chunks: List of context strings from RAG retrieval
-
-        Yields:
-            Chunks of the generated answer
-
-        Raises:
-            GeminiLLMProviderError: If generation fails
-        """
-        # Join context chunks into a single string
+        """Backwards compatible wrapper."""
         context = "\n\n".join(context_chunks) if context_chunks else ""
-
-        # Delegate to the standard interface method
-        async for chunk in self.generate_response(
-            prompt=question,
-            context=context,
-            history=[]  # No history for backwards-compatible interface
-        ):
+        async for chunk in self.generate_response(question, context, []):
             yield chunk

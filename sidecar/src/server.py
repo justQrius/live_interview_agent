@@ -49,9 +49,9 @@ from audio.noise_reduction import NoiseReducer
 from providers.base import STTProvider, LLMProvider
 from providers.factory import ProviderFactory
 from providers.config import ProviderConfig
-from context.manager import ContextManager
+from context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
 from rag.store import VectorStore
-from rag.engine import RAGEngine
+from rag.enhanced_engine import EnhancedRAGEngine
 from rag.speculative import SpeculativeRetriever
 from warmup import ModelWarmer
 from classification.question_detector import QuestionDetector
@@ -60,11 +60,17 @@ from classification.question_splitter import QuestionSplitter
 from storage.session_store import SessionHistoryStore
 from storage.exporter import SessionExporter, ExportFormat
 from memory.store import MemoryStore
-from memory.models import DocumentType
+from memory.models import DocumentType as MemoryDocumentType
 from extraction.pipeline import ExtractionPipeline
 from coaching.story_recaller import StoryRecaller
 from coaching.structure_suggester import StructureSuggester
 from coaching.consistency_tracker import ConsistencyTracker
+
+# Phase 5: Gemini Features
+from context.gemini_cache import GeminiCacheManager
+from context.file_uploader import GeminiFileUploader
+from rag.gemini_embeddings import GeminiEmbeddingFunction
+from context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
 
 # Configure logging
 logging.basicConfig(
@@ -119,14 +125,18 @@ class SidecarServer:
         self.audio_capture: Optional[AudioCapture] = None
         self.llm: Optional[LLMProvider] = None
         self.vector_store: Optional[VectorStore] = None
-        self.rag_engine: Optional[RAGEngine] = None
+        self.rag_engine: Optional[EnhancedRAGEngine] = None
         self.speculative_retriever: Optional[SpeculativeRetriever] = None
         self.story_recaller: Optional[StoryRecaller] = None
         self.structure_suggester: Optional[StructureSuggester] = None
         
+        # Phase 5: Gemini Managers
+        self.gemini_cache_manager: Optional[GeminiCacheManager] = None
+        self.gemini_file_uploader: Optional[GeminiFileUploader] = None
+        
         # Initialize storage and managers
         self.session_store = SessionHistoryStore()
-        self.context_manager = ContextManager()
+        self.context_manager = EnhancedContextManager()
         
         # Phase 4E: Initialize Consistency Tracker (needs session store)
         self.consistency_tracker = ConsistencyTracker(self.session_store)
@@ -288,6 +298,15 @@ class SidecarServer:
             
             self.stt = self.provider_factory.get_stt_provider()
             
+            # Phase 5: Initialize Gemini Managers if key available
+            if config.gemini_api_key:
+                try:
+                    self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
+                    self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
+                    logger.info("Initialized Gemini Cache & Upload managers")
+                except Exception as e:
+                    logger.warning(f"Failed to init Gemini managers: {e}")
+            
             try:
                 self.llm = self.provider_factory.get_llm_provider()
                 # Phase 4: Load existing profile for context injection
@@ -431,18 +450,29 @@ class SidecarServer:
                     errors.append(f"Invalid data for {filename or 'unknown file'}")
                     continue
                 
-                # Map document type string to enum
-                doc_type_map = {
-                    "resume": DocumentType.RESUME,
-                    "job_description": DocumentType.JOB_DESCRIPTION,
-                    "company_info": DocumentType.COMPANY_INFO,
-                    "interviewer_info": DocumentType.INTERVIEWER_INFO,
+                # Map document type string to enum for Context Manager
+                context_doc_type_map = {
+                    "resume": ContextDocumentType.RESUME,
+                    "job_description": ContextDocumentType.JOB_DESCRIPTION,
+                    "company_info": ContextDocumentType.COMPANY_INFO,
+                    "interviewer_info": ContextDocumentType.INTERVIEWER_INFO,
+                    "sample_qa": ContextDocumentType.SAMPLE_QA,
                 }
-                doc_type = doc_type_map.get(doc_type_str, DocumentType.OTHER)
+                context_doc_type = context_doc_type_map.get(doc_type_str, ContextDocumentType.CUSTOM)
+                
+                # Map for Extraction Pipeline (MemoryDocumentType)
+                memory_doc_type_map = {
+                    "resume": MemoryDocumentType.RESUME,
+                    "job_description": MemoryDocumentType.JOB_DESCRIPTION,
+                    "company_info": MemoryDocumentType.COMPANY_INFO,
+                    "interviewer_info": MemoryDocumentType.INTERVIEWER_INFO,
+                }
+                memory_doc_type = memory_doc_type_map.get(doc_type_str, MemoryDocumentType.OTHER)
                     
                 try:
                     # Process through context manager for RAG chunks
-                    new_chunks = await self.context_manager.process_file(filename, content)
+                    # IMPORTANT: Pass document_type for proper filtering fix
+                    new_chunks = await self.context_manager.process_file(filename, content, document_type=context_doc_type)
                     
                     if new_chunks and self.vector_store:
                         chunk_texts = [c.text for c in new_chunks]
@@ -476,7 +506,7 @@ class SidecarServer:
                         
                         # Run extraction (non-blocking for UI responsiveness)
                         asyncio.create_task(self._run_extraction(
-                            websocket, doc_id, content, doc_type, filename, extraction_progress
+                            websocket, doc_id, content, memory_doc_type, filename, extraction_progress
                         ))
                     
                     processed_count += 1
@@ -494,6 +524,24 @@ class SidecarServer:
                 logger.info(f"Context processed: {processed_count}/{len(files)} files, {total_chunks} chunks")
                 if errors:
                     logger.warning(f"Some files failed: {errors}")
+                
+                # Phase 5: Create/Update Gemini Context Cache if managers available
+                if self.gemini_cache_manager and self.llm:
+                    # Only if LLM supports caching (check for set_cached_content method)
+                    if hasattr(self.llm, 'set_cached_content'):
+                        try:
+                            logger.info("Updating Gemini Context Cache...")
+                            cache_name = self.gemini_cache_manager.create_cache_from_context(
+                                self.context_manager,
+                                ttl_seconds=7200, # 2 hours
+                                model="gemini-3-pro-preview",
+                                system_instruction="You are an expert interview coach. Use the provided context (Resume, JD, Company Info) to answer questions accurately. Always prioritize the candidate's resume for personal questions."
+                            )
+                            if cache_name:
+                                self.llm.set_cached_content(cache_name)
+                                logger.info(f"LLM updated with cached context: {cache_name}")
+                        except Exception as e:
+                            logger.error(f"Failed to update Gemini cache: {e}")
         
         except Exception as e:
             logger.error(f"Context upload fatal error: {e}")
@@ -516,7 +564,7 @@ class SidecarServer:
         websocket: ServerConnection,
         doc_id: str,
         content: str,
-        doc_type: DocumentType,
+        doc_type: MemoryDocumentType,
         filename: str,
         progress_callback
     ) -> None:
@@ -1281,7 +1329,7 @@ Provide a concise, punchy version that hits the key points quickly."""
                 lambda: VectorStore(api_key=api_key)
             )
             self.vector_store = vector_store
-            self.rag_engine = RAGEngine(vector_store)
+            self.rag_engine = EnhancedRAGEngine(vector_store, context_manager=self.context_manager)
             
             # Phase 4D: Initialize Speculative Retriever
             self.speculative_retriever = SpeculativeRetriever(self.rag_engine)
@@ -1622,14 +1670,6 @@ Provide a concise, punchy version that hits the key points quickly."""
     ) -> tuple[list[str], ConfidenceLevel]:
         """
         Enhanced context retrieval using question type, sub-questions, and speculative cache.
-        
-        Args:
-            question: The reformulated question
-            question_type: Detected question type for priority filtering
-            sub_questions: List of sub-questions for compound queries
-            
-        Returns:
-            Tuple of (context_chunks, confidence)
         """
         # Phase 4D: Use speculative results if available
         if self.speculative_retriever:
@@ -1642,6 +1682,23 @@ Provide a concise, punchy version that hits the key points quickly."""
                     return chunks, confidence
             except Exception as e:
                 logger.warning(f"Speculative retrieval failed in pipeline: {e}")
+        
+        # Use EnhancedRAGEngine filtering if available
+        if self.rag_engine and hasattr(self.rag_engine, 'retrieve_for_question'):
+            try:
+                results = self.rag_engine.retrieve_for_question(
+                    question=question,
+                    question_type=question_type,
+                    sub_questions=sub_questions,
+                    limit=5
+                )
+                if results:
+                    chunks = [r.text for r in results]
+                    confidence = self._confidence_from_string(results[0].confidence)
+                    logger.info(f"Enhanced retrieval ({question_type}): {len(chunks)} chunks")
+                    return chunks, confidence
+            except Exception as e:
+                logger.error(f"Enhanced retrieval failed: {e}")
         
         # Fallback to standard retrieval
         return self._retrieve_context(question)
