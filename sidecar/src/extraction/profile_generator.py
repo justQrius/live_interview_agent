@@ -317,11 +317,13 @@ class ProfileGenerator:
             score = 0
             
             # Metrics boost (has quantifiable impact)
-            score += len(ach.metrics) * 0.5
+            ach_metrics = ach.metrics or []
+            score += len(ach_metrics) * 0.5
             
             # Tags boost
+            ach_tags = ach.tags or []
             high_value_tags = ["leadership", "scale", "cost", "revenue"]
-            matching_tags = len(set(ach.tags) & set(high_value_tags))
+            matching_tags = len(set(ach_tags) & set(high_value_tags))
             score += matching_tags * 0.3
             
             # Impact level
@@ -377,14 +379,14 @@ class ProfileGenerator:
         # Achievement-based strengths
         leadership_achievements = [
             a for a in facts.achievements
-            if "leadership" in a.tags or "led" in a.description.lower()
+            if "leadership" in (a.tags or []) or "led" in a.description.lower()
         ]
         if leadership_achievements:
             strengths.append("Proven leadership and team management")
         
         scale_achievements = [
             a for a in facts.achievements
-            if "scale" in a.tags or any(m for m in a.metrics if "M" in m or "million" in m.lower())
+            if "scale" in (a.tags or []) or any(m for m in (a.metrics or []) if "M" in m or "million" in m.lower())
         ]
         if scale_achievements:
             strengths.append("Experience building at scale")
@@ -489,8 +491,9 @@ class ProfileGenerator:
             if len(description) > 120:
                 description = description[:117] + "..."
             
-            if ach.metrics:
-                metrics_str = ", ".join(ach.metrics[:2])
+            ach_metrics = ach.metrics or []
+            if ach_metrics:
+                metrics_str = ", ".join(ach_metrics[:2])
                 lines.append(f"- {description} ({metrics_str})")
             else:
                 lines.append(f"- {description}")

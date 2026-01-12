@@ -154,7 +154,8 @@ class SidecarServer:
         self._server = await serve(
             self._handle_client,
             self.host,
-            self.port
+            self.port,
+            max_size=20 * 1024 * 1024  # 20MB limit for large context uploads
         )
         logger.info(f"Sidecar server started on ws://{self.host}:{self.port}")
 
@@ -1025,16 +1026,16 @@ Based on the uploaded documents, here are the main topics to prepare:
     # Session History Helper Methods
 
     def _session_summary_to_dict(self, session) -> dict:
-        """Convert a Session object to a summary dict for list responses."""
-        from storage.session_store import SessionData
-        s: SessionData = session
+        """Convert a SessionSummary object to a summary dict for list responses."""
+        from storage.session_store import SessionSummary
+        s: SessionSummary = session
         return {
             "id": s.id,
             "startedAt": int(s.started_at.timestamp() * 1000) if s.started_at else None,
             "endedAt": int(s.ended_at.timestamp() * 1000) if s.ended_at else None,
             "contextFiles": s.context_files,
-            "transcriptionCount": len(s.transcriptions),
-            "answerCount": len(s.answers)
+            "transcriptionCount": s.transcription_count,
+            "answerCount": s.answer_count
         }
 
     def _session_to_full_dict(self, session) -> dict:
