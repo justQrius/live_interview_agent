@@ -68,7 +68,7 @@ class AnthropicLLMProvider(LLMProvider):
     prompting for high-quality, conversational interview answers.
     """
 
-    DEFAULT_MODEL = "claude-3-5-sonnet-20240620"
+    DEFAULT_MODEL = "claude-3-5-sonnet-20240620"  # Centralized in config.py as AnthropicModels.DEFAULT_LLM
     DEFAULT_MAX_TOKENS = 1024
 
     def __init__(self, api_key: str, model: str | None = None):

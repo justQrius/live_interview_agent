@@ -5,6 +5,7 @@ Stores interview sessions, transcriptions, and generated answers
 for later review and export.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -486,3 +487,106 @@ class SessionHistoryStore:
         if hasattr(self._local, 'connection') and self._local.connection:
             self._local.connection.close()
             self._local.connection = None
+
+
+class AsyncSessionHistoryStore:
+    """
+    Async wrapper for SessionHistoryStore.
+    
+    Provides non-blocking access to all SessionHistoryStore operations by running
+    them in a thread pool via asyncio.to_thread(). This prevents blocking
+    the event loop in async WebSocket handlers.
+    
+    Usage:
+        async_store = AsyncSessionHistoryStore(session_store)
+        session_id = await async_store.create_session()
+    """
+    
+    def __init__(self, store: SessionHistoryStore):
+        """
+        Initialize async wrapper.
+        
+        Args:
+            store: The underlying SessionHistoryStore instance
+        """
+        self._store = store
+    
+    @property
+    def sync_store(self) -> SessionHistoryStore:
+        """Access the underlying synchronous store."""
+        return self._store
+    
+    async def create_session(self, context_files: Optional[List[str]] = None) -> str:
+        """Create a new session (async)."""
+        return await asyncio.to_thread(self._store.create_session, context_files)
+    
+    async def end_session(self, session_id: str) -> None:
+        """Mark a session as ended (async)."""
+        return await asyncio.to_thread(self._store.end_session, session_id)
+    
+    async def add_transcription(
+        self,
+        session_id: str,
+        speaker: str,
+        text: str,
+        timestamp: float,
+        confidence: Optional[float] = None
+    ) -> None:
+        """Record a transcription (async)."""
+        return await asyncio.to_thread(
+            self._store.add_transcription,
+            session_id, speaker, text, timestamp, confidence
+        )
+    
+    async def add_answer(
+        self,
+        session_id: str,
+        question: str,
+        answer: str,
+        confidence: Optional[str] = None,
+        rag_chunks: Optional[List[str]] = None,
+        latency_ms: Optional[int] = None
+    ) -> None:
+        """Record a generated answer (async)."""
+        return await asyncio.to_thread(
+            self._store.add_answer,
+            session_id, question, answer, confidence, rag_chunks, latency_ms
+        )
+    
+    async def add_claim(
+        self,
+        session_id: str,
+        claim_type: str,
+        value: str,
+        original_text: str,
+        timestamp: float
+    ) -> None:
+        """Record a factual claim made during the session (async)."""
+        return await asyncio.to_thread(
+            self._store.add_claim,
+            session_id, claim_type, value, original_text, timestamp
+        )
+    
+    async def get_claims(self, session_id: str) -> List[Dict[str, Any]]:
+        """Get all factual claims for a session (async)."""
+        return await asyncio.to_thread(self._store.get_claims, session_id)
+    
+    async def get_session(self, session_id: str) -> Optional[SessionData]:
+        """Get full session data including transcriptions and answers (async)."""
+        return await asyncio.to_thread(self._store.get_session, session_id)
+    
+    async def list_sessions(
+        self,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[SessionSummary]:
+        """List sessions with pagination, newest first (async)."""
+        return await asyncio.to_thread(self._store.list_sessions, limit, offset)
+    
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session and all related data (async)."""
+        return await asyncio.to_thread(self._store.delete_session, session_id)
+    
+    def close(self) -> None:
+        """Close the database connection."""
+        self._store.close()

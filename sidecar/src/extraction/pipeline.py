@@ -190,41 +190,59 @@ class ExtractionPipeline:
             await report_progress("parsing", 0.1, f"Processing {filename}")
             logger.info(f"Starting extraction for {filename} ({document_type.value})")
             
-            # Stage 2: Summarization
-            await report_progress("summarizing", 0.15, "Generating document summary")
-            try:
-                result.summary = await self.summarizer.summarize(
-                    document_id=document_id,
-                    text=text,
-                    document_type=document_type,
-                    filename=filename,
-                    force_regenerate=force_regenerate,
-                )
-                logger.info(f"Summary generated: {len(result.summary.key_points)} key points")
-            except Exception as e:
-                logger.error(f"Summarization failed: {e}")
-                result.warnings.append(f"Summarization failed: {str(e)}")
+            # Stage 2 & 3: Summarization + Fact Extraction (PARALLEL)
+            # These are independent operations - run them concurrently for ~40% speedup
+            await report_progress("summarizing", 0.15, "Generating summary and extracting facts (parallel)")
             
-            await report_progress("summarizing", 0.35, "Summary complete")
+            async def run_summarization():
+                try:
+                    summary = await self.summarizer.summarize(
+                        document_id=document_id,
+                        text=text,
+                        document_type=document_type,
+                        filename=filename,
+                        force_regenerate=force_regenerate,
+                    )
+                    logger.info(f"Summary generated: {len(summary.key_points)} key points")
+                    return summary, None
+                except Exception as e:
+                    logger.error(f"Summarization failed: {e}")
+                    return None, f"Summarization failed: {str(e)}"
             
-            # Stage 3: Fact Extraction
-            await report_progress("extracting_facts", 0.4, "Extracting structured facts")
-            try:
-                result.facts = await self.fact_extractor.extract_facts(
-                    document_id=document_id,
-                    text=text,
-                    document_type=document_type,
-                    force_regenerate=force_regenerate,
-                )
-                logger.info(
-                    f"Facts extracted: {len(result.facts.skills)} skills, "
-                    f"{len(result.facts.achievements)} achievements"
-                )
-            except Exception as e:
-                logger.error(f"Fact extraction failed: {e}")
-                result.warnings.append(f"Fact extraction failed: {str(e)}")
+            async def run_fact_extraction():
+                try:
+                    facts = await self.fact_extractor.extract_facts(
+                        document_id=document_id,
+                        text=text,
+                        document_type=document_type,
+                        force_regenerate=force_regenerate,
+                    )
+                    logger.info(
+                        f"Facts extracted: {len(facts.skills)} skills, "
+                        f"{len(facts.achievements)} achievements"
+                    )
+                    return facts, None
+                except Exception as e:
+                    logger.error(f"Fact extraction failed: {e}")
+                    return None, f"Fact extraction failed: {str(e)}"
             
-            await report_progress("extracting_facts", 0.6, "Facts extracted")
+            # Run both in parallel
+            (summary_result, summary_err), (facts_result, facts_err) = await asyncio.gather(
+                run_summarization(),
+                run_fact_extraction(),
+                return_exceptions=False
+            )
+            
+            # Process results
+            result.summary = summary_result
+            if summary_err:
+                result.warnings.append(summary_err)
+            
+            result.facts = facts_result
+            if facts_err:
+                result.warnings.append(facts_err)
+            
+            await report_progress("extracting_facts", 0.6, "Summary and facts complete")
             
             # Stage 4: Story Extraction (only for resumes)
             if document_type == DocumentType.RESUME and result.facts:
