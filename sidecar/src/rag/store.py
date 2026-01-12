@@ -4,7 +4,7 @@ import pathlib
 import uuid
 import logging
 from typing import List, Optional, Dict, Any
-from .embeddings import GeminiEmbeddingFunction
+from .gemini_embeddings import GeminiEmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
