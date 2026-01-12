@@ -16,6 +16,13 @@ import numpy as np
 import websockets
 from websockets.asyncio.server import serve, ServerConnection
 
+# Allow running directly from command line
+import sys
+import os
+if __name__ == "__main__" and __package__ is None:
+    # Add the sidecar directory (parent of src) to sys.path
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.protocol import (
     Message,
     MessageType,
