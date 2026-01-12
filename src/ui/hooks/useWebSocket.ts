@@ -41,7 +41,10 @@ export type MessageType =
   | 'ENHANCE_ANSWER'
   | 'ENHANCED_ANSWER_START'
   | 'ENHANCED_ANSWER_CHUNK'
-  | 'ENHANCED_ANSWER_COMPLETE';
+  | 'ENHANCED_ANSWER_COMPLETE'
+  // Document Type Inference (Phase 5)
+  | 'INFER_DOCUMENT_TYPES'
+  | 'DOCUMENT_TYPE_SUGGESTIONS';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -58,6 +61,10 @@ let subscriberCount = 0;
 let reconnectTimeoutId: number | undefined;
 
 const connectionListeners = new Set<ConnectionListener>();
+
+// Custom message handlers for components that need raw message access
+type MessageHandler = (message: WebSocketMessage) => void;
+const customMessageHandlers = new Set<MessageHandler>();
 
 const notifyConnectionListeners = () => {
   for (const listener of connectionListeners) {
@@ -82,6 +89,15 @@ const scheduleReconnect = () => {
 
 const handleIncomingMessage = (message: WebSocketMessage) => {
   const store = useSessionStore.getState();
+
+  // Notify custom handlers first (for component-level handling)
+  for (const handler of customMessageHandlers) {
+    try {
+      handler(message);
+    } catch (e) {
+      console.error('Custom message handler error:', e);
+    }
+  }
 
   switch (message.type) {
     case 'TRANSCRIPTION': {
@@ -446,6 +462,15 @@ export const useWebSocket = () => {
     });
   };
 
+  // Custom message handler registration (for component-level handling)
+  const addMessageHandler = (handler: MessageHandler) => {
+    customMessageHandlers.add(handler);
+  };
+
+  const removeMessageHandler = (handler: MessageHandler) => {
+    customMessageHandlers.delete(handler);
+  };
+
   return {
     sendMessage,
     sendAudio,
@@ -457,5 +482,8 @@ export const useWebSocket = () => {
     deleteSession,
     // Preparation
     requestPreparation,
+    // Custom message handlers (Phase 5: Document Type Inference)
+    addMessageHandler,
+    removeMessageHandler,
   };
 };

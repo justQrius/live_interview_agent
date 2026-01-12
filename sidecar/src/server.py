@@ -48,6 +48,7 @@ from src.protocol import (
     create_enhanced_answer_start_message,
     create_enhanced_answer_chunk_message,
     create_enhanced_answer_complete_message,
+    create_document_type_suggestions_message,
 )
 from src.audio.diarization import SpeakerRecognizer
 from src.audio.capture import AudioCapture, AudioCaptureError
@@ -75,6 +76,7 @@ from src.extraction.pipeline import ExtractionPipeline
 from src.coaching.story_recaller import StoryRecaller
 from src.coaching.structure_suggester import StructureSuggester
 from src.coaching.consistency_tracker import ConsistencyTracker
+from src.classification.document_classifier import DocumentClassifier
 
 # Phase 5: Gemini Features
 from src.context.gemini_cache import GeminiCacheManager
@@ -173,6 +175,9 @@ class SidecarServer:
         self.memory_store = MemoryStore()
         self.extraction_pipeline = ExtractionPipeline(memory_store=self.memory_store)
         self.extraction_enabled = True  # Feature flag for rollout
+        
+        # Phase 5: Document Type Classifier (initialized without LLM, set later)
+        self.document_classifier = DocumentClassifier()
 
     def _create_background_task(self, coro) -> asyncio.Task:
         """Create and track a background task."""
@@ -298,6 +303,8 @@ class SidecarServer:
             MessageType.PREPARE_INTERVIEW: self._handle_prepare_interview,
             # Phase 5: Answer Enhancement
             MessageType.ENHANCE_ANSWER: self._handle_enhance_answer,
+            # Phase 5: Document Type Inference
+            MessageType.INFER_DOCUMENT_TYPES: self._handle_infer_document_types,
         }
 
         handler = handlers.get(message.type)
@@ -1413,6 +1420,164 @@ Provide a concise, punchy version that hits the key points quickly."""
 
         else:
             return base_context + "Improve this answer while maintaining its core message."
+
+    # Phase 5: Document Type Inference Handler
+    
+    async def _handle_infer_document_types(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle INFER_DOCUMENT_TYPES message - classify document types using LLM.
+        
+        Phase 5: Hybrid Document Type Detection
+        
+        Expected data:
+        {
+            "files": [
+                {
+                    "id": "unique-id",
+                    "filename": "resume.pdf",
+                    "content": "base64-encoded-content"
+                },
+                ...
+            ]
+        }
+        
+        Returns DOCUMENT_TYPE_SUGGESTIONS with inferred types.
+        """
+        import io
+        import docx
+        
+        data = message.data or {}
+        files = data.get("files", [])
+        
+        if not files:
+            error_msg = create_error_message(
+                "No files provided for type inference",
+                code="ERR_NO_FILES"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        logger.info(f"Inferring document types for {len(files)} file(s)")
+        
+        # Ensure classifier has LLM if available (use Flash for speed)
+        if self.llm and not self.document_classifier._llm:
+            # Try to get a fast LLM for classification
+            if self.provider_factory:
+                try:
+                    # Use the existing LLM - it will still be fast enough
+                    self.document_classifier.set_llm_provider(self.llm)
+                    logger.info("Set LLM provider for document classifier")
+                except Exception as e:
+                    logger.warning(f"Failed to set classifier LLM: {e}")
+        
+        suggestions = []
+        
+        for file_data in files:
+            file_id = file_data.get("id", file_data.get("filename", "unknown"))
+            filename = file_data.get("filename", "unknown")
+            content_b64 = file_data.get("content", "")
+            
+            try:
+                # Extract text content from file
+                text_content = await self._extract_text_for_classification(
+                    content_b64=content_b64,
+                    filename=filename
+                )
+                
+                # Classify using LLM or fallback to heuristics
+                result = await self.document_classifier.classify(
+                    filename=filename,
+                    text_content=text_content,
+                    fallback_type="custom"
+                )
+                
+                suggestions.append({
+                    "id": file_id,
+                    "filename": filename,
+                    **result.to_dict()
+                })
+                
+                logger.info(f"Classified '{filename}' as {result.document_type} ({result.confidence:.0%})")
+                
+            except Exception as e:
+                logger.error(f"Failed to classify '{filename}': {e}")
+                # Add fallback suggestion
+                suggestions.append({
+                    "id": file_id,
+                    "filename": filename,
+                    "documentType": "custom",
+                    "confidence": 0.3,
+                    "reason": f"Classification failed: {str(e)[:50]}"
+                })
+        
+        # Send suggestions back to frontend
+        response_msg = create_document_type_suggestions_message(suggestions)
+        await websocket.send(response_msg.to_json())
+        
+        logger.info(f"Sent {len(suggestions)} document type suggestion(s)")
+    
+    async def _extract_text_for_classification(
+        self,
+        content_b64: str,
+        filename: str
+    ) -> str:
+        """
+        Extract text content from a base64-encoded file for classification.
+        
+        Supports: .txt, .md, .docx, .pdf (first page via fallback)
+        Returns first ~2000 chars for classification.
+        """
+        import io
+        import docx
+        
+        try:
+            content = base64.b64decode(content_b64)
+            ext = os.path.splitext(filename)[1].lower()
+            
+            # Plain text files
+            if ext in ['.txt', '.md', '.html', '.json']:
+                text = content.decode('utf-8', errors='ignore')
+                return text[:2000]
+            
+            # DOCX files
+            if ext == '.docx':
+                doc = docx.Document(io.BytesIO(content))
+                paragraphs = [para.text for para in doc.paragraphs]
+                text = '\n'.join(paragraphs)
+                return text[:2000]
+            
+            # PDF files - basic text extraction
+            if ext == '.pdf':
+                try:
+                    import pypdf
+                    reader = pypdf.PdfReader(io.BytesIO(content))
+                    text_parts = []
+                    for page in reader.pages[:3]:  # First 3 pages max
+                        text_parts.append(page.extract_text() or "")
+                        if len(''.join(text_parts)) > 2000:
+                            break
+                    return ''.join(text_parts)[:2000]
+                except ImportError:
+                    logger.warning("pypdf not available, using filename heuristics for PDF")
+                    return ""  # Will trigger filename-based fallback
+                except Exception as e:
+                    logger.warning(f"PDF extraction failed: {e}")
+                    return ""
+            
+            # Unknown format - try as text
+            try:
+                text = content.decode('utf-8', errors='ignore')
+                return text[:2000]
+            except Exception:
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Text extraction failed for {filename}: {e}")
+            return ""
 
     # Session History Helper Methods
 
