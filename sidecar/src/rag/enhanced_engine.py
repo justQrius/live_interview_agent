@@ -10,6 +10,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
+from .engine import RAGEngine
 from .store import VectorStore
 from .retrieval import RetrievalResult, confidence_from_distance
 
@@ -46,7 +47,9 @@ DEFAULT_PRIORITIES = [
 ]
 
 
-class EnhancedRAGEngine:
+from .engine import RAGEngine
+
+class EnhancedRAGEngine(RAGEngine):
     """
     Enhanced RAG Engine with question-type-aware retrieval.
     
@@ -72,7 +75,7 @@ class EnhancedRAGEngine:
             context_manager: Optional EnhancedContextManager for parent lookup.
             expand_to_parent: Whether to expand child results to parent context.
         """
-        self.vector_store = vector_store
+        super().__init__(vector_store)
         self.context_manager = context_manager
         self.expand_to_parent = expand_to_parent
         self.parent_cache: Dict[str, str] = {}  # parent_id -> text

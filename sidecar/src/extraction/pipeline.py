@@ -262,35 +262,45 @@ class ExtractionPipeline:
             await report_progress("extracting_stories", 0.85, "Stories complete")
             
             # Stage 5: Profile Generation
-            await report_progress("generating_profile", 0.88, "Generating candidate profile")
-            try:
-                # Get all summaries for context
-                all_summaries = [result.summary] if result.summary else []
-                if self.memory_store:
-                    existing_summaries = self.memory_store.get_all_document_summaries()
-                    # Add existing summaries that aren't the current one
-                    for s in existing_summaries:
-                        if s.document_id != document_id:
-                            all_summaries.append(s)
-                
-                # Get merged facts
-                merged_facts = result.facts
-                if self.memory_store and result.facts:
-                    existing_facts = self.memory_store.get_all_facts()
-                    if existing_facts:
-                        merged_facts = result.facts.merge_with(existing_facts)
-                
-                if merged_facts:
-                    result.profile = self.profile_generator.generate(
-                        facts=merged_facts,
-                        summaries=all_summaries,
-                        stories=result.stories if result.stories else None,
-                        force_regenerate=True,  # Always regenerate profile with new data
-                    )
-                    logger.info("Profile generated/updated")
-            except Exception as e:
-                logger.error(f"Profile generation failed: {e}")
-                result.warnings.append(f"Profile generation failed: {str(e)}")
+            # Only generate profile if we processed a resume or if explicit facts were extracted
+            # Prevent pollution from random context files (like hiring manager info)
+            should_update_profile = (
+                document_type == DocumentType.RESUME or 
+                (result.facts and (result.facts.skills or result.facts.achievements))
+            )
+            
+            if should_update_profile:
+                await report_progress("generating_profile", 0.88, "Generating candidate profile")
+                try:
+                    # Get all summaries for context
+                    all_summaries = [result.summary] if result.summary else []
+                    if self.memory_store:
+                        existing_summaries = self.memory_store.get_all_document_summaries()
+                        # Add existing summaries that aren't the current one
+                        for s in existing_summaries:
+                            if s.document_id != document_id:
+                                all_summaries.append(s)
+                    
+                    # Get merged facts
+                    merged_facts = result.facts
+                    if self.memory_store and result.facts:
+                        existing_facts = self.memory_store.get_all_facts()
+                        if existing_facts:
+                            merged_facts = result.facts.merge_with(existing_facts)
+                    
+                    if merged_facts:
+                        result.profile = self.profile_generator.generate(
+                            facts=merged_facts,
+                            summaries=all_summaries,
+                            stories=result.stories if result.stories else None,
+                            force_regenerate=True,  # Always regenerate profile with new data
+                        )
+                        logger.info("Profile generated/updated")
+                except Exception as e:
+                    logger.error(f"Profile generation failed: {e}")
+                    result.warnings.append(f"Profile generation failed: {str(e)}")
+            else:
+                logger.info(f"Skipping profile update for {document_type.value} (no relevant facts)")
             
             await report_progress("generating_profile", 0.95, "Profile complete")
             
