@@ -6,12 +6,14 @@ export type DocumentType =
   | 'company_info' 
   | 'industry_research' 
   | 'sample_qa' 
+  | 'interviewer_info'
   | 'custom';
 
 export const DOCUMENT_TYPES: Record<DocumentType, { label: string; description: string; icon: string }> = {
   resume: { label: 'Resume/CV', description: 'Your background and experience', icon: '📄' },
   job_description: { label: 'Job Description', description: 'Role requirements', icon: '📋' },
   company_info: { label: 'Company Info', description: 'About the company', icon: '🏢' },
+  interviewer_info: { label: 'Interviewer Info', description: 'About the interviewer/hiring manager', icon: '👤' },
   industry_research: { label: 'Industry Research', description: 'Market insights', icon: '📊' },
   sample_qa: { label: 'Sample Q&A', description: 'Practice questions', icon: '❓' },
   custom: { label: 'Other', description: 'Custom document', icon: '📁' },
@@ -20,9 +22,20 @@ export const DOCUMENT_TYPES: Record<DocumentType, { label: string; description: 
 export const detectDocumentType = (filename: string): DocumentType => {
   const lowerName = filename.toLowerCase();
   
+  // Check resume first (high priority)
   if (lowerName.includes('resume') || lowerName.includes('cv')) return 'resume';
+  
+  // Check interviewer info BEFORE company_info (more specific)
+  if (lowerName.includes('interviewer') || lowerName.includes('hiring_manager') || 
+      lowerName.includes('hiring manager') || lowerName.includes('recruiter')) return 'interviewer_info';
+  
+  // Job description
   if (lowerName.includes('job') || lowerName.includes('jd') || lowerName.includes('description')) return 'job_description';
-  if (lowerName.includes('company') || lowerName.includes('about')) return 'company_info';
+  
+  // Company info (check after interviewer to avoid false matches on "about")
+  if (lowerName.includes('company') || (lowerName.includes('about') && !lowerName.includes('manager'))) return 'company_info';
+  
+  // Other categories
   if (lowerName.includes('research') || lowerName.includes('industry') || lowerName.includes('market')) return 'industry_research';
   if (lowerName.includes('qa') || lowerName.includes('question') || lowerName.includes('sample')) return 'sample_qa';
   
