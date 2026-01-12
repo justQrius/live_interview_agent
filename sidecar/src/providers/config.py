@@ -25,7 +25,7 @@ class GeminiModels:
     # Default choices by use case
     DEFAULT_LLM = PRO
     DEFAULT_STT = FLASH
-    DEFAULT_CACHE = FLASH
+    DEFAULT_CACHE = PRO  # SYNC: Must match DEFAULT_LLM for Gemini API compatibility
     DEFAULT_SEARCH = FLASH
 
 

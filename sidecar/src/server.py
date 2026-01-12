@@ -55,7 +55,7 @@ from src.audio.vad import VADProcessor, SpeechSegment
 from src.audio.noise_reduction import NoiseReducer
 from src.providers.base import STTProvider, LLMProvider
 from src.providers.factory import ProviderFactory
-from src.providers.config import ProviderConfig
+from src.providers.config import ProviderConfig, GeminiModels
 from src.context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
 from src.context.manager import ContextManager
 from src.rag.store import VectorStore
@@ -656,7 +656,7 @@ class SidecarServer:
                                     uploaded_files=uploaded_files,
                                     document_manifest=document_manifest,
                                     ttl_seconds=7200,  # 2 hours
-                                    model="gemini-3-flash-preview",
+                                    model=GeminiModels.DEFAULT_LLM,  # Must match LLM model
                                 )
                                 if cache_name:
                                     # Use getattr to bypass static type checking if base class update isn't picked up
@@ -672,7 +672,7 @@ class SidecarServer:
                                     cache_name = self.gemini_cache_manager.create_cache_from_context(
                                         self.context_manager,
                                         ttl_seconds=7200,
-                                        model="gemini-3-flash-preview",
+                                        model=GeminiModels.DEFAULT_LLM,  # Must match LLM model
                                     )
                                     if cache_name:
                                         if hasattr(self.llm, 'set_cached_content'):
