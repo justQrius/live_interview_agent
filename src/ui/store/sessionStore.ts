@@ -19,7 +19,7 @@ export interface Answer {
 export interface ContextFile {
   id: string;
   name: string;
-  type: 'resume' | 'job_description' | 'company_info' | 'industry_research' | 'sample_qa' | 'custom';
+  type: 'resume' | 'job_description' | 'company_info' | 'industry_research' | 'sample_qa' | 'interviewer_info' | 'custom';
   size: number;
   uploadDate: number;
   preview: string; // First 200 chars

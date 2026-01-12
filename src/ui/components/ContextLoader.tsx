@@ -59,7 +59,7 @@ const ContextLoader: React.FC = () => {
         filesData.push({
           name: file.name,
           content: base64Content,
-          type: docType
+          documentType: docType  // Must match backend expectation
         });
 
         addContextFile({
