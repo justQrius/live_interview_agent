@@ -32,6 +32,9 @@ class DocumentType(Enum):
     CUSTOM = "custom"
 
 
+import io
+import docx
+
 @dataclass
 class UploadedFile:
     """Represents a file uploaded to Gemini."""
@@ -79,24 +82,47 @@ class GeminiFileUploader:
             UploadedFile object with Gemini file reference
         """
         # Auto-detect mime type if not provided
+        ext = os.path.splitext(filename)[1].lower()
         if not mime_type:
-            ext = os.path.splitext(filename)[1].lower()
             mime_type = self._detect_mime_type(ext)
         
         try:
             # Decode base64
             content = base64.b64decode(content_b64)
-            size_bytes = len(content)
+            original_size = len(content)
             
-            # Create temp file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
-                tmp.write(content)
+            upload_content = content
+            upload_mime_type = mime_type
+            upload_ext = ext
+            
+            # Convert DOCX to Text for Gemini Caching compatibility
+            if mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                try:
+                    logger.info(f"Converting DOCX {filename} to text for Gemini compatibility...")
+                    doc = docx.Document(io.BytesIO(content))
+                    full_text = []
+                    for para in doc.paragraphs:
+                        full_text.append(para.text)
+                    
+                    text_content = '\n'.join(full_text)
+                    upload_content = text_content.encode('utf-8')
+                    upload_mime_type = 'text/plain'
+                    upload_ext = '.txt'
+                    logger.info(f"Converted {filename} to text ({len(upload_content)} bytes)")
+                except Exception as conv_err:
+                    logger.warning(f"Failed to convert DOCX {filename}: {conv_err}. Attempting raw upload.")
+            
+            size_bytes = len(upload_content)
+            
+            # Create temp file with correct extension
+            with tempfile.NamedTemporaryFile(delete=False, suffix=upload_ext) as tmp:
+                tmp.write(upload_content)
                 tmp_path = tmp.name
                 
             try:
                 # Upload to Gemini
-                logger.info(f"Uploading {filename} ({document_type.value}) to Gemini...")
-                gemini_file = self.client.upload_file(tmp_path, mime_type=mime_type)
+                logger.info(f"Uploading {filename} ({document_type.value}) to Gemini as {upload_mime_type}...")
+                gemini_file = self.client.upload_file(tmp_path, mime_type=upload_mime_type)
                 logger.info(f"Successfully uploaded {filename} as {gemini_file.name}")
                 
                 # Create tracked file record
@@ -104,7 +130,7 @@ class GeminiFileUploader:
                     gemini_file=gemini_file,
                     filename=filename,
                     document_type=document_type,
-                    mime_type=mime_type,
+                    mime_type=upload_mime_type,  # Store the actual uploaded type
                     size_bytes=size_bytes
                 )
                 
@@ -144,7 +170,7 @@ class GeminiFileUploader:
         mime_map = {
             '.pdf': 'application/pdf',
             '.txt': 'text/plain',
-            '.md': 'text/plain',
+            '.md': 'text/markdown',
             '.doc': 'application/msword',
             '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             '.jpg': 'image/jpeg',
