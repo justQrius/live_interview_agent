@@ -22,6 +22,7 @@ class MessageType(str, Enum):
     MANUAL_QUESTION = "MANUAL_QUESTION"
     PREPARE_INTERVIEW = "PREPARE_INTERVIEW"  # Phase 3B: Request preparation summary
     ENHANCE_ANSWER = "ENHANCE_ANSWER"  # Phase 5: Request answer enhancement
+    INFER_DOCUMENT_TYPES = "INFER_DOCUMENT_TYPES"  # Phase 5: Request LLM-based type inference
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
@@ -55,6 +56,7 @@ class MessageType(str, Enum):
     ENHANCED_ANSWER_START = "ENHANCED_ANSWER_START"  # Phase 5: Enhanced answer streaming start
     ENHANCED_ANSWER_CHUNK = "ENHANCED_ANSWER_CHUNK"  # Phase 5: Enhanced answer chunk
     ENHANCED_ANSWER_COMPLETE = "ENHANCED_ANSWER_COMPLETE"  # Phase 5: Enhancement done
+    DOCUMENT_TYPE_SUGGESTIONS = "DOCUMENT_TYPE_SUGGESTIONS"  # Phase 5: LLM-inferred document types
 
 
 class SessionStatus(str, Enum):
@@ -420,5 +422,28 @@ def create_enhanced_answer_complete_message(
         data={
             "enhancementType": enhancement_type.value,
             "success": success
+        }
+    )
+
+
+# Document Type Inference Helper Functions
+
+def create_document_type_suggestions_message(
+    suggestions: list[dict]
+) -> Message:
+    """
+    Create a DOCUMENT_TYPE_SUGGESTIONS message.
+    
+    Args:
+        suggestions: List of dicts with keys:
+            - id: File identifier from request
+            - documentType: Inferred type (resume, job_description, etc.)
+            - confidence: Float 0.0-1.0
+            - reason: Brief explanation
+    """
+    return Message(
+        type=MessageType.DOCUMENT_TYPE_SUGGESTIONS,
+        data={
+            "suggestions": suggestions
         }
     )
