@@ -128,30 +128,34 @@ class GeminiLLMProvider(LLMProvider):
         """
         Generate streaming response.
         """
+        # When using cache, system prompt must be baked into the cache.
+        # We still calculate it here to know the structure, but we WON'T pass it
+        # to generate_content if a cache is active.
         full_prompt, system_instruction = self._build_prompt(prompt, context, history)
 
         try:
             if not self._client:
                 raise GeminiLLMProviderError("Gemini client is not initialized")
             
-            # Determine thinking budget - disable for simple queries if needed
-            # For now, always enable if model supports it (Gemini 2.0 Flash Thinking)
+            # Determine thinking budget
             thinking = self._thinking_budget if "thinking" in self._model_name else None
             
-            # Run generation in executor to avoid blocking loop (SDK might be sync or async?)
-            # My GeminiClient wrapper uses standard sync client.
-            # So I need to wrap it in run_in_executor.
-            
             loop = asyncio.get_running_loop()
-            
             client = self._client
+            
+            # If we are using a cache, we MUST NOT send system_instruction or tools
+            # (they conflict with the cache configuration)
+            effective_system_instruction = system_instruction
+            if self._cached_content_name:
+                logger.info("Using cached content - suppressing per-request system prompt")
+                effective_system_instruction = None
             
             def run_generate():
                 return client.generate_content(
                     model=self._model_name,
                     contents=full_prompt,
                     cached_content_name=self._cached_content_name,
-                    system_instruction=system_instruction,
+                    system_instruction=effective_system_instruction,
                     thinking_budget=thinking,
                     stream=True
                 )
