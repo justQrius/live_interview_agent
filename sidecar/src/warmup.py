@@ -49,8 +49,8 @@ class ModelWarmer:
         """Load all ML models."""
         try:
             # Import here to avoid blocking main thread
-            from audio.vad import VADProcessor
-            from audio.diarization import SpeakerRecognizer
+            from src.audio.vad import VADProcessor
+            from src.audio.diarization import SpeakerRecognizer
             
             with self._lock:
                 logger.info("Loading Silero VAD model...")

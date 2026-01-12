@@ -16,7 +16,7 @@ from ..base import STTProvider, TranscriptionResult
 
 # Import SAMPLE_RATE from capture module (single source of truth)
 try:
-    from audio.capture import SAMPLE_RATE
+    from src.audio.capture import SAMPLE_RATE
 except ImportError:
     # Fallback if audio module not available (e.g., in tests)
     SAMPLE_RATE = 16000
