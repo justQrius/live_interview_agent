@@ -265,9 +265,18 @@ class ExtractionPipeline:
             # Only generate profile if we processed a resume or if explicit facts were extracted
             # Prevent pollution from random context files (like hiring manager info)
             should_update_profile = (
-                document_type == DocumentType.RESUME or 
-                (result.facts and (result.facts.skills or result.facts.achievements))
+                document_type == DocumentType.RESUME
             )
+            
+            # Additional safety: If type is OTHER/CUSTOM, ensure we don't accidentally update
+            # even if facts were found (unless we are super sure)
+            if result.facts and (result.facts.skills or result.facts.achievements):
+                 # If we found facts but type is OTHER, log it but DON'T update profile automatically
+                 # unless it looks very much like a resume (e.g. has "Experience" section)
+                 # For now, strict mode: ONLY RESUME type updates profile.
+                 if document_type != DocumentType.RESUME:
+                     logger.warning(f"Found facts in {filename} ({document_type.value}) but skipping profile update to prevent pollution")
+                     should_update_profile = False
             
             if should_update_profile:
                 await report_progress("generating_profile", 0.88, "Generating candidate profile")
