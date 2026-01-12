@@ -335,6 +335,13 @@ class SidecarServer:
             try:
                 self.llm = self.provider_factory.get_llm_provider()
                 
+                # Phase 5: Attach Gemini Cache if available
+                # This ensures the LLM has access to the full document context
+                if self.gemini_cache_manager and self.gemini_cache_manager.current_cache_name:
+                    if hasattr(self.llm, 'set_cached_content'):
+                        getattr(self.llm, 'set_cached_content')(self.gemini_cache_manager.current_cache_name)
+                        logger.info(f"Attached existing Gemini cache to session LLM: {self.gemini_cache_manager.current_cache_name}")
+                
                 # Phase 4: Set LLM for Extraction Pipeline
                 if self.extraction_pipeline:
                     self.extraction_pipeline.set_llm_provider(self.llm)
@@ -584,31 +591,31 @@ class SidecarServer:
                     
                     total_chunks += len(new_chunks)
                     
-                # Phase 4: Run extraction pipeline in background
-                # ONLY if we have an LLM (requires apiKeys). If not, we defer extraction.
-                if self.extraction_enabled and self.extraction_pipeline and self.llm:
-                    import uuid
-                    doc_id = str(uuid.uuid4())
-                    
-                    async def extraction_progress(stage: str, progress: float, msg: str = ""):
-                        try:
-                            progress_msg = create_extraction_progress_message(
-                                stage=stage,
-                                progress=progress,
-                                message=msg
-                            )
-                            await websocket.send(progress_msg.to_json())
-                        except Exception as e:
-                            logger.debug(f"Failed to send progress: {e}")
-                    
-                    # Set LLM provider for extraction if available
-                    if self.llm:
-                        self.extraction_pipeline.set_llm_provider(self.llm)
-                    
-                        # Run extraction (non-blocking for UI responsiveness)
-                        self._create_background_task(self._run_extraction(
-                            websocket, doc_id, content, memory_doc_type, filename, extraction_progress
-                        ))
+                    # Phase 4: Run extraction pipeline in background
+                    # ONLY if we have an LLM (requires apiKeys). If not, we defer extraction.
+                    if self.extraction_enabled and self.extraction_pipeline and self.llm:
+                        import uuid
+                        doc_id = str(uuid.uuid4())
+                        
+                        async def extraction_progress(stage: str, progress: float, msg: str = ""):
+                            try:
+                                progress_msg = create_extraction_progress_message(
+                                    stage=stage,
+                                    progress=progress,
+                                    message=msg
+                                )
+                                await websocket.send(progress_msg.to_json())
+                            except Exception as e:
+                                logger.debug(f"Failed to send progress: {e}")
+                        
+                        # Set LLM provider for extraction if available
+                        if self.llm:
+                            self.extraction_pipeline.set_llm_provider(self.llm)
+                        
+                            # Run extraction (non-blocking for UI responsiveness)
+                            self._create_background_task(self._run_extraction(
+                                websocket, doc_id, content, memory_doc_type, filename, extraction_progress
+                            ))
                     elif self.extraction_enabled and not self.llm:
                         logger.warning(f"Skipping extraction for {filename} - No LLM provider available yet")
                     
@@ -882,6 +889,17 @@ class SidecarServer:
                 if not context_chunks and "hiring manager" in self.session_state.conversation_history:
                      # This check is illustrative; actual fix involves clearing persistent state
                      pass 
+
+                # Explicitly add Source Metadata to context string if RAG is used
+                # This helps LLM distinguish between "Resume" vs "Interviewer Info"
+                if context_chunks and retrieval_results:
+                    context_parts = []
+                    for res in retrieval_results:
+                        meta = res.metadata or {}
+                        doc_type = meta.get("document_type", "unknown")
+                        source = meta.get("source", "unknown")
+                        context_parts.append(f"Source: {source} ({doc_type})\n{res.text}")
+                    context_str = "\n\n".join(context_parts)
 
                 async for chunk in self.llm.generate_response(
                     question, context_str, self.session_state.conversation_history

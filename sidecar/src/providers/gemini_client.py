@@ -140,7 +140,7 @@ class GeminiClient:
     def _upload_file_with_retry(self, file_path: str, mime_type: Optional[str] = None) -> types.File:
         """Internal file upload with retry logic."""
         config = types.UploadFileConfig(mime_type=mime_type) if mime_type else None
-        file_obj = self.client.files.upload(path=file_path, config=config)
+        file_obj = self.client.files.upload(file=file_path, config=config)
         
         logger.info(f"Uploaded file {file_path} as {file_obj.name} ({file_obj.mime_type})")
         
@@ -312,13 +312,25 @@ class GeminiClient:
             output_dimensionality=output_dimensionality
         ) if output_dimensionality else None
         
-        result = self.client.models.embed_content(
-            model=model,
-            contents=contents,
-            config=config
-        )
+        # Handle single string case
+        if isinstance(contents, str):
+            contents = [contents]
+            
+        all_embeddings = []
+        BATCH_SIZE = 100
         
-        # Normalize to list of lists
-        if hasattr(result, 'embeddings'):
-            return [e.values for e in result.embeddings]
-        return []
+        # Process in batches to avoid SDK/API limits
+        for i in range(0, len(contents), BATCH_SIZE):
+            batch = contents[i:i + BATCH_SIZE]
+            
+            result = self.client.models.embed_content(
+                model=model,
+                contents=batch,
+                config=config
+            )
+            
+            # Normalize to list of lists
+            if hasattr(result, 'embeddings'):
+                all_embeddings.extend([e.values for e in result.embeddings])
+                
+        return all_embeddings
