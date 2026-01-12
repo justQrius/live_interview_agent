@@ -22,6 +22,7 @@ from protocol import (
     SessionStatus,
     ConfidenceLevel,
     Speaker,
+    EnhancementType,
     create_transcription_message,
     create_answer_chunk_message,
     create_error_message,
@@ -37,6 +38,9 @@ from protocol import (
     create_story_suggestion_message,
     create_structure_suggestion_message,
     create_consistency_warning_message,
+    create_enhanced_answer_start_message,
+    create_enhanced_answer_chunk_message,
+    create_enhanced_answer_complete_message,
 )
 from audio.diarization import SpeakerRecognizer
 from audio.capture import AudioCapture, AudioCaptureError
@@ -250,6 +254,8 @@ class SidecarServer:
             MessageType.DELETE_SESSION: self._handle_delete_session,
             # Pre-interview preparation (Phase 3B: STORY-047)
             MessageType.PREPARE_INTERVIEW: self._handle_prepare_interview,
+            # Phase 5: Answer Enhancement
+            MessageType.ENHANCE_ANSWER: self._handle_enhance_answer,
         }
 
         handler = handlers.get(message.type)
@@ -1022,6 +1028,163 @@ Based on the uploaded documents, here are the main topics to prepare:
 4. **Prepare thoughtful questions** to ask the interviewer
 
 *Note: For personalized insights, ensure an LLM provider is configured.*"""
+
+    # Phase 5: Answer Enhancement Handler
+    
+    async def _handle_enhance_answer(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle ENHANCE_ANSWER message - improves an existing answer.
+        
+        Phase 5: Answer Enhancement Feature
+        
+        Expected data:
+        {
+            "enhancementType": "add_detail" | "make_specific" | "suggest_star" | "adjust_tone" | "shorten",
+            "originalQuestion": "...",
+            "originalAnswer": "...",
+            "tonePreference": "confident" | "humble" (optional, for adjust_tone)
+        }
+        """
+        data = message.data or {}
+        enhancement_type_str = data.get("enhancementType", "add_detail")
+        original_question = data.get("originalQuestion", "")
+        original_answer = data.get("originalAnswer", "")
+        tone_preference = data.get("tonePreference", "confident")
+        
+        if not original_question or not original_answer:
+            error_msg = create_error_message(
+                "originalQuestion and originalAnswer are required",
+                code="ERR_MISSING_DATA"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        try:
+            enhancement_type = EnhancementType(enhancement_type_str)
+        except ValueError:
+            error_msg = create_error_message(
+                f"Invalid enhancement type: {enhancement_type_str}",
+                code="ERR_INVALID_ENHANCEMENT_TYPE"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        if not self.llm:
+            error_msg = create_error_message(
+                "LLM not initialized",
+                code="ERR_LLM_NOT_READY"
+            )
+            await websocket.send(error_msg.to_json())
+            return
+        
+        logger.info(f"Enhancing answer with type: {enhancement_type.value}")
+        
+        # Signal start of enhanced answer
+        start_msg = create_enhanced_answer_start_message(enhancement_type, original_question)
+        await websocket.send(start_msg.to_json())
+        
+        try:
+            # Build enhancement prompt based on type
+            enhancement_prompt = self._build_enhancement_prompt(
+                enhancement_type=enhancement_type,
+                question=original_question,
+                answer=original_answer,
+                tone_preference=tone_preference
+            )
+            
+            # Get additional context if needed (for add_detail)
+            context_str = ""
+            if enhancement_type == EnhancementType.ADD_DETAIL and self.rag_engine:
+                try:
+                    results = self.rag_engine.retrieve(original_question, limit=8)  # Higher limit
+                    context_str = "\n\n".join([r.text for r in results])
+                except Exception as e:
+                    logger.warning(f"RAG retrieval for enhancement failed: {e}")
+            
+            # Stream enhanced answer
+            async for chunk in self.llm.generate_response(
+                enhancement_prompt, context_str, []
+            ):
+                chunk_msg = create_enhanced_answer_chunk_message(chunk=chunk, complete=False)
+                await websocket.send(chunk_msg.to_json())
+            
+            # Signal completion
+            complete_msg = create_enhanced_answer_complete_message(enhancement_type, success=True)
+            await websocket.send(complete_msg.to_json())
+            
+            logger.info(f"Enhancement complete: {enhancement_type.value}")
+            
+        except Exception as e:
+            logger.error(f"Enhancement failed: {e}")
+            error_msg = create_error_message(
+                f"Enhancement failed: {e}",
+                code="ERR_ENHANCEMENT_FAILED"
+            )
+            await websocket.send(error_msg.to_json())
+    
+    def _build_enhancement_prompt(
+        self,
+        enhancement_type: EnhancementType,
+        question: str,
+        answer: str,
+        tone_preference: str = "confident"
+    ) -> str:
+        """Build the prompt for answer enhancement based on type."""
+        
+        base_context = f"""Original Question: {question}
+
+Current Answer: {answer}
+
+"""
+        
+        if enhancement_type == EnhancementType.ADD_DETAIL:
+            return base_context + """Enhance this answer by:
+1. Adding more specific details from the provided context
+2. Including relevant examples or metrics if available
+3. Expanding on key points that could use more depth
+4. Maintaining the same overall structure and tone
+
+Provide an improved, more detailed version of the answer. Keep it natural and conversational."""
+
+        elif enhancement_type == EnhancementType.MAKE_SPECIFIC:
+            return base_context + """Make this answer more specific by:
+1. Adding concrete numbers, percentages, or metrics where possible
+2. Including specific examples with names/dates/technologies
+3. Quantifying achievements and impact
+4. Replacing vague statements with specific details
+
+Provide a version with more specifics. If you don't have exact data, suggest realistic placeholder specifics the candidate should fill in [like this]."""
+
+        elif enhancement_type == EnhancementType.SUGGEST_STAR:
+            return base_context + """Transform this answer into a STAR story format:
+1. **Situation**: Set the context with specific details
+2. **Task**: What was your specific responsibility?
+3. **Action**: What steps did YOU specifically take?
+4. **Result**: What was the measurable outcome?
+
+Rewrite the answer following the STAR structure. Make it compelling and specific."""
+
+        elif enhancement_type == EnhancementType.ADJUST_TONE:
+            tone_desc = "more confident and assertive, using strong action verbs" if tone_preference == "confident" else "more humble and collaborative, acknowledging team contributions"
+            return base_context + f"""Adjust the tone of this answer to be {tone_desc}.
+
+Rewrite the answer maintaining the same information but with the adjusted tone. Keep it natural and authentic."""
+
+        elif enhancement_type == EnhancementType.SHORTEN:
+            return base_context + """Shorten this answer while keeping the key points:
+1. Remove redundant phrases and filler words
+2. Condense to the most impactful statements
+3. Keep the strongest points, remove weaker ones
+4. Aim for ~50% of the original length
+
+Provide a concise, punchy version that hits the key points quickly."""
+
+        else:
+            return base_context + "Improve this answer while maintaining its core message."
 
     # Session History Helper Methods
 

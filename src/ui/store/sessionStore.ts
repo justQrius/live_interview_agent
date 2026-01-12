@@ -82,6 +82,17 @@ export interface Contradiction {
   message: string;
 }
 
+// Enhancement Types (Phase 5)
+export type EnhancementType = 'add_detail' | 'make_specific' | 'suggest_star' | 'adjust_tone' | 'shorten';
+
+export interface EnhancementState {
+  isEnhancing: boolean;
+  enhancementType: EnhancementType | null;
+  enhancedText: string;
+  originalQuestion: string | null;
+  originalAnswer: string | null;
+}
+
 export interface SessionState {
   // Session status
   status: 'idle' | 'calibrating' | 'listening' | 'processing';
@@ -129,6 +140,9 @@ export interface SessionState {
   consistencyWarnings: Contradiction[];
   interimTranscript: string | null;
 
+  // Enhancement State (Phase 5)
+  enhancement: EnhancementState;
+
   // Actions
   setStatus: (status: SessionState['status']) => void;
   setScreenInvisibility: (enabled: boolean) => void;
@@ -167,6 +181,13 @@ export interface SessionState {
   setInterimTranscript: (text: string | null) => void;
   addConsistencyWarning: (warning: Contradiction) => void;
   clearCoachingData: () => void;
+
+  // Enhancement Actions (Phase 5)
+  startEnhancement: (type: EnhancementType, question: string, answer: string) => void;
+  appendEnhancedText: (text: string) => void;
+  completeEnhancement: () => void;
+  cancelEnhancement: () => void;
+  applyEnhancement: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -203,6 +224,15 @@ export const useSessionStore = create<SessionState>((set) => ({
   structureHint: null,
   consistencyWarnings: [],
   interimTranscript: null,
+
+  // Enhancement initial state (Phase 5)
+  enhancement: {
+    isEnhancing: false,
+    enhancementType: null,
+    enhancedText: '',
+    originalQuestion: null,
+    originalAnswer: null,
+  },
 
   // Actions
   setStatus: (status) => set({ status }),
@@ -378,5 +408,74 @@ export const useSessionStore = create<SessionState>((set) => ({
       structureHint: null,
       consistencyWarnings: [],
       interimTranscript: null
+    }),
+
+  // Enhancement Actions (Phase 5)
+  startEnhancement: (type, question, answer) =>
+    set({
+      enhancement: {
+        isEnhancing: true,
+        enhancementType: type,
+        enhancedText: '',
+        originalQuestion: question,
+        originalAnswer: answer,
+      },
+    }),
+
+  appendEnhancedText: (text) =>
+    set((state) => ({
+      enhancement: {
+        ...state.enhancement,
+        enhancedText: state.enhancement.enhancedText + text,
+      },
+    })),
+
+  completeEnhancement: () =>
+    set((state) => ({
+      enhancement: {
+        ...state.enhancement,
+        isEnhancing: false,
+      },
+    })),
+
+  cancelEnhancement: () =>
+    set({
+      enhancement: {
+        isEnhancing: false,
+        enhancementType: null,
+        enhancedText: '',
+        originalQuestion: null,
+        originalAnswer: null,
+      },
+    }),
+
+  applyEnhancement: () =>
+    set((state) => {
+      // Replace current answer with enhanced version
+      if (!state.currentAnswer || !state.enhancement.enhancedText) {
+        return {
+          enhancement: {
+            isEnhancing: false,
+            enhancementType: null,
+            enhancedText: '',
+            originalQuestion: null,
+            originalAnswer: null,
+          },
+        };
+      }
+
+      return {
+        currentAnswer: {
+          ...state.currentAnswer,
+          answerText: state.enhancement.enhancedText,
+        },
+        enhancement: {
+          isEnhancing: false,
+          enhancementType: null,
+          enhancedText: '',
+          originalQuestion: null,
+          originalAnswer: null,
+        },
+      };
     }),
 }));
