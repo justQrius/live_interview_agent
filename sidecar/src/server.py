@@ -551,8 +551,40 @@ class SidecarServer:
         processed_count = 0
         total_chunks = 0
         errors = []
+        
+        # Type mapping dicts (defined once, used for all files)
+        context_doc_type_map = {
+            "resume": ContextDocumentType.RESUME,
+            "job_description": ContextDocumentType.JOB_DESCRIPTION,
+            "company_info": ContextDocumentType.COMPANY_INFO,
+            "interviewer_info": ContextDocumentType.INTERVIEWER_INFO,
+            "sample_qa": ContextDocumentType.SAMPLE_QA,
+        }
+        memory_doc_type_map = {
+            "resume": MemoryDocumentType.RESUME,
+            "job_description": MemoryDocumentType.JOB_DESCRIPTION,
+            "company_info": MemoryDocumentType.COMPANY_INFO,
+            "interviewer_info": MemoryDocumentType.INTERVIEWER_INFO,
+        }
+        file_doc_type_map = {
+            "resume": FileDocumentType.RESUME,
+            "job_description": FileDocumentType.JOB_DESCRIPTION,
+            "company_info": FileDocumentType.COMPANY_INFO,
+            "interviewer_info": FileDocumentType.INTERVIEWER_INFO,
+            "sample_qa": FileDocumentType.SAMPLE_QA,
+        }
+        
+        # Collect Gemini upload tasks for parallel execution
+        # Each entry: (filename, file_doc_type, upload_coroutine)
+        gemini_upload_tasks: List[tuple] = []
+        # Track file info for post-upload processing: (filename, content, memory_doc_type)
+        files_for_extraction: List[tuple] = []
 
         try:
+            # ============================================================
+            # PHASE 1: Pre-process files (validation, chunking, indexing)
+            # This is fast and can stay sequential
+            # ============================================================
             for file_data in files:
                 filename = file_data.get("name")
                 content = file_data.get("content")
@@ -563,77 +595,95 @@ class SidecarServer:
                     errors.append(f"Invalid data for {filename or 'unknown file'}")
                     continue
                 
-                # Map document type string to enum for Context Manager
-                context_doc_type_map = {
-                    "resume": ContextDocumentType.RESUME,
-                    "job_description": ContextDocumentType.JOB_DESCRIPTION,
-                    "company_info": ContextDocumentType.COMPANY_INFO,
-                    "interviewer_info": ContextDocumentType.INTERVIEWER_INFO,
-                    "sample_qa": ContextDocumentType.SAMPLE_QA,
-                }
+                # Map document types
                 context_doc_type = context_doc_type_map.get(doc_type_str, ContextDocumentType.CUSTOM)
-                
-                # Map for Extraction Pipeline (MemoryDocumentType)
-                memory_doc_type_map = {
-                    "resume": MemoryDocumentType.RESUME,
-                    "job_description": MemoryDocumentType.JOB_DESCRIPTION,
-                    "company_info": MemoryDocumentType.COMPANY_INFO,
-                    "interviewer_info": MemoryDocumentType.INTERVIEWER_INFO,
-                }
                 memory_doc_type = memory_doc_type_map.get(doc_type_str, MemoryDocumentType.OTHER)
-                
-                # Map for Gemini File Upload (FileDocumentType)
-                file_doc_type_map = {
-                    "resume": FileDocumentType.RESUME,
-                    "job_description": FileDocumentType.JOB_DESCRIPTION,
-                    "company_info": FileDocumentType.COMPANY_INFO,
-                    "interviewer_info": FileDocumentType.INTERVIEWER_INFO,
-                    "sample_qa": FileDocumentType.SAMPLE_QA,
-                }
                 file_doc_type = file_doc_type_map.get(doc_type_str, FileDocumentType.CUSTOM)
                     
                 try:
-                    # Process through context manager for RAG chunks (secondary)
-                    # IMPORTANT: Pass document_type for proper filtering fix
+                    # Process through context manager for RAG chunks
                     new_chunks = await self.context_manager.process_file(filename, content, document_type=context_doc_type)
                     
                     if new_chunks and self.vector_store:
                         chunk_texts = [c.text for c in new_chunks]
                         chunk_metas = [c.metadata for c in new_chunks]
                         try:
-                            # CRITICAL PERFORMANCE FIX: Run blocking vector store add in thread pool
-                            # This prevents the main event loop from freezing during embeddings generation
+                            # Run blocking vector store add in thread pool
                             loop = asyncio.get_running_loop()
-                            # Capture vector_store in local var to satisfy type checker/runtime safety
                             store = self.vector_store
                             await loop.run_in_executor(
                                 None,
-                                lambda: store.add_documents(chunk_texts, metadatas=chunk_metas)
+                                lambda s=store, ct=chunk_texts, cm=chunk_metas: s.add_documents(ct, metadatas=cm)
                             )
                             logger.info(f"Indexed {len(new_chunks)} chunks for {filename} (non-blocking)")
                         except Exception as e:
                             logger.error(f"Failed to add chunks to vector store: {e}")
                     
-                    # Phase 5 Cache-First: Upload raw file to Gemini File API
-                    if self.gemini_file_uploader:
-                        try:
-                            await self.gemini_file_uploader.upload_from_base64_async(
-                                content_b64=content,
-                                filename=filename,
-                                document_type=file_doc_type
-                            )
-                            logger.info(f"Uploaded {filename} to Gemini File API ({file_doc_type.value})")
-                        except Exception as e:
-                            logger.warning(f"Failed to upload {filename} to Gemini: {e}")
-                    
                     total_chunks += len(new_chunks)
                     
-                    # Phase 4: Run extraction pipeline in background
-                    # ONLY if we have an LLM (requires apiKeys). If not, we defer extraction.
-                    if self.extraction_enabled and self.extraction_pipeline and self.llm:
-                        import uuid
-                        doc_id = str(uuid.uuid4())
-                        
+                    # ============================================================
+                    # PHASE 2: Queue Gemini upload tasks (DON'T await yet)
+                    # ============================================================
+                    if self.gemini_file_uploader:
+                        # Create the coroutine but DON'T await - we'll batch them
+                        upload_coro = self.gemini_file_uploader.upload_from_base64_async(
+                            content_b64=content,
+                            filename=filename,
+                            document_type=file_doc_type
+                        )
+                        gemini_upload_tasks.append((filename, file_doc_type, upload_coro))
+                    
+                    # Track for extraction (after all uploads complete)
+                    files_for_extraction.append((filename, content, memory_doc_type))
+                    
+                    processed_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to process {filename}: {e}")
+                    errors.append(f"Failed to process {filename}: {str(e)}")
+            
+            # ============================================================
+            # PHASE 3: Execute ALL Gemini uploads in PARALLEL
+            # This is the critical performance optimization
+            # 18 files * 1.2s each = 22s sequential vs ~2-3s parallel
+            # ============================================================
+            if gemini_upload_tasks:
+                logger.info(f"Starting parallel Gemini upload for {len(gemini_upload_tasks)} files...")
+                upload_start = asyncio.get_event_loop().time()
+                
+                # Extract just the coroutines for gather
+                upload_coros = [coro for _, _, coro in gemini_upload_tasks]
+                
+                # Execute all uploads concurrently, catching individual failures
+                upload_results = await asyncio.gather(*upload_coros, return_exceptions=True)
+                
+                upload_duration = asyncio.get_event_loop().time() - upload_start
+                logger.info(f"Parallel Gemini upload completed in {upload_duration:.2f}s")
+                
+                # Process results
+                success_count = 0
+                for i, result in enumerate(upload_results):
+                    filename, file_doc_type, _ = gemini_upload_tasks[i]
+                    if isinstance(result, Exception):
+                        logger.warning(f"Failed to upload {filename} to Gemini: {result}")
+                        # Don't add to errors list - Gemini upload failure is non-fatal
+                    else:
+                        logger.info(f"Uploaded {filename} to Gemini File API ({file_doc_type.value})")
+                        success_count += 1
+                
+                logger.info(f"Gemini uploads: {success_count}/{len(gemini_upload_tasks)} successful")
+            
+            # ============================================================
+            # PHASE 4: Start extraction pipelines in background
+            # ============================================================
+            if self.extraction_enabled and self.extraction_pipeline and self.llm:
+                import uuid
+                self.extraction_pipeline.set_llm_provider(self.llm)
+                
+                for filename, content, memory_doc_type in files_for_extraction:
+                    doc_id = str(uuid.uuid4())
+                    
+                    # Create a closure that captures the current websocket
+                    async def make_extraction_progress(ws: ServerConnection):
                         async def extraction_progress(stage: str, progress: float, msg: str = ""):
                             try:
                                 progress_msg = create_extraction_progress_message(
@@ -641,25 +691,20 @@ class SidecarServer:
                                     progress=progress,
                                     message=msg
                                 )
-                                await websocket.send(progress_msg.to_json())
+                                await ws.send(progress_msg.to_json())
                             except Exception as e:
                                 logger.debug(f"Failed to send progress: {e}")
-                        
-                        # Set LLM provider for extraction if available
-                        if self.llm:
-                            self.extraction_pipeline.set_llm_provider(self.llm)
-                        
-                            # Run extraction (non-blocking for UI responsiveness)
-                            self._create_background_task(self._run_extraction(
-                                websocket, doc_id, content, memory_doc_type, filename, extraction_progress
-                            ))
-                    elif self.extraction_enabled and not self.llm:
-                        logger.warning(f"Skipping extraction for {filename} - No LLM provider available yet")
+                        return extraction_progress
                     
-                    processed_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to process {filename}: {e}")
-                    errors.append(f"Failed to process {filename}: {str(e)}")
+                    # Get the callback for this specific websocket
+                    extraction_progress = await make_extraction_progress(websocket)
+                    
+                    # Run extraction in background
+                    self._create_background_task(self._run_extraction(
+                        websocket, doc_id, content, memory_doc_type, filename, extraction_progress
+                    ))
+            elif self.extraction_enabled and not self.llm:
+                logger.warning("Skipping extraction - No LLM provider available yet")
 
             if processed_count == 0 and errors:
                  error_msg = create_error_message(

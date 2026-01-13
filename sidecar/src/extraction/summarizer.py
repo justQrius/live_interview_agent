@@ -79,8 +79,9 @@ class DocumentSummarizer:
     plus extracting key points for interview preparation.
     """
     
-    # Maximum characters to send to LLM (roughly 8k tokens - doubled for pro models)
-    MAX_DOCUMENT_LENGTH = 30000
+    # Maximum characters to send to LLM (roughly 50k tokens)
+    # Gemini supports 2M tokens, so this is very safe
+    MAX_DOCUMENT_LENGTH = 200000
     
     def __init__(
         self, 
