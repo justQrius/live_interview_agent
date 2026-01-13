@@ -601,7 +601,16 @@ class SidecarServer:
                         chunk_texts = [c.text for c in new_chunks]
                         chunk_metas = [c.metadata for c in new_chunks]
                         try:
-                            self.vector_store.add_documents(chunk_texts, metadatas=chunk_metas)
+                            # CRITICAL PERFORMANCE FIX: Run blocking vector store add in thread pool
+                            # This prevents the main event loop from freezing during embeddings generation
+                            loop = asyncio.get_running_loop()
+                            # Capture vector_store in local var to satisfy type checker/runtime safety
+                            store = self.vector_store
+                            await loop.run_in_executor(
+                                None,
+                                lambda: store.add_documents(chunk_texts, metadatas=chunk_metas)
+                            )
+                            logger.info(f"Indexed {len(new_chunks)} chunks for {filename} (non-blocking)")
                         except Exception as e:
                             logger.error(f"Failed to add chunks to vector store: {e}")
                     
@@ -666,41 +675,8 @@ class SidecarServer:
                 # Phase 5 Cache-First: Create Gemini Cache from uploaded files
                 # This provides FULL document context with proper attribution
                 if self.gemini_cache_manager and self.gemini_file_uploader and self.llm:
-                    if hasattr(self.llm, 'set_cached_content'):
-                        if self.gemini_file_uploader.has_files():
-                            try:
-                                logger.info("Creating Gemini Cache from uploaded files (Cache-First)...")
-                                uploaded_files = self.gemini_file_uploader.get_uploaded_files()
-                                document_manifest = self.gemini_file_uploader.get_document_manifest()
-                                
-                                cache_name = await self.gemini_cache_manager.create_cache_from_files_async(
-                                    uploaded_files=uploaded_files,
-                                    document_manifest=document_manifest,
-                                    ttl_seconds=7200,  # 2 hours
-                                    model=GeminiModels.DEFAULT_LLM,  # Must match LLM model
-                                )
-                                if cache_name:
-                                    # Use getattr to bypass static type checking if base class update isn't picked up
-                                    if hasattr(self.llm, 'set_cached_content'):
-                                        getattr(self.llm, 'set_cached_content')(cache_name)
-                                        logger.info(f"LLM using file-based cache: {cache_name}")
-                                    logger.info(f"Document manifest:\n{document_manifest[:500]}...")
-                            except Exception as e:
-                                logger.error(f"Failed to create file-based cache: {e}")
-                                # Fallback to chunk-based cache
-                                logger.info("Falling back to chunk-based cache...")
-                                try:
-                                    cache_name = self.gemini_cache_manager.create_cache_from_context(
-                                        self.context_manager,
-                                        ttl_seconds=7200,
-                                        model=GeminiModels.DEFAULT_LLM,  # Must match LLM model
-                                    )
-                                    if cache_name:
-                                        if hasattr(self.llm, 'set_cached_content'):
-                                            getattr(self.llm, 'set_cached_content')(cache_name)
-                                            logger.info(f"LLM using fallback chunk cache: {cache_name}")
-                                except Exception as fallback_err:
-                                    logger.error(f"Fallback cache also failed: {fallback_err}")
+                    # Run cache creation in background to avoid blocking UI response
+                    self._create_background_task(self._create_gemini_cache_background())
         
         except Exception as e:
             logger.error(f"Context upload fatal error: {e}")
@@ -788,6 +764,46 @@ class SidecarServer:
                 await websocket.send(complete_msg.to_json())
             except Exception:
                 pass
+
+    async def _create_gemini_cache_background(self) -> None:
+        """Background task to create Gemini cache."""
+        if not (self.gemini_cache_manager and self.gemini_file_uploader and self.llm):
+            return
+
+        if not hasattr(self.llm, 'set_cached_content'):
+            return
+
+        if self.gemini_file_uploader.has_files():
+            try:
+                logger.info("Creating Gemini Cache from uploaded files (Cache-First)...")
+                uploaded_files = self.gemini_file_uploader.get_uploaded_files()
+                document_manifest = self.gemini_file_uploader.get_document_manifest()
+                
+                cache_name = await self.gemini_cache_manager.create_cache_from_files_async(
+                    uploaded_files=uploaded_files,
+                    document_manifest=document_manifest,
+                    ttl_seconds=7200,  # 2 hours
+                    model=GeminiModels.DEFAULT_LLM,  # Must match LLM model
+                )
+                if cache_name:
+                    getattr(self.llm, 'set_cached_content')(cache_name)
+                    logger.info(f"LLM using file-based cache: {cache_name}")
+                    logger.info(f"Document manifest:\n{document_manifest[:500]}...")
+            except Exception as e:
+                logger.error(f"Failed to create file-based cache: {e}")
+                # Fallback to chunk-based cache
+                logger.info("Falling back to chunk-based cache...")
+                try:
+                    cache_name = await self.gemini_cache_manager.create_cache_from_context_async(
+                        self.context_manager,
+                        ttl_seconds=7200,
+                        model=GeminiModels.DEFAULT_LLM,
+                    )
+                    if cache_name:
+                        getattr(self.llm, 'set_cached_content')(cache_name)
+                        logger.info(f"LLM using fallback chunk cache: {cache_name}")
+                except Exception as fallback_err:
+                    logger.error(f"Fallback cache also failed: {fallback_err}")
 
     async def _handle_calibrate_voice(
         self,
@@ -1448,7 +1464,8 @@ Provide a concise, punchy version that hits the key points quickly."""
         
         # Lazy Initialization: If API keys are present in this message but providers aren't ready,
         # initialize them now. This handles the case where users add files before "Starting Session".
-        if "apiKeys" in data and not self.llm:
+        has_keys = "apiKeys" in data or "apiKey" in data
+        if has_keys and not self.llm:
             try:
                 logger.info("Auto-initializing providers for document inference...")
                 # Ensure apiKeys structure matches ProviderConfig expectation
