@@ -482,6 +482,15 @@ class SessionHistoryStore:
         logger.debug(f"Deleted session: {session_id}")
         return True
 
+    def clear_all(self) -> None:
+        """
+        Clear all sessions and related data.
+        """
+        conn = self._get_connection()
+        conn.execute("DELETE FROM sessions")
+        conn.commit()
+        logger.info("Cleared all session history")
+
     def close(self) -> None:
         """Close the database connection for this thread."""
         if hasattr(self._local, 'connection') and self._local.connection:
