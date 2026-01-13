@@ -191,7 +191,10 @@ const ContextLoader: React.FC = () => {
         type: file.inferredType,
         size: file.size,
         uploadDate: Date.now(),
-        preview: `${file.inferredType} (${Math.round(file.confidence * 100)}% confidence)`
+        preview: `${file.inferredType} (${Math.round(file.confidence * 100)}% confidence)`,
+        status: 'pending',
+        progress: 0,
+        processingMessage: 'Queued...'
       });
     });
 
@@ -367,28 +370,99 @@ const ContextLoader: React.FC = () => {
               No documents loaded
             </div>
           ) : (
-            <ul className="space-y-2 max-h-40 overflow-y-auto">
+            <ul className="space-y-2 max-h-60 overflow-y-auto">
               {loadedContextFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200 gap-2">
-                  <div className="flex items-center gap-2 overflow-hidden flex-1">
-                    <DocumentTypeSelector 
-                      value={file.type} 
-                      onChange={(newType) => updateContextFile(file.id, { type: newType })}
-                      filename={file.name}
-                    />
-                    <span className="text-sm text-gray-700 truncate" title={file.name}>
-                      {file.name}
-                    </span>
+                <li key={file.id} className="flex flex-col p-2 bg-gray-50 rounded border border-gray-200 gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                      <DocumentTypeSelector 
+                        value={file.type} 
+                        onChange={(newType) => updateContextFile(file.id, { type: newType })}
+                        filename={file.name}
+                      />
+                      <div className="flex flex-col overflow-hidden">
+                        <span className="text-sm text-gray-700 truncate" title={file.name}>
+                          {file.name}
+                        </span>
+                        
+                        {/* Status Message */}
+                        {file.status === 'processing' && (
+                          <span className="text-xs text-gray-500 truncate" title={file.processingMessage}>
+                            {file.processingMessage || 'Processing...'}
+                          </span>
+                        )}
+                        {file.status === 'error' && (
+                          <span className="text-xs text-red-500 truncate" title={file.processingMessage}>
+                            Error: {file.processingMessage}
+                          </span>
+                        )}
+                        {file.status === 'pending' && (
+                          <span className="text-xs text-gray-400">Queued...</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {/* Extraction Result (Sparkles) */}
+                      {file.extractionResult && (
+                        <div className="group relative">
+                          <span className="text-yellow-500 cursor-help" aria-label="View Insights">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" />
+                            </svg>
+                          </span>
+                          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 bg-gray-800 text-white text-xs p-2 rounded z-10 shadow-lg">
+                            <p className="font-semibold mb-1">Extraction Insights:</p>
+                            <p>{file.extractionResult.storyCount} stories</p>
+                            <p>{file.extractionResult.hasFacts ? '✓ Facts extracted' : '• No facts found'}</p>
+                            <p>{file.extractionResult.hasSummary ? '✓ Summary generated' : '• No summary'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Status Indicators */}
+                      {file.status === 'ready' && (
+                        <span className="text-green-500" title="Processing Complete">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      )}
+                      
+                      {file.status === 'error' && (
+                        <div className="group relative">
+                          <span className="text-red-500 cursor-help">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </span>
+                          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 bg-red-800 text-white text-xs p-2 rounded z-10 shadow-lg">
+                            {file.processingMessage || 'Unknown error occurred'}
+                          </div>
+                        </div>
+                      )}
+
+                      <button 
+                        onClick={() => removeContextFile(file.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="Remove file"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => removeContextFile(file.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                    title="Remove file"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
+
+                  {/* Progress Bar */}
+                  {file.status === 'processing' && (
+                    <div className="w-full bg-gray-200 rounded-full h-1 mt-1 overflow-hidden">
+                      <div 
+                        className="bg-blue-600 h-1 rounded-full transition-all duration-300" 
+                        style={{ width: `${file.progress || 0}%` }}
+                      ></div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

@@ -16,6 +16,15 @@ export interface Answer {
   isComplete: boolean;
 }
 
+export interface ExtractionResult {
+  hasSummary: boolean;
+  hasFacts: boolean;
+  storyCount: number;
+  hasProfile: boolean;
+  success: boolean;
+  errors?: string[];
+}
+
 export interface ContextFile {
   id: string;
   name: string;
@@ -23,6 +32,12 @@ export interface ContextFile {
   size: number;
   uploadDate: number;
   preview: string; // First 200 chars
+  
+  // Processing status (Phase 4)
+  status?: 'pending' | 'processing' | 'ready' | 'error';
+  progress?: number;
+  processingMessage?: string;
+  extractionResult?: ExtractionResult;
 }
 
 export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic';
