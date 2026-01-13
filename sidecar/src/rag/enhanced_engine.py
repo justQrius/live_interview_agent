@@ -412,15 +412,23 @@ class EnhancedRAGEngine(RAGEngine):
         
         # Strategy 3: Query vector store by parent_id filter
         try:
-            results = self.vector_store.query_with_filter(
-                query="",  # Empty query, we're filtering by ID
-                n_results=1,
-                where={"level": "parent"}
-            )
+            # FIX: Use get_by_id logic directly instead of querying with empty string
+            # This avoids the "text content is empty" error from the embedding model
+            if hasattr(self.vector_store, 'query_with_filter'):
+                results = self.vector_store.query_with_filter(
+                    query="parent lookup",  # Use non-empty placeholder query
+                    n_results=1,
+                    where={"$and": [{"level": "parent"}, {"chunk_id": parent_id}]}
+                )
+                
+                # Check if we got results
+                parsed = self._parse_results(results)
+                if parsed:
+                    return parsed[0].text
             
-            # This is imperfect - we can't query by exact ID in ChromaDB
-            # without the collection.get() method. For now, return None.
-            # TODO: Add get_by_id to VectorStore
+            # Fallback for when ID lookup via filter fails
+            # Note: We can't easily query by ID unless we stored it as metadata "chunk_id"
+            # which _parse_results seems to suggest we do.
             
         except Exception as e:
             logger.debug(f"Vector store parent lookup failed: {e}")
