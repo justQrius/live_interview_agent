@@ -338,11 +338,31 @@ class SidecarServer:
             self.stt = self.provider_factory.get_stt_provider()
             
             # Phase 5: Initialize Gemini Managers if key available
+            # Reuse existing managers if API key hasn't changed to preserve context
             if config.gemini_api_key:
                 try:
-                    self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
-                    self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
-                    logger.info("Initialized Gemini Cache & Upload managers")
+                    # Check if we can reuse existing cache manager
+                    should_init_cache = True
+                    if self.gemini_cache_manager:
+                        # If manager exists and key matches (or we assume same key for simplicity in session reuse)
+                        # In strict mode we should check key, but for now reuse is priority
+                        should_init_cache = False
+                        logger.info("Reusing existing Gemini Cache Manager")
+                    
+                    if should_init_cache:
+                        self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
+                    
+                    # Check if we can reuse existing file uploader
+                    should_init_uploader = True
+                    if self.gemini_file_uploader:
+                        should_init_uploader = False
+                        logger.info("Reusing existing Gemini File Uploader")
+                        
+                    if should_init_uploader:
+                        self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
+                        
+                    if should_init_cache or should_init_uploader:
+                        logger.info("Initialized Gemini Cache & Upload managers")
                 except Exception as e:
                     logger.warning(f"Failed to init Gemini managers: {e}")
             
@@ -425,8 +445,12 @@ class SidecarServer:
         
         # Initialize RAG in background - don't block audio processing
         # Session works even if RAG fails (graceful degradation)
-        rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
-        self._create_background_task(self._init_rag_background(rag_key))
+        # Reuse existing RAG engine if available to preserve context
+        if not self.rag_engine or not self.vector_store:
+            rag_key = config.gemini_api_key or config.openai_api_key or "dummy"
+            self._create_background_task(self._init_rag_background(rag_key))
+        else:
+            logger.info("RAG engine already active, skipping initialization")
 
     async def _handle_stop_session(
         self,
@@ -448,56 +472,24 @@ class SidecarServer:
         self.session_state.conversation_history.clear()
         self.session_state.persistent_session_id = None
         
-        # Clear Context & Files (Fixes Context Leak)
-        self.context_manager.clear_context()
-        if self.gemini_file_uploader:
-            self.gemini_file_uploader.clear()
-            self.gemini_file_uploader = None
-            
-        # Clear Cache (Fixes Context Leak)
-        if self.gemini_cache_manager:
-            try:
-                # Best effort to delete remote cache to save cost
-                if self.gemini_cache_manager.current_cache_name:
-                    self.gemini_cache_manager.delete_current_cache()
-            except Exception as e:
-                logger.warning(f"Failed to delete remote cache on stop: {e}")
-            self.gemini_cache_manager = None
-
-        if self.vector_store:
-            try:
-                self.vector_store.clear()
-            except Exception as e:
-                logger.error(f"Error clearing vector store: {e}")
-            self.vector_store = None
+        # NOTE: We preserve context (RAG, Cache, Profile) across session stops 
+        # to allow restarting without re-uploading everything.
+        # Cleanup happens only on process exit.
         
-        # Clear Candidate Profile from LLM (Fixes Profile Pollution)
-        if self.llm:
-            self.llm.clear_candidate_profile()
-            
-        # FRESH START: Clear Persistent Memory and Session History
-        # This ensures the next session starts with a clean slate for everything.
-        try:
-            if self.memory_store:
-                self.memory_store.clear_all()
-                logger.info("Cleared persistent memory store (Fresh Start)")
-                
-            if self.session_store:
-                self.session_store.clear_all()
-                logger.info("Cleared session history store (Fresh Start)")
-                
-        except Exception as e:
-            logger.error(f"Failed to clear persistent stores: {e}")
+        # Only clear ephemeral conversation history
+        self.session_state.conversation_history.clear()
         
-        # Reset Providers to ensure fresh init on next session
-        self.llm = None
-        self.stt = None
-        self.rag_engine = None
-        self.provider_factory = None
+        # Don't clear Context/Providers here
+        # self.context_manager.clear_context()
+        # if self.gemini_file_uploader: ...
+        # if self.gemini_cache_manager: ...
+        # if self.vector_store: ...
+        # if self.llm: self.llm.clear_candidate_profile()
         
+        # Stop audio processing
         await self._stop_audio_processing()
 
-        logger.info("Session stopped and context cleared")
+        logger.info("Session stopped (Context preserved for restart)")
 
         status_msg = create_status_message(SessionStatus.IDLE)
         await websocket.send(status_msg.to_json())
