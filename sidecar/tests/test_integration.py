@@ -48,9 +48,14 @@ class TestBidirectionalMessaging:
             patch("server.ContextManager") as _MockContextManager,
             patch("server.GeminiCacheManager") as _MockGeminiCacheManager,
             patch("server.GeminiFileUploader") as _MockGeminiFileUploader,
+            patch("server.MemoryStore") as MockMemoryStore,
             patch("server.SidecarServer._start_audio_processing", new_callable=AsyncMock),
             patch("server.SidecarServer._init_rag_background", new_callable=AsyncMock),
         ):
+            # Setup mock MemoryStore
+            mock_memory = MockMemoryStore.return_value
+            mock_memory.get_profile.return_value = None
+            
             # Setup mock SpeakerRecognizer
             mock_recognizer = MockRecognizer.return_value
             mock_recognizer.create_embedding = MagicMock(return_value=[0.1, 0.2, 0.3])
