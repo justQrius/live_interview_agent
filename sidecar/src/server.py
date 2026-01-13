@@ -1442,31 +1442,37 @@ Provide a concise, punchy version that hits the key points quickly."""
         websocket: ServerConnection,
         message: Message
     ) -> None:
-        """
-        Handle INFER_DOCUMENT_TYPES message - classify document types using LLM.
-        
-        Phase 5: Hybrid Document Type Detection
-        
-        Expected data:
-        {
-            "files": [
-                {
-                    "id": "unique-id",
-                    "filename": "resume.pdf",
-                    "content": "base64-encoded-content"
-                },
-                ...
-            ]
-        }
-        
-        Returns DOCUMENT_TYPE_SUGGESTIONS with inferred types.
-        """
-        import io
-        import docx
-        
+        """Handle INFER_DOCUMENT_TYPES message."""
         data = message.data or {}
         files = data.get("files", [])
         
+        # Lazy Initialization: If API keys are present in this message but providers aren't ready,
+        # initialize them now. This handles the case where users add files before "Starting Session".
+        if "apiKeys" in data and not self.llm:
+            try:
+                logger.info("Auto-initializing providers for document inference...")
+                # Ensure apiKeys structure matches ProviderConfig expectation
+                if "apiKeys" not in data and "apiKey" in data:
+                     data["apiKeys"] = {"gemini": data["apiKey"]}
+                     
+                config = ProviderConfig.from_dict(data)
+                self.provider_factory = ProviderFactory(config)
+                
+                # We need LLM for classification
+                self.llm = self.provider_factory.get_llm_provider()
+                
+                # Set the LLM on the classifier immediately
+                if self.llm:
+                    self.document_classifier.set_llm_provider(self.llm)
+                
+                # Also init other providers if possible, to be ready for session start
+                if not self.stt:
+                    self.stt = self.provider_factory.get_stt_provider()
+                    
+                logger.info("Providers initialized for inference")
+            except Exception as e:
+                logger.warning(f"Failed to auto-init providers for inference: {e}")
+
         if not files:
             error_msg = create_error_message(
                 "No files provided for type inference",
