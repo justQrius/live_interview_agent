@@ -1,0 +1,113 @@
+CANDIDATE SUMMARY: SHAKTISINH SODHA
+
+CONTACT INFORMATION
+Email: shaktisinh.a.sodha@gmail.com
+LinkedIn: linkedin.com/in/shaktisinh-sodha
+GitHub: github.com/shaktisinh-sodha
+Portfolio: portfolio.shaktisinh-sodha.com
+
+PROFESSIONAL TITLE
+Senior Solutions Engineer | AI Solutions Architect | Agentic AI Specialist
+
+PROFESSIONAL SUMMARY
+Senior Solutions Engineer with 5+ years bridging technical architectures and business value. Proven success in Enterprise SaaS and Cloud Infrastructure, driving revenue through technical discovery, PoCs, and strategic implementation. Transitioning into LLM Engineering and Agentic AI Solutions with strong foundation in modern orchestration frameworks and compliance-first RAG architectures.
+
+VALUE PROPOSITION
+
+Bridge Builder: Connects complex technical solutions to measurable business outcomes
+- Quantifying ROI and risk mitigation, not just implementing features
+- Translates technical complexity to executive-friendly narratives
+
+Revenue Driver: Proven track record of deal acceleration
+- $2M+ ARR contribution at Solsys
+- 90% POC-to-Deal conversion (industry average: 60-70%)
+- Technical closer removing blockers in enterprise sales
+
+Fast Learner & Innovator: Self-directed mastery of emerging tech
+- 500+ hours in LLM Engineering and Agentic AI (past 12 months)
+- Built production-grade AI systems independently
+- Stays ahead: GenAI, cloud-native, compliance automation
+
+Enterprise Expert: Navigates complex multi-stakeholder environments
+- Tier 1 enterprises (major telecom, global e-commerce)
+- Manages validation across Legal, IT, InfoSec, Compliance
+- 6-12 month sales cycles, rigorous security reviews
+
+CAREER NARRATIVE ARC
+
+Phase 1: Foundation (2017-2021) - Freedom Mobile
+- Built operational excellence and customer success skills
+- Managed high-performing teams in high-pressure environment
+- Consultative selling with complex products
+
+Phase 2: E-commerce & APIs (2021-2022) - Shopify
+- Mastered API integrations (GraphQL, REST)
+- Architected scalable cloud solutions
+- Custom code development (Rust/Wasm)
+- SaaS economics and merchant success
+
+Phase 3: Enterprise SE (2022-Present) - Solsys
+- True Enterprise SE role with Splunk platform
+- Complex POCs for Fortune 500
+- Expert in compliance, security, observability
+- Presales methodologies mastery
+
+Phase 4: AI/ML Specialization (2024-Present) - Self-Directed
+- Intensive AI engineering courses (Google, industry)
+- 3 portfolios: Agentic AI, LLM Engineering, Production AI
+- Fine-tuning, agents, RAG systems
+- AI-fluent enterprise SE (rare combination)
+
+Phase 5: Next Chapter - Smarsh (Target)
+Why Smarsh: Enterprise SaaS + Cloud + Compliance + AI/ML intersection
+- GenAI transforming compliance (Digital Reasoning + OpenAI)
+- Mission: Protecting largest financial institutions
+- Growth: AWS partnership, global expansion, presales building
+
+UNIQUE DIFFERENTIATORS
+
+1. AI/ML Fluency (Rare for Enterprise SEs)
+   - Build AI systems, not just sell AI features
+   - Can discuss NLP vs. foundation models
+   - RAG architectures for enterprise compliance
+   - GenAI risk monitoring expertise
+
+2. Compliance DNA
+   - Regulated industries (telecom, finance)
+   - Security frameworks (SOC2, ISO 27001)
+   - CCO and CISO pain points understanding
+
+3. Technical Depth + Business Acumen
+   - Architect multi-region AWS deployments
+   - Quantify ROI for CFO: "$22.5M savings via 95% false positive reduction"
+
+4. Proven Presales Excellence
+   - 90% POC-to-Deal conversion
+   - $2M+ ARR contribution (2.5 years)
+   - Displacing incumbents track record
+
+ELEVATOR PITCH (30 seconds)
+"Senior Solutions Engineer bridging technical complexity and business value. At Solsys: $2M+ ARR, 90% POC win rate, architecting Splunk for Fortune 500. Invested 500+ hours mastering LLM engineering and agentic AI. Smarsh combines enterprise SaaS, cloud-native, AI-powered compliance, solving existential problems for largest banks—this is where I need to be."
+
+INTERVIEW POSITIONING
+
+Lead With Strength:
+"I solve complex problems for enterprise customers while speaking business value language. Technical features mean nothing without ROI."
+
+Acknowledge Gaps, Emphasize Learning:
+"Haven't sold to financial services, but spent two weeks mastering SEC Rule 17a-4, WhatsApp crisis, competitive landscape. I ramp fast."
+
+Close With Vision:
+"Compliance market shifting to GenAI-powered intelligence. I speak that future because I'm building those systems today. Want to help Smarsh lead transformation."
+
+THREE-WORD DESCRIPTORS
+- Customer-First: Starts with customer pain, not product features
+- Outcome-Driven: Measures success by business results, not activity
+- Growth-Minded: Continuously learning, adapting, improving
+
+WHAT MOTIVATES ME
+- Problem Complexity: Hard problems requiring technical depth and creative thinking
+- Customer Impact: Preventing $50M fines, saving 20 hours/week, enabling capabilities
+- Innovation: Emerging technologies, cutting edge
+- Team Building: Contributing to building something great
+- Mission: High-stakes meaningful work protecting financial institutions
