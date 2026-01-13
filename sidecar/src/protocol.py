@@ -353,6 +353,8 @@ def create_consistency_warning_message(
 def create_extraction_progress_message(
     stage: str,
     progress: float,
+    document_id: str,
+    filename: str,
     message: str = ""
 ) -> Message:
     return Message(
@@ -360,6 +362,8 @@ def create_extraction_progress_message(
         data={
             "stage": stage,
             "progress": progress,
+            "documentId": document_id,
+            "filename": filename,
             "message": message
         }
     )

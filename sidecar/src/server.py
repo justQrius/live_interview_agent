@@ -675,13 +675,15 @@ class SidecarServer:
                 for filename, content, memory_doc_type in files_for_extraction:
                     doc_id = str(uuid.uuid4())
                     
-                    # Create a closure that captures the current websocket
-                    async def make_extraction_progress(ws: ServerConnection):
+                    # Create a closure that captures the current websocket, doc_id, and filename
+                    async def make_extraction_progress(ws: ServerConnection, d_id: str, fname: str):
                         async def extraction_progress(stage: str, progress: float, msg: str = ""):
                             try:
                                 progress_msg = create_extraction_progress_message(
                                     stage=stage,
                                     progress=progress,
+                                    document_id=d_id,
+                                    filename=fname,
                                     message=msg
                                 )
                                 await ws.send(progress_msg.to_json())
@@ -690,7 +692,7 @@ class SidecarServer:
                         return extraction_progress
                     
                     # Get the callback for this specific websocket
-                    extraction_progress = await make_extraction_progress(websocket)
+                    extraction_progress = await make_extraction_progress(websocket, doc_id, filename)
                     
                     # Run extraction in background
                     self._create_background_task(self._run_extraction(

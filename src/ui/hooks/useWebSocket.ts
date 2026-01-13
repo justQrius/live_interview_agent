@@ -4,7 +4,8 @@ import {
   useSessionStore, 
   StorySuggestion, 
   StructureHint, 
-  Contradiction 
+  Contradiction,
+  ExtractionResult 
 } from '../store/sessionStore';
 
 // WebSocket message types (as per architecture)
@@ -37,7 +38,10 @@ export type MessageType =
   | 'STRUCTURE_SUGGESTION'
   | 'CONSISTENCY_WARNING'
   | 'INTERIM_TRANSCRIPTION'
-  // Answer Enhancement (Phase 5)
+  // Phase 4: Extraction Pipeline
+  | 'EXTRACTION_PROGRESS'
+  | 'EXTRACTION_COMPLETE'
+  // Phase 5: Answer Enhancement
   | 'ENHANCE_ANSWER'
   | 'ENHANCED_ANSWER_START'
   | 'ENHANCED_ANSWER_CHUNK'
@@ -236,6 +240,48 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       const data = message.data as { text: string; speaker: string };
       if (data.speaker === 'Interviewer') {
         store.setInterimTranscript(data.text);
+      }
+      break;
+    }
+
+    // Phase 4: Extraction Pipeline
+    case 'EXTRACTION_PROGRESS': {
+      const data = message.data as {
+        documentId: string;
+        filename: string;
+        stage: string;
+        progress: number;
+        message: string;
+      };
+
+      // Find file by name since IDs might differ
+      const file = store.loadedContextFiles.find((f) => f.name === data.filename);
+      if (file) {
+        store.updateContextFile(file.id, {
+          status: 'processing',
+          progress: data.progress * 100,
+          processingMessage: data.message,
+        });
+      }
+      break;
+    }
+
+    case 'EXTRACTION_COMPLETE': {
+      const data = message.data as {
+        documentId: string;
+        filename: string;
+        success: boolean;
+        summary: ExtractionResult;
+      };
+
+      const file = store.loadedContextFiles.find((f) => f.name === data.filename);
+      if (file) {
+        store.updateContextFile(file.id, {
+          status: data.success ? 'ready' : 'error',
+          extractionResult: data.summary,
+          progress: 100,
+          processingMessage: data.success ? 'Complete' : 'Extraction failed',
+        });
       }
       break;
     }
