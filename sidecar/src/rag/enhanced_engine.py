@@ -25,18 +25,21 @@ logger = logging.getLogger(__name__)
 
 # Question type to document priority mapping
 # First document type in list has highest priority
+# SAMPLE_QA is prioritized FIRST for most question types to leverage user's prepared answers
 DOC_PRIORITY_BY_QUESTION_TYPE: Dict[str, List[DocumentType]] = {
-    "behavioral": [DocumentType.RESUME, DocumentType.SAMPLE_QA],
-    "intro": [DocumentType.RESUME],
-    "technical": [DocumentType.RESUME, DocumentType.JOB_DESCRIPTION],
-    "motivation": [DocumentType.COMPANY_INFO, DocumentType.JOB_DESCRIPTION, DocumentType.INDUSTRY_RESEARCH],
+    "behavioral": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
+    "intro": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
+    "technical": [DocumentType.SAMPLE_QA, DocumentType.RESUME, DocumentType.JOB_DESCRIPTION],
+    "motivation": [DocumentType.SAMPLE_QA, DocumentType.COMPANY_INFO, DocumentType.JOB_DESCRIPTION, DocumentType.INDUSTRY_RESEARCH],
     "weakness": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
-    "strength": [DocumentType.RESUME, DocumentType.SAMPLE_QA],
-    "experience": [DocumentType.RESUME],
-    "salary": [DocumentType.JOB_DESCRIPTION, DocumentType.INDUSTRY_RESEARCH],
-    "culture": [DocumentType.COMPANY_INFO, DocumentType.INTERVIEWER_INFO],
-    "interviewer": [DocumentType.INTERVIEWER_INFO, DocumentType.COMPANY_INFO],
-    "general": [DocumentType.RESUME, DocumentType.JOB_DESCRIPTION],
+    "strength": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
+    "experience": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
+    "salary": [DocumentType.SAMPLE_QA, DocumentType.JOB_DESCRIPTION, DocumentType.INDUSTRY_RESEARCH],
+    "culture": [DocumentType.SAMPLE_QA, DocumentType.COMPANY_INFO, DocumentType.INTERVIEWER_INFO],
+    "interviewer": [DocumentType.SAMPLE_QA, DocumentType.INTERVIEWER_INFO, DocumentType.COMPANY_INFO],
+    "conflict": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
+    "leadership": [DocumentType.SAMPLE_QA, DocumentType.RESUME],
+    "general": [DocumentType.SAMPLE_QA, DocumentType.RESUME, DocumentType.JOB_DESCRIPTION],
 }
 
 # Default priorities when question type is unknown
@@ -148,10 +151,14 @@ class EnhancedRAGEngine(RAGEngine):
         all_results: List[RetrievalResult] = []
         seen_texts: Set[str] = set()  # Use text hash for dedup
         
+        # Build priority index map for stable sorting
+        # SAMPLE_QA first means it gets index 0, RESUME gets index 1, etc.
+        priority_values = [p.value for p in priorities]
+        
         # Query each priority document type
         results_per_type = max(2, limit // len(priorities))
         
-        for doc_type in priorities:
+        for priority_idx, doc_type in enumerate(priorities):
             try:
                 type_results = self._query_by_type(
                     query=question,
@@ -164,6 +171,8 @@ class EnhancedRAGEngine(RAGEngine):
                     text_key = result.text[:200] if len(result.text) > 200 else result.text
                     if text_key not in seen_texts:
                         seen_texts.add(text_key)
+                        # Store priority index in metadata for sorting
+                        result.metadata["_priority_idx"] = priority_idx
                         all_results.append(result)
                         
             except Exception as e:
@@ -178,6 +187,8 @@ class EnhancedRAGEngine(RAGEngine):
                     text_key = result.text[:200] if len(result.text) > 200 else result.text
                     if text_key not in seen_texts:
                         seen_texts.add(text_key)
+                        # Sub-question results get lowest priority (after main priorities)
+                        result.metadata["_priority_idx"] = len(priorities)
                         all_results.append(result)
         
         # Expand child chunks to parents for fuller context
@@ -186,8 +197,12 @@ class EnhancedRAGEngine(RAGEngine):
         else:
             expanded_results = all_results
         
-        # Sort by confidence/distance and limit
-        sorted_results = sorted(expanded_results, key=lambda r: r.distance)
+        # Sort by (priority_index, distance) to preserve document type priority
+        # This ensures SAMPLE_QA results come before RESUME even with similar distances
+        sorted_results = sorted(
+            expanded_results, 
+            key=lambda r: (r.metadata.get("_priority_idx", 999), r.distance)
+        )
         
         return sorted_results[:limit]
     
