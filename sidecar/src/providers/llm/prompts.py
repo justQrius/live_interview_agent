@@ -4,6 +4,13 @@ Enhanced Interview Prompts Module.
 Contains optimized system prompts and question classification logic
 for generating high-quality interview answers.
 
+Frameworks supported:
+- STAR (Situation, Task, Action, Result) - Full behavioral stories
+- SOAR (Situation, Obstacle, Action, Result) - Problem-solving emphasis
+- CAR (Challenge, Action, Result) - Quick punchy responses
+- PAR (Problem, Action, Result) - Rapid-fire answers
+- SHARE (Situation, Hindrance, Action, Result, Evaluation) - Resilience stories
+
 Based on research from:
 - STAR method best practices (ACL, BigInterview)
 - Conversational AI guidelines (Hume AI, ElevenLabs)
@@ -76,6 +83,22 @@ QUESTION_PATTERNS = {
         r"what technologies",
         r"walk me through (the |your )?(architecture|system|code)",
     ],
+    "conflict": [
+        r"disagree with",
+        r"conflict with",
+        r"difficult (person|colleague|coworker|team member)",
+        r"pushback",
+        r"difference of opinion",
+        r"handled disagreement",
+    ],
+    "leadership": [
+        r"led a team",
+        r"leadership (style|experience)",
+        r"managed (a team|people|others)",
+        r"mentored",
+        r"influenced without authority",
+        r"delegated",
+    ],
 }
 
 
@@ -87,7 +110,8 @@ def classify_question(question: str) -> str:
         question: The interview question text
 
     Returns:
-        One of: 'behavioral', 'intro', 'weakness', 'motivation', 'technical', 'general'
+        One of: 'behavioral', 'intro', 'weakness', 'motivation', 'technical', 
+                'conflict', 'leadership', 'general'
     """
     if not question:
         return "general"
@@ -100,6 +124,38 @@ def classify_question(question: str) -> str:
                 return question_type
 
     return "general"
+
+
+def get_recommended_framework(question_type: str, question: str = "") -> str:
+    """
+    Get the recommended framework for a question type.
+    
+    Returns one of: STAR, SOAR, CAR, PAR, SHARE, PREP, or None for non-behavioral.
+    """
+    q_lower = question.lower()
+    
+    # Check for specific signals in the question
+    if "failure" in q_lower or "mistake" in q_lower or "difficult" in q_lower:
+        return "SHARE"  # Best for resilience/failure stories
+    
+    if "quickly" in q_lower or "briefly" in q_lower or "short" in q_lower:
+        return "CAR"  # Quick punchy format
+    
+    if "problem" in q_lower or "solve" in q_lower or "obstacle" in q_lower:
+        return "SOAR"  # Problem-solving emphasis
+    
+    framework_map = {
+        "behavioral": "STAR",
+        "weakness": "SHARE",
+        "conflict": "SOAR",
+        "leadership": "STAR",
+        "intro": "PREP",
+        "motivation": "PREP",
+        "technical": None,
+        "general": None,
+    }
+    
+    return framework_map.get(question_type, "STAR")
 
 
 # =============================================================================
@@ -123,6 +179,14 @@ MASTER_SYSTEM_PROMPT = """You are an expert interview coach helping a job candid
 - If Context lacks relevant info, give a general framework answer or say "I'd be happy to elaborate on specifics".
 - If a detail isn't available, acknowledge naturally: "The specifics would depend on..."
 
+## Web Search Capability
+You have access to real-time web search. Use it when:
+- The question asks about current events, recent news, or trends
+- You need up-to-date information about the company, industry, or technologies
+- Fact-checking specific claims or statistics would strengthen the answer
+- The candidate's context files don't cover a relevant topic
+DO NOT announce that you're searching. Just incorporate the information naturally.
+
 ## Conversational Style Requirements
 - Use contractions naturally (I've, we're, didn't, that's, it's)
 - Vary sentence length: mix short punchy sentences with longer flowing explanations
@@ -141,12 +205,11 @@ MASTER_SYSTEM_PROMPT = """You are an expert interview coach helping a job candid
 
 
 # =============================================================================
-# QUESTION-TYPE SPECIFIC ADDONS
+# BEHAVIORAL FRAMEWORKS
 # =============================================================================
 
-BEHAVIORAL_ADDON = """
-
-## Response Framework: STAR Method (Behavioral Question Detected)
+STAR_FRAMEWORK = """
+## Response Framework: STAR Method
 
 Structure your response using STAR with this distribution:
 
@@ -173,8 +236,118 @@ Example: "As a result, we saw a 30% improvement in... What this taught me was...
 Make the ACTION section the most detailed and specific part of your answer."""
 
 
-INTRO_ADDON = """
+SOAR_FRAMEWORK = """
+## Response Framework: SOAR Method (Problem-Solving Emphasis)
 
+Use SOAR when demonstrating critical thinking and initiative:
+
+**SITUATION (15%, 1-2 sentences)**
+Set the context quickly - what was happening and why it mattered.
+Example: "Our team was experiencing..."
+
+**OBSTACLE (15%, 1-2 sentences)**
+Highlight the specific challenge or blocker you faced. This shows you didn't just follow a script.
+Example: "The main challenge was..." or "What made this difficult was..."
+
+**ACTION (55%, 3-4 sentences)**
+Detail YOUR specific problem-solving approach:
+- How you analyzed the obstacle
+- Creative solutions you proposed
+- Steps you took to overcome the blocker
+- How you brought others along
+Example: "I realized that... so I decided to..."
+
+**RESULT (15%, 1-2 sentences)**
+Quantify the outcome and connect it back to the obstacle you overcame.
+Example: "This approach resulted in... which directly addressed the original challenge."
+
+SOAR emphasizes your ability to identify and overcome obstacles, showing initiative."""
+
+
+CAR_FRAMEWORK = """
+## Response Framework: CAR Method (Quick & Punchy)
+
+Use CAR for concise, impactful answers when time is limited:
+
+**CHALLENGE (20%, 1-2 sentences)**
+Quickly state the problem or goal. Combine situation and task into one punchy setup.
+Example: "We needed to reduce customer churn by 20% in one quarter."
+
+**ACTION (50%, 2-3 sentences)**
+Focus on YOUR key actions. Be specific but brief. Pick the 2-3 most impactful things you did.
+Example: "I analyzed the data and identified three root causes. Then I led a cross-functional sprint to address each one."
+
+**RESULT (30%, 1-2 sentences)**
+Land the outcome with specific metrics. Make it memorable.
+Example: "We hit 25% reduction - exceeding target by 5 points. The approach became our standard playbook."
+
+CAR is ideal for rapid-fire behavioral rounds or when the interviewer is short on time."""
+
+
+PAR_FRAMEWORK = """
+## Response Framework: PAR Method (Rapid Response)
+
+Use PAR for very quick answers or follow-up elaborations:
+
+**PROBLEM (20%, 1 sentence)**
+State the core problem in one sentence.
+Example: "Our deployment process took 4 hours and was error-prone."
+
+**ACTION (50%, 2-3 sentences)**
+What you did to solve it. Be direct and specific.
+Example: "I built a CI/CD pipeline with automated testing. I also added rollback capabilities."
+
+**RESULT (30%, 1-2 sentences)**
+The measurable outcome.
+Example: "Deployments now take 15 minutes with zero errors in the last 6 months."
+
+PAR is the fastest framework - use it when you need to answer in 30 seconds or less."""
+
+
+SHARE_FRAMEWORK = """
+## Response Framework: SHARE Method (Resilience & Growth)
+
+Use SHARE for failure, weakness, or resilience questions:
+
+**SITUATION (10%, 1 sentence)**
+Brief context for what was happening.
+Example: "During a critical product launch at [Company]..."
+
+**HINDRANCE (15%, 1-2 sentences)**
+What went wrong or what obstacle you faced. Be honest and specific.
+Example: "I underestimated the integration complexity, and we missed our deadline by two weeks."
+
+**ACTION (45%, 2-3 sentences)**
+What you did to recover or address the failure. Show ownership.
+Example: "I immediately took responsibility with stakeholders. Then I created a recovery plan with daily milestones and extra testing cycles."
+
+**RESULT (15%, 1-2 sentences)**
+The outcome - even if imperfect, show what was salvaged.
+Example: "We launched successfully two weeks late, but with zero critical bugs. The client appreciated our transparency."
+
+**EVALUATION (15%, 1-2 sentences)**
+What you learned and how you've changed. This is crucial for weakness questions.
+Example: "Looking back, I now always add a 20% buffer for integration work. I've applied this to three projects since with no delays."
+
+SHARE demonstrates self-awareness, accountability, and growth mindset."""
+
+
+# =============================================================================
+# QUESTION-TYPE SPECIFIC ADDONS
+# =============================================================================
+
+BEHAVIORAL_ADDON = """
+## Behavioral Question Detected
+
+Choose the best framework for this specific question:
+- **STAR**: For comprehensive stories with clear task ownership
+- **SOAR**: When emphasizing problem-solving or overcoming obstacles  
+- **CAR**: For quick, punchy responses
+- **PAR**: For very brief answers or follow-ups
+""" + STAR_FRAMEWORK
+
+
+INTRO_ADDON = """
 ## Response Framework: Elevator Pitch (Introduction Question Detected)
 
 Deliver a confident 45-60 second pitch using this structure:
@@ -199,40 +372,20 @@ Keep energy up - this sets the tone for the entire interview. Be warm but profes
 
 
 WEAKNESS_ADDON = """
+## Weakness/Failure Question Detected
 
-## Response Framework: Growth Narrative (Weakness/Failure Question Detected)
-
-Structure your response to show self-awareness and growth:
-
-**1. ACKNOWLEDGE (1 sentence)**
-Name a genuine area of development - not a humble-brag like "I work too hard."
-Choose something real but manageable, ideally not core to the role.
-Example: "One area I've been actively working on is..."
-
-**2. CONTEXT (1-2 sentences)**
-Briefly explain how this showed up in your work - be specific.
-Example: "Earlier in my career, this meant I would sometimes..."
-
-**3. ACTIONS TAKEN (2-3 sentences)**
-Describe SPECIFIC steps you've taken to improve. This is the most important part.
-Example: "To address this, I started... I also began... One technique that helped was..."
-
-**4. PROGRESS (1-2 sentences)**
-Show measurable improvement or a recent positive example.
-Example: "Recently, I was able to... which showed me how far I've come."
-
-Be authentic. Interviewers want to see self-awareness and commitment to growth."""
+Use the SHARE framework for these questions - it includes the crucial "Evaluation" component.
+""" + SHARE_FRAMEWORK
 
 
 MOTIVATION_ADDON = """
-
 ## Response Framework: Authentic Connection (Motivation Question Detected)
 
 Show genuine interest through research and alignment:
 
 **1. COMPANY-SPECIFIC INSIGHT (1-2 sentences)**
 Reference something specific about the company - product, mission, recent news, culture.
-Show you've done your research. Avoid generic praise.
+Show you've done your research. Use web search if needed for recent developments.
 Example: "I've been following [Company]'s work on [specific product/initiative], and..."
 
 **2. ROLE ALIGNMENT (2-3 sentences)**
@@ -248,7 +401,6 @@ Be genuine. Generic answers like "I love your culture" fall flat. Be specific.""
 
 
 TECHNICAL_ADDON = """
-
 ## Response Framework: Structured Technical Response (Technical Question Detected)
 
 Structure technical answers for clarity:
@@ -269,11 +421,39 @@ Example: "I chose [X] over [Y] because... The key trade-off was..."
 Show depth by mentioning nuances, edge cases, or lessons learned.
 Example: "One thing I've learned is..." or "The gotcha to watch out for is..."
 
+For current technology questions, use web search to ensure accuracy on recent developments.
 Balance depth with clarity. Avoid jargon overload but demonstrate real knowledge."""
 
 
-GENERAL_ADDON = """
+CONFLICT_ADDON = """
+## Conflict/Disagreement Question Detected
 
+Use SOAR framework - it emphasizes how you navigated the obstacle (the conflict).
+""" + SOAR_FRAMEWORK + """
+
+**Additional Tips for Conflict Questions:**
+- Never badmouth the other person
+- Focus on the professional disagreement, not personal issues
+- Show you listened and understood their perspective
+- Demonstrate collaborative resolution, not "winning"
+"""
+
+
+LEADERSHIP_ADDON = """
+## Leadership Question Detected
+
+Use STAR framework with emphasis on how you INFLUENCED and ENABLED others.
+""" + STAR_FRAMEWORK + """
+
+**Additional Tips for Leadership Questions:**
+- Use "we" for team outcomes, but be clear about YOUR leadership actions
+- Show how you developed or supported team members
+- Demonstrate decision-making under uncertainty
+- Include how you handled resistance or built buy-in
+"""
+
+
+GENERAL_ADDON = """
 ## Response Framework: Structured General Response
 
 For this question, use a clear structure:
@@ -284,6 +464,7 @@ Address the core of the question immediately. Don't meander.
 **2. SUPPORTING DETAIL (2-4 sentences)**
 Provide specific examples, context, or reasoning from your experience.
 Draw from the Context provided when possible.
+If the question involves current events or recent developments, use web search.
 
 **3. CLOSING (1 sentence)**
 End with a clear conclusion or forward-looking statement.
@@ -296,12 +477,30 @@ Keep your answer focused and relevant to what was asked."""
 # =============================================================================
 
 BEHAVIORAL_EXAMPLE = """
-## Example - Behavioral Question:
+## Example - Behavioral Question (STAR):
 Q: "Tell me about a time you had to meet a tight deadline."
 
 A: "At my previous role at a fintech startup, we had a major client demo scheduled for Friday, but on Tuesday we discovered a critical bug in the payment processing flow. I took ownership since I'd built that module originally. First, I spent Tuesday evening mapping out exactly where the bug originated - it turned out to be a race condition in our async handlers. Wednesday, I coordinated with QA to set up rapid testing cycles, and I stayed late Thursday walking through edge cases myself. We shipped the fix by 2 AM Friday and the demo went perfectly. That experience reinforced how important it is to stay calm, break problems into testable pieces, and communicate progress frequently when stakes are high."
 
 Note: The answer uses "I" throughout, includes specific timeline and technical details, shows ownership, and ends with a genuine learning."""
+
+
+CAR_EXAMPLE = """
+## Example - Quick Behavioral (CAR):
+Q: "Give me a quick example of improving a process."
+
+A: "Our deployment process took 4 hours and caused weekend outages. I automated the entire pipeline with Jenkins and added rollback capabilities. We went from 4 hours to 15 minutes with zero failed deployments in six months - and no more weekend pages."
+
+Note: Punchy, specific, results-focused. Under 30 seconds to deliver."""
+
+
+SHARE_EXAMPLE = """
+## Example - Failure Question (SHARE):
+Q: "Tell me about a time you failed."
+
+A: "During a product launch at my last company, I underestimated the complexity of a third-party integration. We missed our deadline by two weeks. The main hindrance was that I hadn't allocated enough time for API testing edge cases. Once I realized the issue, I immediately flagged it to stakeholders, created a detailed recovery plan with daily check-ins, and personally handled the trickiest integration scenarios. We launched two weeks late but with no critical bugs. Looking back, I learned to always add buffer time for external dependencies. I've since applied this to three projects - all delivered on time."
+
+Note: Honest about the failure, shows ownership, includes concrete learning and behavior change."""
 
 
 INTRO_EXAMPLE = """
@@ -330,6 +529,7 @@ def build_system_prompt(question: str, include_examples: bool = True, candidate_
         Tuple of (complete_system_prompt, question_type)
     """
     question_type = classify_question(question)
+    recommended_framework = get_recommended_framework(question_type, question)
 
     prompt_parts = []
     
@@ -345,16 +545,26 @@ def build_system_prompt(question: str, include_examples: bool = True, candidate_
         "weakness": WEAKNESS_ADDON,
         "motivation": MOTIVATION_ADDON,
         "technical": TECHNICAL_ADDON,
+        "conflict": CONFLICT_ADDON,
+        "leadership": LEADERSHIP_ADDON,
         "general": GENERAL_ADDON,
     }
 
     prompt_parts.append(addons.get(question_type, GENERAL_ADDON))
+    
+    # Add framework hint if applicable
+    if recommended_framework:
+        prompt_parts.append(f"\n**Recommended framework for this question: {recommended_framework}**")
 
     if include_examples:
         if question_type == "behavioral":
             prompt_parts.append(BEHAVIORAL_EXAMPLE)
         elif question_type == "intro":
             prompt_parts.append(INTRO_EXAMPLE)
+        elif question_type == "weakness":
+            prompt_parts.append(SHARE_EXAMPLE)
+        elif question_type in ("conflict", "leadership"):
+            prompt_parts.append(BEHAVIORAL_EXAMPLE)  # STAR example works for these
 
     return "\n".join(prompt_parts), question_type
 
@@ -374,13 +584,88 @@ def format_context_for_prompt(context: str, question_type: str) -> str:
         return ""
 
     headers = {
-        "behavioral": "CANDIDATE'S EXPERIENCE (use for STAR stories):",
+        "behavioral": "CANDIDATE'S EXPERIENCE (use for STAR/SOAR/CAR stories):",
         "intro": "CANDIDATE'S BACKGROUND (for introduction):",
-        "weakness": "CANDIDATE'S BACKGROUND:",
+        "weakness": "CANDIDATE'S BACKGROUND (for SHARE framework):",
         "motivation": "ROLE AND COMPANY CONTEXT:",
         "technical": "CANDIDATE'S TECHNICAL EXPERIENCE:",
+        "conflict": "CANDIDATE'S EXPERIENCE (for conflict resolution story):",
+        "leadership": "CANDIDATE'S LEADERSHIP EXPERIENCE:",
         "general": "RELEVANT CONTEXT:",
     }
 
     header = headers.get(question_type, "RELEVANT CONTEXT:")
     return f"{header}\n{context}"
+
+
+# =============================================================================
+# FRAMEWORK REFERENCE (for UI hints)
+# =============================================================================
+
+FRAMEWORK_DESCRIPTIONS = {
+    "STAR": {
+        "name": "STAR Method",
+        "sections": [
+            {"name": "Situation", "percentage": "15%", "description": "Set the scene"},
+            {"name": "Task", "percentage": "10%", "description": "Your responsibility"},
+            {"name": "Action", "percentage": "60%", "description": "What YOU did"},
+            {"name": "Result", "percentage": "15%", "description": "Quantified outcome"},
+        ],
+        "best_for": "Comprehensive behavioral stories",
+        "time": "60-90 seconds",
+    },
+    "SOAR": {
+        "name": "SOAR Method",
+        "sections": [
+            {"name": "Situation", "percentage": "15%", "description": "Context"},
+            {"name": "Obstacle", "percentage": "15%", "description": "The challenge"},
+            {"name": "Action", "percentage": "55%", "description": "Problem-solving steps"},
+            {"name": "Result", "percentage": "15%", "description": "Outcome"},
+        ],
+        "best_for": "Problem-solving and initiative stories",
+        "time": "60-90 seconds",
+    },
+    "CAR": {
+        "name": "CAR Method",
+        "sections": [
+            {"name": "Challenge", "percentage": "20%", "description": "Problem/goal"},
+            {"name": "Action", "percentage": "50%", "description": "Key actions"},
+            {"name": "Result", "percentage": "30%", "description": "Impact"},
+        ],
+        "best_for": "Quick, punchy responses",
+        "time": "30-45 seconds",
+    },
+    "PAR": {
+        "name": "PAR Method",
+        "sections": [
+            {"name": "Problem", "percentage": "20%", "description": "Core issue"},
+            {"name": "Action", "percentage": "50%", "description": "Solution"},
+            {"name": "Result", "percentage": "30%", "description": "Outcome"},
+        ],
+        "best_for": "Rapid-fire rounds",
+        "time": "20-30 seconds",
+    },
+    "SHARE": {
+        "name": "SHARE Method",
+        "sections": [
+            {"name": "Situation", "percentage": "10%", "description": "Context"},
+            {"name": "Hindrance", "percentage": "15%", "description": "What went wrong"},
+            {"name": "Action", "percentage": "45%", "description": "Recovery steps"},
+            {"name": "Result", "percentage": "15%", "description": "Outcome"},
+            {"name": "Evaluation", "percentage": "15%", "description": "Learning & growth"},
+        ],
+        "best_for": "Failure/weakness questions",
+        "time": "60-90 seconds",
+    },
+    "PREP": {
+        "name": "PREP Method",
+        "sections": [
+            {"name": "Point", "percentage": "20%", "description": "Main message"},
+            {"name": "Reason", "percentage": "30%", "description": "Why it matters"},
+            {"name": "Example", "percentage": "35%", "description": "Supporting story"},
+            {"name": "Point", "percentage": "15%", "description": "Reinforce"},
+        ],
+        "best_for": "Opinion and motivation questions",
+        "time": "45-60 seconds",
+    },
+}

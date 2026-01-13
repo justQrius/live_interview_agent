@@ -306,7 +306,11 @@ class ProviderFactory:
             # Lazy imports to avoid loading all provider dependencies
             if provider_type == ProviderType.GEMINI:
                 from .llm.gemini import GeminiLLMProvider
-                return GeminiLLMProvider(api_key, thinking_budget=self.config.thinking_budget)
+                return GeminiLLMProvider(
+                    api_key, 
+                    thinking_budget=self.config.thinking_budget,
+                    search_enabled=self.config.search_enabled
+                )
             elif provider_type == ProviderType.OPENAI:
                 from .llm.openai import OpenAILLMProvider
                 return OpenAILLMProvider(api_key)

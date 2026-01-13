@@ -36,7 +36,13 @@ class GeminiLLMProvider(LLMProvider):
 
     DEFAULT_MODEL = "gemini-3-pro-preview"  # Centralized in config.py as GeminiModels.DEFAULT_LLM
     
-    def __init__(self, api_key: str, model_name: Optional[str] = None, thinking_budget: Optional[int] = None):
+    def __init__(
+        self, 
+        api_key: str, 
+        model_name: Optional[str] = None, 
+        thinking_budget: Optional[int] = None,
+        search_enabled: bool = False
+    ):
         """
         Initialize Gemini LLM provider.
 
@@ -44,6 +50,7 @@ class GeminiLLMProvider(LLMProvider):
             api_key: Google AI API key
             model_name: Model to use
             thinking_budget: Optional token budget for thinking
+            search_enabled: Enable Google Search grounding for real-time information
         """
         super().__init__()
         
@@ -55,7 +62,8 @@ class GeminiLLMProvider(LLMProvider):
         self._available = False
         self._client: Optional[GeminiClient] = None
         self._cached_content_name: Optional[str] = None
-        self._thinking_budget: int = thinking_budget or 1024 
+        self._thinking_budget: int = thinking_budget or 1024
+        self._search_enabled: bool = search_enabled 
 
         try:
             self._client = GeminiClient(api_key=api_key)
@@ -150,6 +158,10 @@ class GeminiLLMProvider(LLMProvider):
                 logger.info("Using cached content - suppressing per-request system prompt")
                 effective_system_instruction = None
             
+            # Enable web search if configured and not using cache
+            # (search tool cannot be used with cached_content per Gemini API rules)
+            use_search = self._search_enabled and not self._cached_content_name
+            
             def run_generate():
                 return client.generate_content(
                     model=self._model_name,
@@ -157,6 +169,7 @@ class GeminiLLMProvider(LLMProvider):
                     cached_content_name=self._cached_content_name,
                     system_instruction=effective_system_instruction,
                     thinking_budget=thinking,
+                    web_search=use_search,
                     stream=True
                 )
             
