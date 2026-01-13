@@ -19,6 +19,10 @@ class GeminiModels:
     FLASH = "gemini-3-flash-preview"  # Fast, cost-effective for most tasks
     PRO = "gemini-3-pro-preview"      # Higher capability for complex tasks
     
+    # Fallback / Stable models
+    PRO_STABLE = "gemini-2.5-pro"
+    FLASH_STABLE = "gemini-1.5-flash"
+    
     # Specialized
     EMBEDDING = "text-embedding-004"
     
