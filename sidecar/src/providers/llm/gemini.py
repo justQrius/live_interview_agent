@@ -157,93 +157,114 @@ class GeminiLLMProvider(LLMProvider):
             
         last_error = None
         
+        # Configuration for retries
+        MAX_RETRIES_PER_MODEL = 3
+        BASE_DELAY = 2.0
+        
         for attempt_idx, model_attempt in enumerate(models_to_try):
-            try:
-                if not self._client:
-                    raise GeminiLLMProviderError("Gemini client is not initialized")
+            # Inner retry loop for 503/429/Overloaded errors on the SAME model
+            # We try once + MAX_RETRIES_PER_MODEL
+            for retry_count in range(MAX_RETRIES_PER_MODEL + 1):
+                try:
+                    if not self._client:
+                        raise GeminiLLMProviderError("Gemini client is not initialized")
+                    
+                    # Determine thinking budget
+                    # All these models support thinking per user instruction
+                    thinking = self._thinking_budget
+                    
+                    # Log fallback if happening (only on first attempt for this model)
+                    if model_attempt != self._model_name and retry_count == 0:
+                        logger.warning(
+                            f"Fallback attempt {attempt_idx}/{len(models_to_try)-1}: "
+                            f"Switching to {model_attempt} due to quota exhaustion or overload"
+                        )
+                    
+                    loop = asyncio.get_running_loop()
+                    client = self._client
+                    
+                    # If we are using a cache, we MUST NOT send system_instruction or tools
+                    # (they conflict with the cache configuration)
+                    effective_system_instruction = system_instruction
+                    if self._cached_content_name:
+                        if attempt_idx == 0 and retry_count == 0:
+                            logger.info("Using cached content - suppressing per-request system prompt")
+                        effective_system_instruction = None
+                    
+                    # Enable web search if configured and not using cache
+                    use_search = self._search_enabled and not self._cached_content_name
+                    
+                    def run_generate():
+                        return client.generate_content(
+                            model=model_attempt,
+                            contents=full_prompt,
+                            cached_content_name=self._cached_content_name,
+                            system_instruction=effective_system_instruction,
+                            thinking_budget=thinking,
+                            web_search=use_search,
+                            stream=True
+                        )
+                    
+                    response = await loop.run_in_executor(None, run_generate)
+                    
+                    # The response is a synchronous iterator/generator
+                    # We need to iterate it in a way that yields back to asyncio
+                    
+                    # Flag to track if we successfully yielded at least one chunk
+                    # If we yield even one chunk, we consider this model working and don't fallback further
+                    yielded_any = False
+                    
+                    for chunk in response:
+                        if hasattr(chunk, 'text') and chunk.text:
+                            yield chunk.text
+                            yielded_any = True
+                        elif hasattr(chunk, 'candidates') and chunk.candidates:
+                             # Fallback for structured response access
+                             parts = chunk.candidates[0].content.parts
+                             for part in parts:
+                                 if part.text:
+                                     yield part.text
+                                     yielded_any = True
+                                     
+                        # Give other tasks a chance to run
+                        await asyncio.sleep(0)
+                    
+                    # If we finished successfully, break the fallback loop (return from function)
+                    return
                 
-                # Determine thinking budget
-                # All these models support thinking per user instruction
-                thinking = self._thinking_budget
-                
-                # Log fallback if happening
-                if model_attempt != self._model_name:
-                    logger.warning(
-                        f"Fallback attempt {attempt_idx}/{len(models_to_try)-1}: "
-                        f"Switching to {model_attempt} due to quota exhaustion"
-                    )
-                
-                loop = asyncio.get_running_loop()
-                client = self._client
-                
-                # If we are using a cache, we MUST NOT send system_instruction or tools
-                # (they conflict with the cache configuration)
-                effective_system_instruction = system_instruction
-                if self._cached_content_name:
-                    if attempt_idx == 0:
-                        logger.info("Using cached content - suppressing per-request system prompt")
-                    effective_system_instruction = None
-                
-                # Enable web search if configured and not using cache
-                use_search = self._search_enabled and not self._cached_content_name
-                
-                def run_generate():
-                    return client.generate_content(
-                        model=model_attempt,
-                        contents=full_prompt,
-                        cached_content_name=self._cached_content_name,
-                        system_instruction=effective_system_instruction,
-                        thinking_budget=thinking,
-                        web_search=use_search,
-                        stream=True
-                    )
-                
-                response = await loop.run_in_executor(None, run_generate)
-                
-                # The response is a synchronous iterator/generator
-                # We need to iterate it in a way that yields back to asyncio
-                
-                # Flag to track if we successfully yielded at least one chunk
-                # If we yield even one chunk, we consider this model working and don't fallback further
-                yielded_any = False
-                
-                for chunk in response:
-                    if hasattr(chunk, 'text') and chunk.text:
-                        yield chunk.text
-                        yielded_any = True
-                    elif hasattr(chunk, 'candidates') and chunk.candidates:
-                         # Fallback for structured response access
-                         parts = chunk.candidates[0].content.parts
-                         for part in parts:
-                             if part.text:
-                                 yield part.text
-                                 yielded_any = True
-                                 
-                    # Give other tasks a chance to run
-                    await asyncio.sleep(0)
-                
-                # If we finished successfully, break the fallback loop
-                return
-            
-            except Exception as e:
-                error_str = str(e).lower()
-                is_quota_error = "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str
-                
-                last_error = e
-                
-                if is_quota_error and attempt_idx < len(models_to_try) - 1:
-                    # Continue to next model
-                    continue
-                else:
-                    # Not a quota error, or no more models to try
-                    logger.error(f"Gemini LLM error on {model_attempt}: {e}")
-                    # If this was the last attempt, raise
-                    if attempt_idx == len(models_to_try) - 1:
-                        raise GeminiLLMProviderError(f"Generation failed after fallback: {e}")
-                    # If it wasn't a quota error, we probably shouldn't swallow it unless we want to be very aggressive
-                    # But usually only 429s are safe to fallback on (e.g. 400 Bad Request won't be fixed by changing model)
-                    if not is_quota_error:
+                except Exception as e:
+                    error_str = str(e).lower()
+                    is_quota_error = "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str
+                    is_server_error = "503" in error_str or "overloaded" in error_str or "unavailable" in error_str
+                    
+                    last_error = e
+                    
+                    # Retry on 503 (Server Error) OR 429 (Rate Limit) for the SAME model first
+                    if is_server_error or is_quota_error:
+                        if retry_count < MAX_RETRIES_PER_MODEL:
+                            delay = BASE_DELAY * (2 ** retry_count)
+                            logger.warning(
+                                f"Gemini {model_attempt} error ({'Server Error' if is_server_error else 'Rate Limit'}). "
+                                f"Retrying in {delay}s (Attempt {retry_count + 1}/{MAX_RETRIES_PER_MODEL})..."
+                            )
+                            await asyncio.sleep(delay)
+                            continue # Retry same model
+                        else:
+                            # Max retries reached for this model
+                            logger.warning(f"Gemini {model_attempt} failed after {MAX_RETRIES_PER_MODEL} retries. Trying next model if available.")
+                            break # Break inner loop to try next model
+                            
+                    else:
+                        # Not a retryable error
+                        logger.error(f"Gemini LLM error on {model_attempt}: {e}")
                         raise GeminiLLMProviderError(f"Generation failed with non-retryable error: {e}")
+
+            # If loop finished naturally (break from quota/503 max retries), we fall through here.
+            # Loop continues to next model if available.
+            
+            if attempt_idx == len(models_to_try) - 1:
+                # If this was the last model, we must raise
+                raise GeminiLLMProviderError(f"Generation failed after fallback: {last_error}")
 
     async def generate_answer(
         self,
