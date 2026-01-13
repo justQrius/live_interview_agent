@@ -474,6 +474,20 @@ class SidecarServer:
         # Clear Candidate Profile from LLM (Fixes Profile Pollution)
         if self.llm:
             self.llm.clear_candidate_profile()
+            
+        # FRESH START: Clear Persistent Memory and Session History
+        # This ensures the next session starts with a clean slate for everything.
+        try:
+            if self.memory_store:
+                self.memory_store.clear_all()
+                logger.info("Cleared persistent memory store (Fresh Start)")
+                
+            if self.session_store:
+                self.session_store.clear_all()
+                logger.info("Cleared session history store (Fresh Start)")
+                
+        except Exception as e:
+            logger.error(f"Failed to clear persistent stores: {e}")
         
         # Reset Providers to ensure fresh init on next session
         self.llm = None
