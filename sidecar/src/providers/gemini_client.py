@@ -298,7 +298,16 @@ class GeminiClient:
         Returns:
             List of embedding vectors
         """
-        return self._embed_content_with_retry(model, contents, output_dimensionality)
+        # Filter empty content to prevent API errors 400 INVALID_ARGUMENT
+        if isinstance(contents, str):
+            contents = [contents]
+            
+        # Replace empty strings with a placeholder space to maintain indices
+        # This is critical because the vector store expects N embeddings for N inputs
+        # We explicitly check for None or empty string or whitespace-only
+        processed_contents = [c if c and c.strip() else " " for c in contents]
+            
+        return self._embed_content_with_retry(model, processed_contents, output_dimensionality)
     
     @_retry_with_backoff("embedding", max_retries=3, initial_delay=1.0)
     def _embed_content_with_retry(

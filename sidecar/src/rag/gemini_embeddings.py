@@ -6,8 +6,8 @@ Uses the unified GeminiClient (google-genai SDK) for embeddings.
 
 import logging
 import concurrent.futures
-from typing import List, Union
-from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
+from typing import List, Union, Sequence, cast
+from chromadb.api.types import EmbeddingFunction, Documents, Embeddings, Embedding
 
 from src.providers.gemini_client import GeminiClient
 
@@ -55,7 +55,8 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(self._embed_batch, input)
-                return future.result(timeout=self.timeout)
+                result = future.result(timeout=self.timeout)
+                return cast(Embeddings, result)
                 
         except concurrent.futures.TimeoutError:
             logger.error(f"Embedding timed out after {self.timeout}s")
