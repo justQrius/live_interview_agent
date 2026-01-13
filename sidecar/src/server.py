@@ -68,6 +68,7 @@ from src.warmup import ModelWarmer
 from src.classification.question_detector import QuestionDetector
 from src.classification.query_reformulator import QueryReformulator
 from src.classification.question_splitter import QuestionSplitter
+from src.providers.llm.prompts import classify_question
 from src.storage.session_store import SessionHistoryStore
 from src.storage.exporter import SessionExporter, ExportFormat
 from src.memory.store import MemoryStore
@@ -2038,8 +2039,16 @@ Provide a concise, punchy version that hits the key points quickly."""
         """
         import time
         
+        # Refine question_type using granular classification from prompts.py
+        # This ensures "interview_question" becomes "intro", "behavioral", "technical", etc.
+        # which allows DOC_PRIORITY_BY_QUESTION_TYPE to properly prioritize SAMPLE_QA
+        refined_question_type = classify_question(original_question)
+        if refined_question_type != "general":
+            logger.info(f"Refined question type: {question_type} → {refined_question_type}")
+            question_type = refined_question_type
+        
         # Phase 4E: Recall relevant stories (parallel)
-        if self.story_recaller and question_type in ("behavioral", "interview_question"):
+        if self.story_recaller and question_type in ("behavioral", "interview_question", "intro", "weakness", "conflict", "leadership"):
             asyncio.create_task(self._recall_and_suggest_story(original_question, question_type))
             
         # Phase 4E: Suggest structure (parallel)
