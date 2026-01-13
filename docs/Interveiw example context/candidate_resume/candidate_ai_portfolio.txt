@@ -1,0 +1,106 @@
+CANDIDATE AI PORTFOLIO: SHAKTISINH SODHA
+
+PORTFOLIO OVERVIEW
+Investment: 500+ hours over 12 months (2024-present)
+Repositories: 3 comprehensive GitHub portfolios
+Focus: Production-ready implementations, deployed to cloud
+
+PORTFOLIO 1: AGENTIC AI ENGINEERING
+Repository: Experiments_with_agenticAI
+
+Key Projects:
+
+1. Production Multi-Agent Systems (CrewAI)
+   - Engineering Teams crew: Planner, Developer, Reviewer, Tester
+   - Financial Research crew: Analyst, Strategist, Writer
+   - Autonomous task decomposition and execution
+   - Multi-step workflow with inter-agent communication
+   Relevance: Multi-agent compliance workflows, alert triage automation
+
+2. Stateful Workflows (LangGraph)
+   - Human-in-the-Loop approval systems
+   - State machines with conditional branching
+   - Checkpointing and rollback capabilities
+   Relevance: Enterprise reliability, human oversight, audit trails
+
+3. Model Context Protocol (MCP)
+   - Custom MCP servers for databases, APIs, file systems
+   - Secure, versioned tool definitions
+   - Authentication and authorization layers
+   Relevance: Standardized agent interfaces, security, future-proof architecture
+
+4. Distributed Systems (AutoGen)
+   - Distributed coding agents, autonomous debugging
+   - Group chat collaboration, parallel task execution
+   Relevance: Distributed compliance processing, multi-model consensus
+
+PORTFOLIO 2: LLM ENGINEERING & RAG
+Repository: Experiments_with_LLMs
+
+Key Projects:
+
+1. Autonomous Deal Hunter
+   - Multi-agent system on Modal (Serverless), running 24/7
+   - Scraping, analysis, alerting agents
+   - 100+ products monitored, <$5/month cost, 99% uptime
+   Relevance: Serverless architecture, always-on monitoring, scalability
+
+2. Advanced RAG Pipelines
+   - Semantic search, hybrid search, reranking, query rewriting
+   - ChromaDB + OpenAI embeddings
+   - 85% answer accuracy, <500ms latency at 100K docs
+   Relevance: Similar to Smarsh Conduct RAG, eDiscovery retrieval
+
+3. Model Fine-Tuning (QLoRA)
+   - Fine-tuned Llama 3.1 8B on consumer hardware
+   - 4-bit quantization, LoRA for efficiency
+   - 2x performance improvement on specialized task
+   Relevance: Custom models for compliance domain, cost efficiency
+
+PORTFOLIO 3: AI IN PRODUCTION
+Repository: AI_in_Production
+
+Key Projects:
+
+1. Full-Stack SaaS Platform
+   - Next.js + FastAPI + OpenAI GPT-4 streaming
+   - Clerk auth, Vercel hosting, CI/CD pipeline
+   - Production deployed with custom domain
+   Relevance: Full-stack capability, can build custom POC demos
+
+2. Cyber Security Agent
+   - MCP agent with Semgrep integration
+   - Terraform + Docker + AWS Lambda
+   - Automated vulnerability analysis and reporting
+   Relevance: Security-first, automated compliance, infrastructure automation
+
+3. Digital Twin
+   - Stateful agent with SQLite memory
+   - Docker + AWS App Runner deployment
+   - Remembers conversations, adapts over time
+   Relevance: Long-term memory systems, data persistence
+
+AI/ML EXPERTISE SUMMARY
+
+Demonstrated Capabilities:
+1. Agentic Systems: Multi-agent collaboration, autonomous execution
+2. LLM Engineering: Fine-tuning, prompt optimization
+3. RAG Architectures: End-to-end retrieval, hybrid search
+4. Production Deployment: Serverless, full-stack, CI/CD
+5. Infrastructure: Docker, Terraform, cloud deployment
+
+ALIGNMENT WITH SMARSH AI ROADMAP
+
+Smarsh Capability                → My Portfolio Proof
+Intelligent Alert Triage         → Multi-agent systems, autonomous decisions
+Investigation Summaries          → RAG pipelines, document analysis
+Behavioral Profiling             → Anomaly detection, pattern recognition
+Context-Aware Analysis           → RAG with hybrid search, reranking
+GenAI Risk Monitoring            → Security agent, policy enforcement
+
+PORTFOLIO IMPACT ON INTERVIEW
+
+Credibility: Can discuss Digital Reasoning NLP, RAG architecture, multi-agent patterns
+Differentiation: Build AI systems, not just sell AI features
+Demo Engineering: Can prototype custom demos for POCs
+Product Feedback: Provide technical feasibility input to Product team

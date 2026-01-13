@@ -1,0 +1,111 @@
+CANDIDATE EDUCATION & CERTIFICATIONS: SHAKTISINH SODHA
+
+FORMAL EDUCATION
+
+Master of Science (M.Sc.) in Computational Engineering
+- Universität Rostock, Germany (2010 – 2014)
+- Focus: Computational methods, numerical analysis, simulation
+- Relevance: Mathematical foundation, complex systems, research rigor
+
+Bachelor of Engineering (B.E.) in Electronics Engineering
+- The Maharaja Sayajirao University of Baroda, India (2006 – 2010)
+- Focus: Electronics, embedded systems, signal processing
+- Relevance: Technical engineering foundation, systems thinking
+
+Graduate Diploma in Entrepreneurship
+- Algonquin College, Canada (2016 – 2017)
+- Focus: Business strategy, startup operations, venture development
+- Relevance: Business acumen, aligns with Dominic's VC background
+
+AI & MACHINE LEARNING CERTIFICATIONS
+
+AI Agents Intensive Course with Google (2024)
+- Focus: Building production-grade AI agents
+- Topics: Agentic AI, multi-agent systems, orchestration, deployment
+- Relevance: Smarsh GenAI roadmap, intelligent agents
+
+AI Engineer Core Track: LLM Engineering, RAG, QLoRA, Agents (2024)
+- Focus: Comprehensive LLM engineering
+- Topics: LLM fundamentals, prompt engineering, RAG, fine-tuning, agents
+- Projects: End-to-end RAG pipelines, Llama fine-tuning, production deployment
+- Relevance: Digital Reasoning NLP, GenAI features
+
+AI Engineer Agentic Track: Complete Agent & MCP Course (2024)
+- Focus: Advanced agent architectures
+- Topics: Autonomous agents, MCP, multi-agent collaboration, LangGraph, HITL
+- Projects: Custom MCP servers, CrewAI teams, state machines
+- Relevance: Intelligent agent roadmap discussions
+
+AI Engineer MLOps Track: Deploy Gen AI at Scale (2024)
+- Focus: Production deployment and scaling
+- Topics: Serverless AI, model serving, monitoring, cost optimization, CI/CD
+- Infrastructure: Docker, Kubernetes, AWS, Modal, Vercel, Terraform
+- Relevance: Cloud-native AWS architecture, production AI systems
+
+ENTERPRISE SOFTWARE CERTIFICATIONS
+
+Splunk Accredited Sales Engineer II (2023)
+- Competencies: Enterprise architecture, POC execution, technical discovery,
+  solution positioning, value engineering
+- Relevance: Core SE competencies for Smarsh role
+
+Splunk Accredited Architecting Enterprise Deployments (2023)
+- Competencies: Distributed architecture, clustering, data pipelines,
+  capacity planning, high availability
+- Relevance: Multi-region, highly available systems (similar to Smarsh AWS)
+
+Splunk Accredited Enterprise Cluster Administration (2023)
+- Competencies: Cluster operations, performance tuning, upgrades,
+  security, monitoring
+- Relevance: Operational excellence, system reliability
+
+DATA SCIENCE & ANALYTICS CERTIFICATIONS
+
+IBM Data & AI Essentials (2021)
+- Topics: Data science methodology, ML fundamentals, data visualization, ethical AI
+- Relevance: Foundation for AI/ML work, data pipelines
+
+Complete Data Science Bootcamp (2020)
+- Topics: Statistics, supervised/unsupervised learning, deep learning, Python
+- Projects: Predictive modeling, classification, regression, clustering
+- Relevance: Statistical foundation for AI/ML surveillance
+
+Python for Data Science and Machine Learning (2020)
+- Topics: Pandas, NumPy, Matplotlib, Scikit-learn, TensorFlow, Keras
+- Relevance: Python proficiency, data manipulation, ML basics
+
+PROFESSIONAL DEVELOPMENT SUMMARY
+
+Education Philosophy:
+- Continuous Learner: 500+ hours AI/ML in 2024
+- Practical Over Theoretical: Every certification backed by projects
+- Self-Directed Mastery: Identify and close skill gaps
+- Industry Currency: Stays ahead of trends
+
+Certification Strategy Aligned with Smarsh:
+Enterprise Software (Splunk) → Smarsh Enterprise Platform: POC execution, solution architecture
+AI/ML (Google, AI Engineering) → Smarsh Digital Reasoning + GenAI: NLP, intelligent agents, RAG
+Cloud (AWS via MLOps) → Smarsh AWS Partnership: Cloud-native, serverless, multi-region
+Business (Entrepreneurship) → Dominic's VC Perspective: ROI thinking, business value
+
+LEARNING VELOCITY DEMONSTRATED
+
+2024: Zero AI → Production AI systems (12 months)
+- 5 certifications, 3 portfolios, fine-tuned models, production deployed
+
+2023: Zero Splunk → Accredited SE (3 months)
+- 3 certifications, first POC in 60 days, $500K deal in month 4
+
+2021: Zero e-commerce → Shopify expert (2 months)
+- Mastered GraphQL, Liquid, Rust, client success in 6 weeks
+
+Pattern: Steep learning curves, fast time-to-productivity, sustained mastery
+
+CERTIFICATIONS ROADMAP (POTENTIAL 2025)
+
+Financial Services Domain: FINRA SIE exam, CAMS (Anti-Money Laundering)
+Cloud Architecture: AWS Solutions Architect, AWS Security Specialty
+AI/ML Continued: TensorFlow Developer, Coursera ML Specialization
+Sales Engineering: Demo2Win, MEDDIC Certification
+
+Why This Commitment: Serious commitment to Smarsh, proactive gap closing, long-term investment, growth mindset
