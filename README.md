@@ -20,15 +20,16 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Persistent Memory**: The AI "learns" your background from documents and maintains understanding across all answers.
 - **STAR Story Bank**: Automatic extraction of 8-12 achievement stories from your resume in STAR format.
 - **Real-time Story Recall**: When behavioral questions are detected, relevant stories surface within 1 second.
-- **Answer Structure Hints**: Suggests optimal frameworks (STAR, PREP, Pyramid) based on question type.
+- **Answer Structure Hints**: Suggests optimal frameworks (STAR, SOAR, CAR, PAR, SHARE, PREP) based on question type.
 - **Consistency Tracking**: Prevents contradictions between answers during the interview.
 - **Document Extraction Pipeline**: Automatic extraction of skills, timeline, achievements, and metrics from uploaded documents.
+- **Smart Document Classification**: LLM-based automatic detection of document types (resume, job description, company info) with confidence scoring.
 
 ### Gemini Integration (Phase 5)
 - **Context Caching**: Reduced latency and cost through Gemini context caching for long sessions.
 - **Answer Enhancement**: On-demand answer refinement (add detail, make specific, suggest STAR, adjust tone, shorten).
 - **Enhanced RAG**: Hierarchical chunking with child-to-parent expansion for richer context.
-- **Google Search Grounding**: Real-time web search for company news, interviewer research, and industry trends.
+- **Google Search Grounding**: Autonomous real-time web search for company news, industry trends, and factual queries. The AI intelligently decides when to search vs. use internal context.
 
 ### Low-Latency Architecture
 - **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.

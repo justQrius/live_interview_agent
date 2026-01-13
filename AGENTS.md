@@ -36,6 +36,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Run standalone (development)
+# ALWAYS run with -m flag from sidecar directory to ensure correct package resolution
 python -m src.server
 ```
 
@@ -163,6 +164,7 @@ Port: `localhost:8765`
 | `START_SESSION` | Start interview session | `{apiKeys, preferences}` |
 | `STOP_SESSION` | End session | `{}` |
 | `UPLOAD_CONTEXT` | Upload documents | `{files: [{name, content, documentType}]}` |
+| `INFER_DOCUMENT_TYPES` | Infer types for uploaded files | `{files: [{name, snippet, ...}]}` |
 | `CALIBRATE_VOICE` | Voice calibration | `{audioData}` |
 | `MANUAL_QUESTION` | Manual question input | `{question}` |
 | `PREPARE_INTERVIEW` | Request preparation | `{}` |
@@ -182,6 +184,7 @@ Port: `localhost:8765`
 | `ANSWER_CHUNK` | Streaming answer chunk | `{chunk, complete, confidence}` |
 | `ERROR` | Error occurred | `{message, code}` |
 | `STATUS` | Status update | `{state}` |
+| `DOCUMENT_TYPE_SUGGESTIONS` | Document classification results | `{suggestions: [{filename, type, confidence, reasoning}]}` |
 | `PREPARATION_READY` | Preparation complete | `{summary}` |
 | `EXTRACTION_PROGRESS` | Extraction progress | `{stage, progress, message}` |
 | `EXTRACTION_COMPLETE` | Extraction done | `{documentId, filename, success, summary}` |

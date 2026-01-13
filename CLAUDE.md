@@ -190,7 +190,7 @@ live_interview_agent/
 - **Context Caching**: 2-hour TTL cache for reduced latency
 - **Answer Enhancement**: 5 enhancement types (detail, specific, STAR, tone, shorten)
 - **Enhanced RAG**: Child-to-parent expansion, question-type awareness
-- **Google Search Grounding**: Real-time web research
+- **Google Search Grounding**: Autonomous real-time web search for facts, news, and trends
 
 ## Conventions
 
@@ -211,6 +211,7 @@ live_interview_agent/
 - One module per concern (audio, stt, rag, llm, coaching, memory)
 - pytest for testing
 - Use `src.` prefix for all imports (e.g., `from src.audio.vad import VADProcessor`)
+- ALWAYS run as module: `python -m src.server` (not `python src/server.py`)
 
 ### IPC Protocol
 - WebSocket on localhost:8765
