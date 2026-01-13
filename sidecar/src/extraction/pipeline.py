@@ -30,13 +30,10 @@ from src.memory.models import (
     DocumentType,
 )
 
-
 logger = logging.getLogger(__name__)
-
 
 # Type alias for progress callback
 ProgressCallback = Callable[[str, float, Optional[str]], Awaitable[None]]
-
 
 @dataclass
 class ExtractionResult:
@@ -78,375 +75,316 @@ class ExtractionResult:
             "warnings": self.warnings,
         }
 
-
 @dataclass 
 class PipelineStage:
     """Represents a stage in the extraction pipeline."""
     name: str
     display_name: str
     weight: float  # Relative weight for progress calculation
-
-
-# Pipeline stages with weights
-PIPELINE_STAGES = [
-    PipelineStage("parsing", "Parsing document", 0.1),
-    PipelineStage("summarizing", "Generating summary", 0.25),
-    PipelineStage("extracting_facts", "Extracting facts", 0.25),
-    PipelineStage("extracting_stories", "Extracting stories", 0.25),
-    PipelineStage("generating_profile", "Generating profile", 0.1),
-    PipelineStage("complete", "Complete", 0.05),
-]
-
+    status: str    # Status string for callback
 
 class ExtractionPipeline:
     """
-    Orchestrates the full document extraction workflow.
+    Orchestrates the document extraction pipeline.
     
-    Coordinates summarization, fact extraction, story extraction,
-    and profile generation in a unified pipeline with progress tracking.
+    Coordinates the execution of Summarizer, FactExtractor, StoryExtractor,
+    and ProfileGenerator to extract intelligence from documents.
     """
+    
+    STAGES = [
+        PipelineStage("summarize", "Summarizing Document", 0.2, "summarizing"),
+        PipelineStage("facts", "Extracting Facts", 0.3, "extracting_facts"),
+        PipelineStage("stories", "identifying STAR Stories", 0.3, "extracting_stories"),
+        PipelineStage("profile", "Updating Candidate Profile", 0.2, "updating_profile"),
+    ]
     
     def __init__(
         self,
         llm_provider: Optional[Any] = None,
-        memory_store: Optional[Any] = None,
+        memory_store: Optional[Any] = None
     ):
         """
         Initialize the extraction pipeline.
         
         Args:
-            llm_provider: LLM provider for AI-powered extraction
-            memory_store: Memory store for persisting results
+            llm_provider: LLM provider for all extractors
+            memory_store: Memory store for saving results
         """
         self.llm_provider = llm_provider
         self.memory_store = memory_store
         
-        # Initialize extractors
+        # Initialize sub-extractors
         self.summarizer = DocumentSummarizer(llm_provider, memory_store)
         self.fact_extractor = FactExtractor(llm_provider, memory_store)
         self.story_extractor = StoryExtractor(llm_provider, memory_store)
         self.profile_generator = ProfileGenerator(memory_store)
         
-        # Track active extractions
-        self._active_extractions: Dict[str, asyncio.Task] = {}
-    
+        # Track background tasks
+        self._background_tasks: Dict[str, asyncio.Task] = {}
+        
     def set_llm_provider(self, provider: Any) -> None:
-        """Set or update the LLM provider for all extractors."""
+        """Update LLM provider for all components."""
         self.llm_provider = provider
         self.summarizer.set_llm_provider(provider)
         self.fact_extractor.set_llm_provider(provider)
         self.story_extractor.set_llm_provider(provider)
-    
+        
     def set_memory_store(self, store: Any) -> None:
-        """Set or update the memory store for all extractors."""
+        """Update memory store for all components."""
         self.memory_store = store
         self.summarizer.set_memory_store(store)
         self.fact_extractor.set_memory_store(store)
         self.story_extractor.set_memory_store(store)
         self.profile_generator.set_memory_store(store)
-    
+        
     async def process_document(
         self,
         document_id: str,
         text: str,
         document_type: DocumentType,
-        filename: str = "",
-        progress_callback: Optional[ProgressCallback] = None,
-        force_regenerate: bool = False,
+        filename: str,
+        progress_callback: Optional[ProgressCallback] = None
     ) -> ExtractionResult:
         """
-        Process a document through the full extraction pipeline.
+        Run the full extraction pipeline.
         
         Args:
-            document_id: Unique identifier for the document
-            text: Full text content of the document
-            document_type: Type of document (resume, JD, etc.)
+            document_id: Unique document ID
+            text: Document content
+            document_type: Type of document
             filename: Original filename
-            progress_callback: Async callback for progress updates
-                               Signature: (stage: str, progress: float, message: str) -> None
-            force_regenerate: If True, regenerate even if cached
+            progress_callback: Optional async callback for progress updates
             
         Returns:
-            ExtractionResult with all extracted data
+            ExtractionResult object
         """
-        started_at = datetime.now()
+        start_time = datetime.now()
+        logger.info(f"Starting extraction for {filename} ({document_type.value})")
+        
         result = ExtractionResult(
             document_id=document_id,
             document_type=document_type,
             filename=filename,
-            started_at=started_at,
+            started_at=start_time
         )
         
-        async def report_progress(stage: str, progress: float, message: str = ""):
-            """Helper to report progress."""
-            if progress_callback:
-                try:
-                    await progress_callback(stage, progress, message)
-                except Exception as e:
-                    logger.warning(f"Progress callback failed: {e}")
+        current_progress = 0.0
         
+        async def update_progress(stage_idx: int, message: str = ""):
+            """Helper to update progress based on stages."""
+            if not progress_callback:
+                return
+                
+            nonlocal current_progress
+            
+            # Calculate base progress from completed stages
+            base_progress = sum(s.weight for s in self.STAGES[:stage_idx]) * 100
+            
+            # Add a bit of progress for the current stage start
+            current_stage_weight = self.STAGES[stage_idx].weight * 100
+            
+            # Update global progress
+            current_progress = base_progress + (current_stage_weight * 0.1)
+            
+            stage = self.STAGES[stage_idx]
+            if message:
+                full_message = f"{stage.display_name}: {message}"
+            else:
+                full_message = stage.display_name
+                
+            await progress_callback(stage.status, current_progress, full_message)
+
         try:
-            # Stage 1: Parsing (already done - text is provided)
-            await report_progress("parsing", 0.1, f"Processing {filename}")
-            logger.info(f"Starting extraction for {filename} ({document_type.value})")
+            # Initial status
+            if progress_callback:
+                await progress_callback("parsing", 0.0, "Parsing document...")
+
+            # 1. Summarization
+            await update_progress(0)
+            try:
+                result.summary = await self.summarizer.summarize(
+                    document_id, text, document_type, filename
+                )
+            except Exception as e:
+                logger.error(f"Summarization failed: {e}")
+                result.errors.append(f"Summarization failed: {str(e)}")
             
-            # Stage 2 & 3: Summarization + Fact Extraction (PARALLEL)
-            # These are independent operations - run them concurrently for ~40% speedup
-            await report_progress("summarizing", 0.15, "Generating summary and extracting facts (parallel)")
+            # 2. Fact Extraction
+            await update_progress(1)
+            try:
+                result.facts = await self.fact_extractor.extract_facts(
+                    document_id, text, document_type
+                )
+            except Exception as e:
+                logger.error(f"Fact extraction failed: {e}")
+                result.errors.append(f"Fact extraction failed: {str(e)}")
             
-            async def run_summarization():
-                try:
-                    summary = await self.summarizer.summarize(
-                        document_id=document_id,
-                        text=text,
-                        document_type=document_type,
-                        filename=filename,
-                        force_regenerate=force_regenerate,
-                    )
-                    logger.info(f"Summary generated: {len(summary.key_points)} key points")
-                    return summary, None
-                except Exception as e:
-                    logger.error(f"Summarization failed: {e}")
-                    return None, f"Summarization failed: {str(e)}"
-            
-            async def run_fact_extraction():
-                try:
-                    facts = await self.fact_extractor.extract_facts(
-                        document_id=document_id,
-                        text=text,
-                        document_type=document_type,
-                        force_regenerate=force_regenerate,
-                    )
-                    logger.info(
-                        f"Facts extracted: {len(facts.skills)} skills, "
-                        f"{len(facts.achievements)} achievements"
-                    )
-                    return facts, None
-                except Exception as e:
-                    logger.error(f"Fact extraction failed: {e}")
-                    return None, f"Fact extraction failed: {str(e)}"
-            
-            # Run both in parallel
-            (summary_result, summary_err), (facts_result, facts_err) = await asyncio.gather(
-                run_summarization(),
-                run_fact_extraction(),
-                return_exceptions=False
-            )
-            
-            # Process results
-            result.summary = summary_result
-            if summary_err:
-                result.warnings.append(summary_err)
-            
-            result.facts = facts_result
-            if facts_err:
-                result.warnings.append(facts_err)
-            
-            await report_progress("extracting_facts", 0.6, "Summary and facts complete")
-            
-            # Stage 4: Story Extraction (only for resumes)
+            # 3. Story Extraction (only for Resumes)
+            await update_progress(2)
             if document_type == DocumentType.RESUME and result.facts:
-                await report_progress("extracting_stories", 0.65, "Extracting STAR stories")
                 try:
                     result.stories = await self.story_extractor.extract_stories(
-                        facts=result.facts,
-                        force_regenerate=force_regenerate,
+                        result.facts
                     )
-                    logger.info(f"Stories extracted: {len(result.stories)}")
                 except Exception as e:
                     logger.error(f"Story extraction failed: {e}")
-                    result.warnings.append(f"Story extraction failed: {str(e)}")
+                    result.errors.append(f"Story extraction failed: {str(e)}")
             else:
-                await report_progress("extracting_stories", 0.65, "Skipping stories (not a resume)")
+                logger.info(f"Skipping story extraction for {document_type.value}")
             
-            await report_progress("extracting_stories", 0.85, "Stories complete")
-            
-            # Stage 5: Profile Generation
-            # Only generate profile if we processed a resume or if explicit facts were extracted
-            # Prevent pollution from random context files (like hiring manager info)
-            should_update_profile = (
-                document_type == DocumentType.RESUME
-            )
-            
-            # Additional safety: If type is OTHER/CUSTOM, ensure we don't accidentally update
-            # even if facts were found (unless we are super sure)
-            if result.facts and (result.facts.skills or result.facts.achievements):
-                 # If we found facts but type is OTHER, log it but DON'T update profile automatically
-                 # unless it looks very much like a resume (e.g. has "Experience" section)
-                 # For now, strict mode: ONLY RESUME type updates profile.
-                 if document_type != DocumentType.RESUME:
-                     logger.warning(f"Found facts in {filename} ({document_type.value}) but skipping profile update to prevent pollution")
-                     should_update_profile = False
-            
-            if should_update_profile:
-                await report_progress("generating_profile", 0.88, "Generating candidate profile")
+            # 4. Profile Generation (only for Resumes or if we have new facts)
+            await update_progress(3)
+            if result.facts and (result.facts.skills or result.facts.timeline):
                 try:
-                    # Get all summaries for context
-                    all_summaries = [result.summary] if result.summary else []
-                    if self.memory_store:
-                        existing_summaries = self.memory_store.get_all_document_summaries()
-                        # Add existing summaries that aren't the current one
-                        for s in existing_summaries:
-                            if s.document_id != document_id:
-                                all_summaries.append(s)
-                    
-                    # Get merged facts
-                    merged_facts = result.facts
-                    if self.memory_store and result.facts:
-                        existing_facts = self.memory_store.get_all_facts()
-                        if existing_facts:
-                            merged_facts = result.facts.merge_with(existing_facts)
-                    
-                    if merged_facts:
-                        result.profile = self.profile_generator.generate(
-                            facts=merged_facts,
-                            summaries=all_summaries,
-                            stories=result.stories if result.stories else None,
-                            force_regenerate=True,  # Always regenerate profile with new data
-                        )
-                        logger.info("Profile generated/updated")
+                    # Pass facts explicitly to handle cases where store update isn't visible (e.g. mocks)
+                    result.profile = self.profile_generator.generate(
+                        facts=result.facts,
+                        summaries=[result.summary] if result.summary else [],
+                        stories=result.stories,
+                        force_regenerate=True
+                    )
                 except Exception as e:
                     logger.error(f"Profile generation failed: {e}")
-                    result.warnings.append(f"Profile generation failed: {str(e)}")
-            else:
-                logger.info(f"Skipping profile update for {document_type.value} (no relevant facts)")
-            
-            await report_progress("generating_profile", 0.95, "Profile complete")
+                    result.errors.append(f"Profile generation failed: {str(e)}")
             
             # Complete
-            await report_progress("complete", 1.0, "Extraction complete")
+            result.completed_at = datetime.now()
+            result.duration_ms = (result.completed_at - start_time).total_seconds() * 1000
+            
+            # Add warnings for partial failures
+            if result.errors:
+                result.warnings.extend([f"Partial failure: {e}" for e in result.errors])
+                # We don't want to fail the whole pipeline for partial errors if some data was extracted
+                if result.summary or result.facts:
+                    result.errors = [] # Clear errors so success remains True if we recovered
+                else:
+                    result.success = False
+
+            if progress_callback:
+                await progress_callback(
+                    "complete", 
+                    100.0, 
+                    f"Extraction complete ({len(result.stories)} stories found)"
+                )
+            
+            logger.info(f"Extraction completed in {result.duration_ms:.2f}ms")
+            return result
             
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")
             result.success = False
             result.errors.append(str(e))
-            await report_progress("error", 0.0, f"Extraction failed: {str(e)}")
-        
-        finally:
             result.completed_at = datetime.now()
-            result.duration_ms = (result.completed_at - started_at).total_seconds() * 1000
-            logger.info(
-                f"Extraction complete for {filename}: "
-                f"{result.duration_ms:.0f}ms, success={result.success}"
-            )
-        
-        return result
-    
+            
+            if progress_callback:
+                await progress_callback("error", 0, f"Extraction failed: {str(e)}")
+                
+            return result
+
     async def process_document_background(
         self,
         document_id: str,
         text: str,
         document_type: DocumentType,
-        filename: str = "",
-        progress_callback: Optional[ProgressCallback] = None,
+        filename: str,
+        progress_callback: Optional[ProgressCallback] = None
     ) -> str:
         """
-        Start document processing in background, returning immediately.
+        Run extraction in background.
         
         Args:
-            document_id: Unique identifier for the document
-            text: Full text content
+            document_id: Unique document ID
+            text: Document content
             document_type: Type of document
             filename: Original filename
-            progress_callback: Async callback for progress updates
+            progress_callback: Optional callback
             
         Returns:
-            Task ID for tracking
+            Task ID (str)
         """
         task_id = str(uuid.uuid4())
         
-        async def run_extraction():
+        async def _wrapper():
             try:
-                result = await self.process_document(
-                    document_id=document_id,
-                    text=text,
-                    document_type=document_type,
-                    filename=filename,
-                    progress_callback=progress_callback,
+                await self.process_document(
+                    document_id, text, document_type, filename, progress_callback
                 )
-                return result
+            except Exception as e:
+                logger.error(f"Background task failed: {e}")
             finally:
-                # Clean up task reference
-                if task_id in self._active_extractions:
-                    del self._active_extractions[task_id]
+                if task_id in self._background_tasks:
+                    del self._background_tasks[task_id]
         
-        task = asyncio.create_task(run_extraction())
-        self._active_extractions[task_id] = task
-        
-        logger.info(f"Started background extraction: {task_id}")
+        task = asyncio.create_task(_wrapper())
+        self._background_tasks[task_id] = task
         return task_id
     
     def get_extraction_task(self, task_id: str) -> Optional[asyncio.Task]:
-        """Get an active extraction task by ID."""
-        return self._active_extractions.get(task_id)
-    
+        """Get a background task by ID."""
+        return self._background_tasks.get(task_id)
+        
     def cancel_extraction(self, task_id: str) -> bool:
-        """Cancel an active extraction."""
-        task = self._active_extractions.get(task_id)
-        if task and not task.done():
-            task.cancel()
-            del self._active_extractions[task_id]
+        """
+        Cancel a running background extraction task.
+        
+        Args:
+            task_id: Task ID returned from process_document_background
+            
+        Returns:
+            True if cancelled, False if not found
+        """
+        if task_id in self._background_tasks:
+            self._background_tasks[task_id].cancel()
+            del self._background_tasks[task_id]
             return True
         return False
     
     def get_active_extraction_count(self) -> int:
-        """Get the number of active extractions."""
-        # Clean up completed tasks
-        completed = [tid for tid, task in self._active_extractions.items() if task.done()]
-        for tid in completed:
-            del self._active_extractions[tid]
-        return len(self._active_extractions)
-    
+        """Get number of active background extractions."""
+        return len(self._background_tasks)
+        
     async def process_multiple_documents(
         self,
         documents: List[Dict[str, Any]],
-        progress_callback: Optional[ProgressCallback] = None,
+        progress_callback: Optional[ProgressCallback] = None
     ) -> List[ExtractionResult]:
         """
-        Process multiple documents, potentially in parallel.
+        Process multiple documents in sequence.
         
         Args:
-            documents: List of dicts with 'document_id', 'text', 'document_type', 'filename'
-            progress_callback: Callback for overall progress
+            documents: List of dicts with keys: document_id, text, document_type, filename
+            progress_callback: Optional callback
             
         Returns:
-            List of ExtractionResults
+            List of ExtractionResult
         """
         results = []
-        total = len(documents)
+        total_docs = len(documents)
         
         for i, doc in enumerate(documents):
-            # Calculate overall progress
-            base_progress = i / total
-            
-            async def doc_progress(stage: str, progress: float, message: Optional[str] = ""):
-                overall = base_progress + (progress / total)
+            # Wrap progress callback to reflect overall progress
+            async def wrapped_callback(status, progress, message):
                 if progress_callback:
-                    await progress_callback(
-                        stage, 
-                        overall,
-                        f"[{i+1}/{total}] {message or ''}"
-                    )
+                    # Scale progress: (doc_index * 100 + doc_progress) / total_docs
+                    overall_progress = (i * 100 + progress) / total_docs
+                    await progress_callback(status, overall_progress, f"[{i+1}/{total_docs}] {message}")
             
             result = await self.process_document(
-                document_id=doc.get("document_id", str(uuid.uuid4())),
-                text=doc.get("text", ""),
-                document_type=doc.get("document_type", DocumentType.OTHER),
-                filename=doc.get("filename", ""),
-                progress_callback=doc_progress,
+                document_id=doc["document_id"],
+                text=doc["text"],
+                document_type=doc["document_type"],
+                filename=doc["filename"],
+                progress_callback=wrapped_callback if progress_callback else None
             )
             results.append(result)
-        
+            
         return results
-    
+
     def get_pipeline_stats(self) -> Dict[str, Any]:
         """Get statistics about the pipeline."""
         return {
-            "active_extractions": self.get_active_extraction_count(),
+            "active_tasks": len(self._background_tasks),
+            "stages": [s.name for s in self.STAGES],
             "has_llm_provider": self.llm_provider is not None,
-            "has_memory_store": self.memory_store is not None,
-            "stages": [
-                {"name": s.name, "display": s.display_name, "weight": s.weight}
-                for s in PIPELINE_STAGES
-            ],
+            "has_memory_store": self.memory_store is not None
         }

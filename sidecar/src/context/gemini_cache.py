@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING
 import datetime
 
 from src.providers.gemini_client import GeminiClient
+from src.providers.config import GeminiModels
 from .enhanced_manager import EnhancedContextManager
 
 if TYPE_CHECKING:
@@ -77,7 +78,7 @@ class GeminiCacheManager:
         self, 
         context_manager: EnhancedContextManager,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
+        model: str = GeminiModels.DEFAULT_CACHE,
         system_instruction: Optional[str] = None,
         profile_text: Optional[str] = None
     ) -> str:
@@ -187,7 +188,7 @@ class GeminiCacheManager:
         self, 
         context_manager: EnhancedContextManager,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
+        model: str = GeminiModels.DEFAULT_CACHE,
         system_instruction: Optional[str] = None
     ) -> str:
         """
@@ -205,7 +206,7 @@ class GeminiCacheManager:
         uploaded_files: List["UploadedFile"],
         document_manifest: str,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
+        model: str = GeminiModels.DEFAULT_CACHE,
         profile_text: Optional[str] = None
     ) -> str:
         """
@@ -325,7 +326,7 @@ class GeminiCacheManager:
         uploaded_files: List["UploadedFile"],
         document_manifest: str,
         ttl_seconds: int = 7200,
-        model: str = "gemini-3-pro-preview",  # SYNC: Must match GeminiLLMProvider.DEFAULT_MODEL
+        model: str = GeminiModels.DEFAULT_CACHE,
         profile_text: Optional[str] = None
     ) -> str:
         """
