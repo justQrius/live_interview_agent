@@ -86,6 +86,7 @@ class ProviderConfig:
     
     # Advanced settings (Phase 5)
     thinking_budget: Optional[int] = 1024 # Default token budget for thinking models
+    search_enabled: bool = True  # Enable Google Search grounding for Gemini LLM
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProviderConfig":
@@ -126,6 +127,9 @@ class ProviderConfig:
             except ValueError:
                 pass  # Invalid provider, use auto
 
+        # Search is enabled by default, can be disabled via preferences
+        search_enabled = preferences.get("searchEnabled", True)
+        
         return cls(
             gemini_api_key=api_keys.get("gemini"),
             groq_api_key=api_keys.get("groq"),
@@ -134,7 +138,8 @@ class ProviderConfig:
             anthropic_api_key=api_keys.get("anthropic"),
             preferred_stt=preferred_stt,
             preferred_llm=preferred_llm,
-            thinking_budget=preferences.get("thinkingBudget")
+            thinking_budget=preferences.get("thinkingBudget"),
+            search_enabled=search_enabled
         )
 
     def has_api_key(self, provider_type: ProviderType) -> bool:
