@@ -134,66 +134,116 @@ class GeminiLLMProvider(LLMProvider):
         history: List[Dict]
     ) -> AsyncGenerator[str, None]:
         """
-        Generate streaming response.
+        Generate streaming response with automatic model fallback.
         """
         # When using cache, system prompt must be baked into the cache.
         # We still calculate it here to know the structure, but we WON'T pass it
         # to generate_content if a cache is active.
         full_prompt, system_instruction = self._build_prompt(prompt, context, history)
 
-        try:
-            if not self._client:
-                raise GeminiLLMProviderError("Gemini client is not initialized")
+        # Define fallback models in order of preference
+        # 1. Default (gemini-3-pro-preview)
+        # 2. Flash Preview (gemini-3-flash-preview)
+        # 3. Pro Stable (gemini-2.5-pro - requested by user)
+        # Logic: Try current model first. If 429/Exhausted, try next in list.
+        
+        models_to_try = [self._model_name]
+        
+        # Add fallbacks if not already the default
+        if "gemini-3-flash-preview" != self._model_name:
+            models_to_try.append("gemini-3-flash-preview")
+        if "gemini-2.5-pro" != self._model_name:
+            models_to_try.append("gemini-2.5-pro")
             
-            # Determine thinking budget
-            thinking = self._thinking_budget if "thinking" in self._model_name else None
+        last_error = None
+        
+        for attempt_idx, model_attempt in enumerate(models_to_try):
+            try:
+                if not self._client:
+                    raise GeminiLLMProviderError("Gemini client is not initialized")
+                
+                # Determine thinking budget
+                # All these models support thinking per user instruction
+                thinking = self._thinking_budget
+                
+                # Log fallback if happening
+                if model_attempt != self._model_name:
+                    logger.warning(
+                        f"Fallback attempt {attempt_idx}/{len(models_to_try)-1}: "
+                        f"Switching to {model_attempt} due to quota exhaustion"
+                    )
+                
+                loop = asyncio.get_running_loop()
+                client = self._client
+                
+                # If we are using a cache, we MUST NOT send system_instruction or tools
+                # (they conflict with the cache configuration)
+                effective_system_instruction = system_instruction
+                if self._cached_content_name:
+                    if attempt_idx == 0:
+                        logger.info("Using cached content - suppressing per-request system prompt")
+                    effective_system_instruction = None
+                
+                # Enable web search if configured and not using cache
+                use_search = self._search_enabled and not self._cached_content_name
+                
+                def run_generate():
+                    return client.generate_content(
+                        model=model_attempt,
+                        contents=full_prompt,
+                        cached_content_name=self._cached_content_name,
+                        system_instruction=effective_system_instruction,
+                        thinking_budget=thinking,
+                        web_search=use_search,
+                        stream=True
+                    )
+                
+                response = await loop.run_in_executor(None, run_generate)
+                
+                # The response is a synchronous iterator/generator
+                # We need to iterate it in a way that yields back to asyncio
+                
+                # Flag to track if we successfully yielded at least one chunk
+                # If we yield even one chunk, we consider this model working and don't fallback further
+                yielded_any = False
+                
+                for chunk in response:
+                    if hasattr(chunk, 'text') and chunk.text:
+                        yield chunk.text
+                        yielded_any = True
+                    elif hasattr(chunk, 'candidates') and chunk.candidates:
+                         # Fallback for structured response access
+                         parts = chunk.candidates[0].content.parts
+                         for part in parts:
+                             if part.text:
+                                 yield part.text
+                                 yielded_any = True
+                                 
+                    # Give other tasks a chance to run
+                    await asyncio.sleep(0)
+                
+                # If we finished successfully, break the fallback loop
+                return
             
-            loop = asyncio.get_running_loop()
-            client = self._client
-            
-            # If we are using a cache, we MUST NOT send system_instruction or tools
-            # (they conflict with the cache configuration)
-            effective_system_instruction = system_instruction
-            if self._cached_content_name:
-                logger.info("Using cached content - suppressing per-request system prompt")
-                effective_system_instruction = None
-            
-            # Enable web search if configured and not using cache
-            # (search tool cannot be used with cached_content per Gemini API rules)
-            use_search = self._search_enabled and not self._cached_content_name
-            
-            def run_generate():
-                return client.generate_content(
-                    model=self._model_name,
-                    contents=full_prompt,
-                    cached_content_name=self._cached_content_name,
-                    system_instruction=effective_system_instruction,
-                    thinking_budget=thinking,
-                    web_search=use_search,
-                    stream=True
-                )
-            
-            response = await loop.run_in_executor(None, run_generate)
-            
-            # The response is a synchronous iterator/generator
-            # We need to iterate it in a way that yields back to asyncio
-            
-            for chunk in response:
-                if hasattr(chunk, 'text') and chunk.text:
-                    yield chunk.text
-                elif hasattr(chunk, 'candidates') and chunk.candidates:
-                     # Fallback for structured response access
-                     parts = chunk.candidates[0].content.parts
-                     for part in parts:
-                         if part.text:
-                             yield part.text
-                             
-                # Give other tasks a chance to run
-                await asyncio.sleep(0)
-            
-        except Exception as e:
-             logger.error(f"Gemini LLM error: {e}")
-             raise GeminiLLMProviderError(f"Generation failed: {e}")
+            except Exception as e:
+                error_str = str(e).lower()
+                is_quota_error = "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str
+                
+                last_error = e
+                
+                if is_quota_error and attempt_idx < len(models_to_try) - 1:
+                    # Continue to next model
+                    continue
+                else:
+                    # Not a quota error, or no more models to try
+                    logger.error(f"Gemini LLM error on {model_attempt}: {e}")
+                    # If this was the last attempt, raise
+                    if attempt_idx == len(models_to_try) - 1:
+                        raise GeminiLLMProviderError(f"Generation failed after fallback: {e}")
+                    # If it wasn't a quota error, we probably shouldn't swallow it unless we want to be very aggressive
+                    # But usually only 429s are safe to fallback on (e.g. 400 Bad Request won't be fixed by changing model)
+                    if not is_quota_error:
+                        raise GeminiLLMProviderError(f"Generation failed with non-retryable error: {e}")
 
     async def generate_answer(
         self,
