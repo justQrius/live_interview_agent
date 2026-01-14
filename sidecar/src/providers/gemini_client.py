@@ -215,6 +215,7 @@ class GeminiClient:
         except Exception as e:
             logger.warning(f"Failed to delete cache {name}: {e}")
 
+    @_retry_with_backoff("generation", max_retries=3, initial_delay=1.0)
     def generate_content(
         self,
         model: str,

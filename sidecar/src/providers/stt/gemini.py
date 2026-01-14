@@ -15,6 +15,7 @@ from google import genai
 from google.genai import types
 
 from ..base import STTProvider, TranscriptionResult
+from ..config import GeminiModels
 
 # Import SAMPLE_RATE from capture module (single source of truth)
 try:
@@ -44,7 +45,7 @@ class GeminiSTTProvider(STTProvider):
         print(result.text)
     """
 
-    DEFAULT_MODEL = "gemini-3-flash-preview"
+    DEFAULT_MODEL = GeminiModels.DEFAULT_STT
 
     def __init__(self, api_key: str, model_name: Optional[str] = None):
         """
