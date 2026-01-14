@@ -7,10 +7,12 @@ for generating high-quality interview answers with advanced features like Cachin
 
 import asyncio
 import logging
+import threading
 from typing import Any, AsyncGenerator, Dict, List, Optional, cast
 
 from ..gemini_client import GeminiClient
 from ..base import LLMProvider
+from ..config import GeminiModels
 from .prompts import build_system_prompt, format_context_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -136,24 +138,16 @@ class GeminiLLMProvider(LLMProvider):
         """
         Generate streaming response with automatic model fallback.
         """
-        # When using cache, system prompt must be baked into the cache.
-        # We still calculate it here to know the structure, but we WON'T pass it
-        # to generate_content if a cache is active.
-        full_prompt, system_instruction = self._build_prompt(prompt, context, history)
-
         # Define fallback models in order of preference
-        # 1. Default (gemini-3-pro-preview)
-        # 2. Flash Preview (gemini-3-flash-preview)
-        # 3. Pro Stable (gemini-2.5-pro - requested by user)
-        # Logic: Try current model first. If 429/Exhausted, try next in list.
-        
         models_to_try = [self._model_name]
         
         # Add fallbacks if not already the default
-        if "gemini-3-flash-preview" != self._model_name:
-            models_to_try.append("gemini-3-flash-preview")
-        if "gemini-2.5-pro" != self._model_name:
-            models_to_try.append("gemini-2.5-pro")
+        if GeminiModels.FLASH != self._model_name:
+            models_to_try.append(GeminiModels.FLASH)
+        if GeminiModels.PRO_STABLE != self._model_name:
+            models_to_try.append(GeminiModels.PRO_STABLE)
+        if GeminiModels.FLASH_STABLE != self._model_name:
+            models_to_try.append(GeminiModels.FLASH_STABLE)
             
         last_error = None
         
@@ -169,6 +163,10 @@ class GeminiLLMProvider(LLMProvider):
                     if not self._client:
                         raise GeminiLLMProviderError("Gemini client is not initialized")
                     
+                    # Re-build prompt on every retry to support dynamic cache fallback
+                    # If cache was cleared due to 403/404, this will re-inject RAG context
+                    full_prompt, system_instruction = self._build_prompt(prompt, context, history)
+
                     # Determine thinking budget
                     # All these models support thinking per user instruction
                     thinking = self._thinking_budget
@@ -208,13 +206,38 @@ class GeminiLLMProvider(LLMProvider):
                     response = await loop.run_in_executor(None, run_generate)
                     
                     # The response is a synchronous iterator/generator
-                    # We need to iterate it in a way that yields back to asyncio
+                    # We need to iterate it in a separate thread to avoid blocking the asyncio loop
+                    
+                    # Queue for bridging sync thread to async loop
+                    queue = asyncio.Queue()
+                    
+                    def consume_stream(iterator):
+                        try:
+                            for chunk in iterator:
+                                loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                            loop.call_soon_threadsafe(queue.put_nowait, None) # Sentinel
+                        except Exception as e:
+                            loop.call_soon_threadsafe(queue.put_nowait, e)
+                            
+                    # Start consumer thread
+                    threading.Thread(target=consume_stream, args=(response,), daemon=True).start()
                     
                     # Flag to track if we successfully yielded at least one chunk
                     # If we yield even one chunk, we consider this model working and don't fallback further
                     yielded_any = False
                     
-                    for chunk in response:
+                    while True:
+                        # Wait for next chunk from thread
+                        chunk = await queue.get()
+                        
+                        # Check for sentinel (end of stream)
+                        if chunk is None:
+                            break
+                            
+                        # Check for exception from thread
+                        if isinstance(chunk, Exception):
+                            raise chunk
+                            
                         if hasattr(chunk, 'text') and chunk.text:
                             yield chunk.text
                             yielded_any = True
@@ -225,9 +248,6 @@ class GeminiLLMProvider(LLMProvider):
                                  if part.text:
                                      yield part.text
                                      yielded_any = True
-                                     
-                        # Give other tasks a chance to run
-                        await asyncio.sleep(0)
                     
                     # If we finished successfully, break the fallback loop (return from function)
                     return
@@ -237,7 +257,27 @@ class GeminiLLMProvider(LLMProvider):
                     is_quota_error = "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str
                     is_server_error = "503" in error_str or "overloaded" in error_str or "unavailable" in error_str
                     
+                    # New: Check for Cache-specific errors (403 Permission Denied or 404 Not Found)
+                    is_cache_error = self._cached_content_name and (
+                        "403" in error_str or "permission_denied" in error_str or
+                        "404" in error_str or "not found" in error_str or
+                        "cachedcontent" in error_str
+                    )
+
                     last_error = e
+                    
+                    # Handle Cache Failure -> Fallback to RAG
+                    if is_cache_error:
+                        logger.warning(
+                            f"Gemini Cache invalid or expired ({e}). "
+                            f"Clearing cache reference and falling back to RAG context."
+                        )
+                        # Clear cache reference
+                        self._cached_content_name = None
+                        # DO NOT increment retry_count or sleep - immediately retry with RAG
+                        # The next iteration will call _build_prompt again, which detects
+                        # self._cached_content_name is None and inserts context.
+                        continue
                     
                     # Retry on 503 (Server Error) OR 429 (Rate Limit) for the SAME model first
                     if is_server_error or is_quota_error:

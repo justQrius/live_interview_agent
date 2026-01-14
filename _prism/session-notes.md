@@ -11,12 +11,13 @@
 - **File Upload**: Implemented `GeminiFileUploader` for large file support (PDFs/Images).
 - **Embeddings**: Implemented `GeminiEmbeddingFunction` for ChromaDB using the unified client.
 - **Server Integration**: Integrated all new components into `sidecar/src/server.py`.
+- **Bug Fix**: Fixed "Enhance Answer" freezing issue. The `google-genai` synchronous stream iterator was blocking the asyncio event loop. Offloaded iteration to a separate thread in `GeminiLLMProvider`.
 
 ### TEST RESULTS
 
 - **New Integration Tests**: 4 passing (Client, Cache, Embeddings)
-- **Regression Tests**: 79 passing (Enhanced Manager, Enhance Answer)
-- **Total**: 83 tests passing
+- **Regression Tests**: 80 passing (Enhanced Manager, Enhance Answer, Gemini Provider)
+- **Total**: 84 tests passing
 
 ### KEY FILES CREATED/MODIFIED
 
@@ -24,7 +25,7 @@
 ```
 sidecar/src/providers/
 ├── gemini_client.py (Unified SDK Wrapper)
-└── llm/gemini.py (Updated to use GeminiClient)
+└── llm/gemini.py (Updated with threaded streaming)
 
 sidecar/src/context/
 ├── gemini_cache.py (Context Caching Manager)
