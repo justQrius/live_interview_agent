@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSessionStore } from '../store/sessionStore';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -9,12 +9,53 @@ const SessionControls: React.FC = () => {
   const clearSession = useSessionStore((state) => state.clearSession);
   const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
   const preferredSttProvider = useSessionStore((state) => state.preferredSttProvider);
-  const setCurrentAnswer = useSessionStore((state) => state.setCurrentAnswer);
+  const addTranscription = useSessionStore((state) => state.addTranscription);
+  const startAnswer = useSessionStore((state) => state.startAnswer);
+  const setInterimTranscript = useSessionStore((state) => state.setInterimTranscript);
+  const loadedContextFiles = useSessionStore((state) => state.loadedContextFiles);
   const { sendMessage, isConnected } = useWebSocket();
 
   const [manualQuestion, setManualQuestion] = useState('');
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [hasPrimaryKey, setHasPrimaryKey] = useState<boolean | null>(null);
+
+  // Calculate document readiness status
+  const documentStatus = useMemo(() => {
+    const total = loadedContextFiles.length;
+    if (total === 0) return { status: 'none', message: 'No documents uploaded', color: 'text-gray-500' };
+    
+    const ready = loadedContextFiles.filter(f => f.status === 'ready').length;
+    const processing = loadedContextFiles.filter(f => f.status === 'processing').length;
+    const pending = loadedContextFiles.filter(f => f.status === 'pending').length;
+    const errors = loadedContextFiles.filter(f => f.status === 'error').length;
+    
+    if (processing > 0 || pending > 0) {
+      return { 
+        status: 'processing', 
+        message: `Processing documents (${ready}/${total} ready)`, 
+        color: 'text-blue-600'
+      };
+    }
+    if (errors > 0 && ready === 0) {
+      return { 
+        status: 'error', 
+        message: `Document processing failed`, 
+        color: 'text-red-600'
+      };
+    }
+    if (ready === total) {
+      return { 
+        status: 'ready', 
+        message: `✓ ${total} document${total > 1 ? 's' : ''} ready`, 
+        color: 'text-green-600'
+      };
+    }
+    return { 
+      status: 'partial', 
+      message: `${ready}/${total} documents ready`, 
+      color: 'text-yellow-600'
+    };
+  }, [loadedContextFiles]);
 
   useEffect(() => {
     let isMounted = true;
@@ -110,18 +151,29 @@ const SessionControls: React.FC = () => {
 
   const handleSendManualQuestion = () => {
     const trimmedQuestion = manualQuestion.trim();
-    if (!trimmedQuestion || !isConnected || status !== 'listening') {
+    if (!trimmedQuestion || !isConnected || status !== "listening") {
       return;
     }
 
-    // Clear current answer before sending new question
-    setCurrentAnswer(null);
+    const timestamp = Date.now();
+    
+    // Update local state so UI reflects the manual question immediately
+    addTranscription({
+      speaker: "Interviewer",
+      text: trimmedQuestion,
+      timestamp,
+      confidence: 1.0,
+    });
+    
+    // Prepare answer buffer with the question
+    startAnswer(trimmedQuestion, timestamp);
+    setInterimTranscript(null);
 
     sendMessage({
-      type: 'MANUAL_QUESTION',
+      type: "MANUAL_QUESTION",
       data: { question: trimmedQuestion }
     });
-    setManualQuestion('');
+    setManualQuestion("");
   };
 
   const handleQuestionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -177,6 +229,19 @@ const SessionControls: React.FC = () => {
         <div className="mt-2 text-xs text-gray-500">
           API Key Status: {hasPrimaryKey === null ? 'Checking...' : hasPrimaryKey ? '✅ Found' : '❌ Not configured'}
           {' '}(Provider: {preferredSttProvider === 'auto' ? 'gemini (auto)' : preferredSttProvider})
+        </div>
+        
+        {/* Document & RAG Status */}
+        <div className={`mt-2 text-xs ${documentStatus.color} flex items-center gap-1`}>
+          {documentStatus.status === 'processing' && (
+            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+          )}
+          {documentStatus.status === 'ready' && (
+            <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+          )}
+          <span>{documentStatus.message}</span>
         </div>
       </div>
 
