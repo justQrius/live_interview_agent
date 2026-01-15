@@ -19,6 +19,131 @@ type CombinedHistoryItem =
       confidence: 'high' | 'medium' | 'low';
     };
 
+// Patterns that indicate LLM "thinking" vs actual answer content
+const THINKING_PATTERNS = [
+  /^\*\*[^*]+\*\*$/m,           // **Bold headers** on their own line
+  /^My focus/m,                 // "My focus is..."
+  /^I'm exploring/m,            // "I'm exploring..."
+  /^I'm considering/m,          // "I'm considering..."
+  /^I am focusing/m,            // "I am focusing..."
+  /^Analyzing/m,                // "Analyzing..."
+  /^\*[^*]+\*$/m,               // *Italic notes*
+  /^I view the/m,               // Bridge phrases before actual answer
+];
+
+// Try to separate thinking from answer
+function separateThinkingFromAnswer(text: string): { thinking: string | null; answer: string } {
+  if (!text) return { thinking: null, answer: '' };
+  
+  // Look for patterns that mark the start of actual answer
+  // Common patterns: first-person statements about real experience
+  const answerMarkers = [
+    /\n\nI had a situation/,
+    /\n\nAt my previous/,
+    /\n\nIn my role/,
+    /\n\nWhen I was/,
+    /\n\nDuring my time/,
+    /\n\nAt \w+,/,           // "At Company,"
+    /\n\nI remember/,
+    /\n\nOne example/,
+    /\n\nFor example/,
+    /\n\nHere's what happened/,
+    /\n\nLet me share/,
+    /\n\n---\n/,            // Explicit separator
+  ];
+  
+  // Check if text starts with thinking patterns
+  const hasThinkingStart = THINKING_PATTERNS.some(pattern => pattern.test(text.split('\n')[0]));
+  
+  if (!hasThinkingStart) {
+    return { thinking: null, answer: text };
+  }
+  
+  // Find where the actual answer starts
+  for (const marker of answerMarkers) {
+    const match = text.match(marker);
+    if (match && match.index !== undefined) {
+      const thinkingPart = text.substring(0, match.index).trim();
+      const answerPart = text.substring(match.index).trim();
+      
+      // Only separate if thinking is substantial (more than just a header)
+      if (thinkingPart.length > 50 && answerPart.length > 50) {
+        return {
+          thinking: thinkingPart,
+          answer: answerPart
+        };
+      }
+    }
+  }
+  
+  return { thinking: null, answer: text };
+}
+
+// Component to render the separated thinking/answer
+function AnswerContent({ text }: { text: string; isComplete?: boolean }) {
+  const [showThinking, setShowThinking] = useState(false);
+  const { thinking, answer } = useMemo(() => separateThinkingFromAnswer(text), [text]);
+  
+  if (!thinking) {
+    // No thinking detected, render normally
+    return (
+      <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
+        {text || 'AI-generated answer will stream here...'}
+      </p>
+    );
+  }
+  
+  return (
+    <div className="space-y-3">
+      {/* Thinking trace - collapsible */}
+      <div className="border-l-2 border-amber-300 bg-amber-50/50 rounded-r">
+        <button 
+          onClick={() => setShowThinking(!showThinking)}
+          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-amber-50 transition-colors"
+        >
+          <span className="flex items-center gap-2 text-xs text-amber-700 font-medium">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            AI Reasoning Trace
+            <span className="text-amber-500">({showThinking ? 'hide' : 'show'})</span>
+          </span>
+          <svg 
+            className={`w-4 h-4 text-amber-500 transition-transform ${showThinking ? 'rotate-180' : ''}`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {showThinking && (
+          <div className="px-3 pb-3 text-sm text-amber-900/70 whitespace-pre-wrap italic">
+            {thinking}
+          </div>
+        )}
+      </div>
+      
+      {/* Answer separator */}
+      <div className="flex items-center gap-2 py-1">
+        <div className="flex-1 h-px bg-green-300"></div>
+        <span className="text-xs font-semibold text-green-700 uppercase tracking-wide flex items-center gap-1">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+          Your Answer
+        </span>
+        <div className="flex-1 h-px bg-green-300"></div>
+      </div>
+      
+      {/* Actual answer */}
+      <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
+        {answer}
+      </p>
+    </div>
+  );
+}
+
 const AnswerDisplay: React.FC = () => {
   const currentTranscription = useSessionStore((state) => state.currentTranscription);
   const interimTranscript = useSessionStore((state) => state.interimTranscript);
@@ -171,9 +296,10 @@ const AnswerDisplay: React.FC = () => {
             <h3 className="font-medium text-sm text-gray-600">Answer:</h3>
             <EnhanceButton disabled={!currentAnswer?.isComplete} />
           </div>
-          <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
-            {currentAnswer?.answerText || 'AI-generated answer will stream here...'}
-          </p>
+          <AnswerContent 
+            text={currentAnswer?.answerText || ''} 
+            isComplete={currentAnswer?.isComplete || false} 
+          />
           {currentAnswer && !currentAnswer.isComplete && (
             <span className="inline-block w-2 h-4 bg-gray-600 animate-pulse ml-1" />
           )}

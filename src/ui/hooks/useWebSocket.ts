@@ -124,8 +124,12 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       break;
     }
 
-    case 'ANSWER_START': {
-      store.startAnswer('', Date.now());
+    case "ANSWER_START": {
+      // Only start a new answer if one isn't already in progress with a question
+      // This prevents overwriting questions from TRANSCRIPTION or MANUAL_QUESTION
+      if (!store.currentAnswer || !store.currentAnswer.question) {
+        store.startAnswer("", Date.now());
+      }
       break;
     }
 

@@ -341,7 +341,8 @@ describe('SessionControls', () => {
       await user.type(screen.getByPlaceholderText(/type a question/i), 'New question');
       await user.click(screen.getByRole('button', { name: /send question/i }));
 
-      expect(useSessionStore.getState().currentAnswer).toBeNull();
+      expect(useSessionStore.getState().currentAnswer?.question).toBe("New question");
+      expect(useSessionStore.getState().currentAnswer?.answerText).toBe("");
     });
   });
 

@@ -106,8 +106,9 @@ class TestBuildSystemPrompt:
         """Test that weakness questions include growth narrative."""
         prompt, qtype = build_system_prompt("What is your greatest weakness?")
         assert qtype == "weakness"
-        assert "ACKNOWLEDGE" in prompt
-        assert "PROGRESS" in prompt
+        # SHARE framework includes honest acknowledgment via HINDRANCE section
+        assert "HINDRANCE" in prompt or "ACKNOWLEDGE" in prompt
+        assert "EVALUATION" in prompt or "PROGRESS" in prompt
 
     def test_master_prompt_always_included(self):
         """Test that master prompt is always included."""
@@ -183,9 +184,9 @@ class TestPromptQuality:
 
     def test_prompts_are_reasonable_length(self):
         """Test that prompts aren't excessively long."""
-        # Master prompt should be under 3000 chars
-        assert len(MASTER_SYSTEM_PROMPT) < 3000
+        # Master prompt should be under 3500 chars (includes acronym expansion rule)
+        assert len(MASTER_SYSTEM_PROMPT) < 3500
         
-        # Full prompt with addon should be under 6000 chars
+        # Full prompt with addon should be under 6500 chars
         full_prompt, _ = build_system_prompt("Tell me about a time you solved a problem")
-        assert len(full_prompt) < 6000
+        assert len(full_prompt) < 6500
