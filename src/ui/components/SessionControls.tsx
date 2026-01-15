@@ -7,6 +7,7 @@ const SessionControls: React.FC = () => {
   const status = useSessionStore((state) => state.status);
   const setStatus = useSessionStore((state) => state.setStatus);
   const clearSession = useSessionStore((state) => state.clearSession);
+  const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
   const preferredSttProvider = useSessionStore((state) => state.preferredSttProvider);
   const setCurrentAnswer = useSessionStore((state) => state.setCurrentAnswer);
   const { sendMessage, isConnected } = useWebSocket();
@@ -93,6 +94,10 @@ const SessionControls: React.FC = () => {
   };
 
   const confirmStopSession = () => {
+    // Cancel any ongoing enhancement first
+    sendMessage({ type: 'CANCEL_ENHANCEMENT' });
+    cancelEnhancement();
+    
     sendMessage({ type: 'STOP_SESSION' });
     clearSession();
     setManualQuestion('');

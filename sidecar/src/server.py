@@ -179,6 +179,9 @@ class SidecarServer:
         
         # Phase 5: Document Type Classifier (initialized without LLM, set later)
         self.document_classifier = DocumentClassifier()
+        
+        # Phase 5: Enhancement task tracking for cancellation
+        self._enhancement_task: Optional[asyncio.Task] = None
 
     def _create_background_task(self, coro) -> asyncio.Task:
         """Create and track a background task."""
@@ -304,6 +307,7 @@ class SidecarServer:
             MessageType.PREPARE_INTERVIEW: self._handle_prepare_interview,
             # Phase 5: Answer Enhancement
             MessageType.ENHANCE_ANSWER: self._handle_enhance_answer,
+            MessageType.CANCEL_ENHANCEMENT: self._handle_cancel_enhancement,
             # Phase 5: Document Type Inference
             MessageType.INFER_DOCUMENT_TYPES: self._handle_infer_document_types,
         }
@@ -489,6 +493,16 @@ class SidecarServer:
         
         # Stop audio processing
         await self._stop_audio_processing()
+        
+        # Cancel any ongoing enhancement task
+        if self._enhancement_task and not self._enhancement_task.done():
+            self._enhancement_task.cancel()
+            try:
+                await self._enhancement_task
+            except asyncio.CancelledError:
+                pass
+            self._enhancement_task = None
+            logger.info("Cancelled ongoing enhancement due to session stop")
 
         logger.info("Session stopped (Context preserved for restart)")
 
@@ -1392,6 +1406,44 @@ Based on the uploaded documents, here are the main topics to prepare:
         start_msg = create_enhanced_answer_start_message(enhancement_type, original_question)
         await websocket.send(start_msg.to_json())
         
+        # Cancel any existing enhancement task
+        if self._enhancement_task and not self._enhancement_task.done():
+            self._enhancement_task.cancel()
+            try:
+                await self._enhancement_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Run enhancement as a cancellable task
+        self._enhancement_task = asyncio.create_task(
+            self._run_enhancement(
+                websocket, enhancement_type, original_question, 
+                original_answer, tone_preference
+            )
+        )
+        
+        try:
+            await self._enhancement_task
+        except asyncio.CancelledError:
+            logger.info("Enhancement was cancelled")
+            # Send completion message to signal cancellation
+            complete_msg = create_enhanced_answer_complete_message(enhancement_type, success=False)
+            await websocket.send(complete_msg.to_json())
+        finally:
+            self._enhancement_task = None
+    
+    async def _run_enhancement(
+        self,
+        websocket: ServerConnection,
+        enhancement_type: EnhancementType,
+        original_question: str,
+        original_answer: str,
+        tone_preference: str
+    ) -> None:
+        """Run the actual enhancement streaming. Can be cancelled."""
+        # Type assertion (already checked in caller)
+        assert self.llm is not None, "LLM must be initialized before calling _run_enhancement"
+        
         try:
             # Build enhancement prompt based on type
             enhancement_prompt = self._build_enhancement_prompt(
@@ -1423,6 +1475,9 @@ Based on the uploaded documents, here are the main topics to prepare:
             
             logger.info(f"Enhancement complete: {enhancement_type.value}")
             
+        except asyncio.CancelledError:
+            # Re-raise to let the caller handle it
+            raise
         except Exception as e:
             logger.error(f"Enhancement failed: {e}")
             error_msg = create_error_message(
@@ -1430,6 +1485,23 @@ Based on the uploaded documents, here are the main topics to prepare:
                 code="ERR_ENHANCEMENT_FAILED"
             )
             await websocket.send(error_msg.to_json())
+    
+    async def _handle_cancel_enhancement(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """Handle CANCEL_ENHANCEMENT message - stops ongoing enhancement."""
+        if self._enhancement_task and not self._enhancement_task.done():
+            self._enhancement_task.cancel()
+            try:
+                await self._enhancement_task
+            except asyncio.CancelledError:
+                pass
+            self._enhancement_task = None
+            logger.info("Enhancement cancelled by user request")
+        else:
+            logger.debug("No enhancement task to cancel")
     
     def _build_enhancement_prompt(
         self,
