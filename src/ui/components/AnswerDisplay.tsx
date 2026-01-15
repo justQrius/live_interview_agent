@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSessionStore } from '../store/sessionStore';
+import { useWebSocket } from '../hooks/useWebSocket';
 import EnhanceButton from './EnhanceButton';
 
 type CombinedHistoryItem =
@@ -29,6 +30,13 @@ const AnswerDisplay: React.FC = () => {
   const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showHistory, setShowHistory] = useState(false);
+  
+  const { sendMessage } = useWebSocket();
+  
+  const handleCancelEnhancement = () => {
+    sendMessage({ type: 'CANCEL_ENHANCEMENT' });
+    cancelEnhancement();
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -198,11 +206,23 @@ const AnswerDisplay: React.FC = () => {
             <p className="text-gray-800 whitespace-pre-wrap leading-relaxed tracking-wide">
               {enhancement.enhancedText || 'Generating enhanced answer...'}
             </p>
-            {enhancement.isEnhancing && (
-              <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1" />
-            )}
+              {enhancement.isEnhancing && (
+                <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse ml-1" />
+              )}
+              
+              {/* Cancel button while enhancement is in progress */}
+              {enhancement.isEnhancing && (
+                <div className="flex gap-2 mt-4 pt-3 border-t border-blue-200">
+                  <button
+                    onClick={handleCancelEnhancement}
+                    className="px-4 py-2 bg-red-50 text-red-700 text-sm font-medium rounded-md border border-red-300 hover:bg-red-100 transition-colors"
+                  >
+                    Cancel Enhancement
+                  </button>
+                </div>
+              )}
 
-            {/* Action buttons when enhancement is complete */}
+              {/* Action buttons when enhancement is complete */}
             {!enhancement.isEnhancing && enhancement.enhancedText && (
               <div className="flex gap-2 mt-4 pt-3 border-t border-blue-200">
                 <button

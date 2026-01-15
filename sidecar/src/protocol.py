@@ -22,6 +22,7 @@ class MessageType(str, Enum):
     MANUAL_QUESTION = "MANUAL_QUESTION"
     PREPARE_INTERVIEW = "PREPARE_INTERVIEW"  # Phase 3B: Request preparation summary
     ENHANCE_ANSWER = "ENHANCE_ANSWER"  # Phase 5: Request answer enhancement
+    CANCEL_ENHANCEMENT = "CANCEL_ENHANCEMENT"  # Phase 5: Cancel ongoing enhancement
     INFER_DOCUMENT_TYPES = "INFER_DOCUMENT_TYPES"  # Phase 5: Request LLM-based type inference
 
     # Server -> Client

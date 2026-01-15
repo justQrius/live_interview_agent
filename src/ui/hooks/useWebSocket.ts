@@ -43,6 +43,7 @@ export type MessageType =
   | 'EXTRACTION_COMPLETE'
   // Phase 5: Answer Enhancement
   | 'ENHANCE_ANSWER'
+  | 'CANCEL_ENHANCEMENT'
   | 'ENHANCED_ANSWER_START'
   | 'ENHANCED_ANSWER_CHUNK'
   | 'ENHANCED_ANSWER_COMPLETE'
