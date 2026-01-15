@@ -71,18 +71,18 @@ const DocumentTypeSelector: React.FC<DocumentTypeSelectorProps> = ({ value, onCh
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 w-full md:w-auto min-w-[140px]"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm bg-surface dark:bg-surface-elevated border border-border rounded-lg hover:bg-surface-elevated dark:hover:bg-surface hover:border-primary/30 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 w-full md:w-auto min-w-[140px]"
         type="button"
       >
         <span className="text-lg leading-none" role="img" aria-hidden="true">
           {selectedType.icon}
         </span>
-        <span className="text-gray-700 font-medium truncate flex-1 text-left">
+        <span className="text-text-primary font-medium truncate flex-1 text-left">
           {selectedType.label}
         </span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 text-text-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -91,7 +91,7 @@ const DocumentTypeSelector: React.FC<DocumentTypeSelectorProps> = ({ value, onCh
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-50 mt-1 w-64 bg-white rounded-lg shadow-lg border border-gray-100 ring-1 ring-black ring-opacity-5 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+        <div className="absolute right-0 z-50 mt-1 w-64 bg-surface dark:bg-surface-elevated rounded-xl shadow-lg border border-border animate-in fade-in zoom-in-95 duration-100 origin-top-right">
           <div className="py-1 max-h-[300px] overflow-y-auto">
             {(Object.entries(DOCUMENT_TYPES) as [DocumentType, typeof DOCUMENT_TYPES[DocumentType]][]).map(([type, info]) => (
               <button
@@ -100,23 +100,23 @@ const DocumentTypeSelector: React.FC<DocumentTypeSelectorProps> = ({ value, onCh
                   onChange(type);
                   setIsOpen(false);
                 }}
-                className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-start gap-3 group ${
-                  value === type ? 'bg-blue-50/50' : ''
+                className={`w-full text-left px-4 py-3 hover:bg-surface-elevated dark:hover:bg-surface transition-colors flex items-start gap-3 group ${
+                  value === type ? 'bg-primary/5 dark:bg-primary/10' : ''
                 }`}
               >
                 <span className="text-xl mt-0.5" aria-hidden="true">{info.icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-medium ${
-                    value === type ? 'text-blue-700' : 'text-gray-900'
+                    value === type ? 'text-primary' : 'text-text-primary'
                   }`}>
                     {info.label}
                   </div>
-                  <div className="text-xs text-gray-500 truncate group-hover:text-gray-600">
+                  <div className="text-xs text-text-muted truncate group-hover:text-text-secondary">
                     {info.description}
                   </div>
                 </div>
                 {value === type && (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-600 mt-1" viewBox="0 0 20 20" fill="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary mt-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 )}

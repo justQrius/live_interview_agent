@@ -211,57 +211,74 @@ const CalibrationModal: React.FC = () => {
   if (status !== 'calibrating') return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-        <h2 className="text-2xl font-bold mb-4">Voice Calibration</h2>
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-surface dark:bg-surface-elevated rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4 border border-border">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-text-primary">Voice Calibration</h2>
+            <p className="text-sm text-text-muted">Help us recognize your voice</p>
+          </div>
+        </div>
         
         {error ? (
-          <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-xl mb-4 text-sm flex items-center gap-2">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             {error}
           </div>
         ) : (
-          <p className="text-gray-600 mb-4">
-            Please read the following text clearly:
-            <br />
-            <span className="font-medium italic block mt-2 p-3 bg-gray-50 rounded text-gray-800">
-              "The quick brown fox jumps over the lazy dog. I am calibrating my voice profile for the interview."
-            </span>
-          </p>
+          <div className="mb-5">
+            <p className="text-text-secondary text-sm mb-3">Please read the following text clearly:</p>
+            <div className="p-4 bg-surface-elevated dark:bg-surface rounded-xl border border-border">
+              <p className="font-medium italic text-text-primary leading-relaxed">
+                "The quick brown fox jumps over the lazy dog. I am calibrating my voice profile for the interview."
+              </p>
+            </div>
+          </div>
         )}
 
         <div className="mb-6">
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className="w-full bg-surface-elevated dark:bg-surface rounded-full h-2 overflow-hidden">
             <div 
-              className={`h-2.5 rounded-full transition-all duration-100 ${isRecording ? 'bg-red-600' : 'bg-blue-600'}`} 
+              className={`h-2 rounded-full transition-all duration-100 ${isRecording ? 'bg-gradient-to-r from-red-500 to-rose-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'}`} 
               style={{ width: `${progress}%` }}
             ></div>
           </div>
-          <p className="text-sm text-gray-500 mt-2 flex justify-between">
-            <span data-testid="recording-status">{isRecording ? 'Recording...' : 'Ready to record'}</span>
-            <span>{Math.ceil((progress / 100) * (RECORDING_DURATION_MS / 1000))} / {RECORDING_DURATION_MS / 1000}s</span>
-          </p>
+          <div className="text-sm text-text-muted mt-2 flex justify-between">
+            <span data-testid="recording-status" className={isRecording ? 'text-red-500 font-medium' : ''}>
+              {isRecording ? 'Recording...' : 'Ready to record'}
+            </span>
+            <span className="tabular-nums">{Math.ceil((progress / 100) * (RECORDING_DURATION_MS / 1000))} / {RECORDING_DURATION_MS / 1000}s</span>
+          </div>
         </div>
 
         <div className="flex gap-3">
           {!isRecording ? (
             <button 
               onClick={handleStartRecording}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200"
+              className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-200 shadow-sm"
             >
               Start Recording
             </button>
           ) : (
              <button 
-              className="flex-1 bg-gray-400 text-white font-medium py-2 px-4 rounded-lg cursor-not-allowed"
+              className="flex-1 bg-surface-elevated dark:bg-surface text-text-muted font-medium py-2.5 px-4 rounded-xl cursor-not-allowed flex items-center justify-center gap-2"
               disabled
             >
+              <span className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></span>
               Recording...
             </button>
           )}
           
           <button 
             onClick={handleCancel}
-            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium py-2 px-4 rounded-lg transition duration-200"
+            className="flex-1 bg-surface-elevated dark:bg-surface hover:bg-primary/5 dark:hover:bg-primary/10 text-text-primary font-medium py-2.5 px-4 rounded-xl transition-all duration-200 border border-border"
           >
             Cancel
           </button>
