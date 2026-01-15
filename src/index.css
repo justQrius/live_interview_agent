@@ -1,18 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  :root {
+    /* Light mode */
+    --color-background: 0 0% 98%;      /* #fafafa */
+    --color-surface: 0 0% 100%;        /* #ffffff */
+    --color-surface-elevated: 0 0% 100%; /* cards */
+    --color-text-primary: 222 47% 11%;   /* #0f172a */
+    --color-text-secondary: 215 16% 47%; /* #64748b */
+    --color-text-muted: 215 20% 65%;     /* #94a3b8 */
+    --color-border: 214 32% 91%;         /* #e2e8f0 */
+    --color-border-subtle: 220 13% 91%;  /* #e5e7eb */
+
+    /* Accents (same for both modes usually, but defined here) */
+    --color-primary: 217 91% 60%;        /* #3b82f6 (blue-500) */
+    --color-primary-hover: 217 91% 55%;  /* blue-600 */
+    --color-success: 142 71% 45%;        /* #22c55e (green-500) */
+    --color-warning: 38 92% 50%;         /* #f59e0b (amber-500) */
+    --color-danger: 0 84% 60%;           /* #ef4444 (red-500) */
+    --color-accent: 262 83% 58%;         /* #8b5cf6 (violet-500) */
+  }
+
+  .dark {
+    /* Dark mode */
+    --color-background: 222 47% 8%;      /* #0c1222 */
+    --color-surface: 222 47% 11%;        /* #0f172a */
+    --color-surface-elevated: 217 33% 17%; /* #1e293b */
+    --color-text-primary: 210 40% 98%;   /* #f8fafc */
+    --color-text-secondary: 215 20% 65%; /* #94a3b8 */
+    --color-text-muted: 215 16% 47%;     /* #64748b */
+    --color-border: 217 33% 17%;         /* #1e293b */
+    --color-border-subtle: 215 28% 17%;  /* #1f2937 */
+  }
 }
 
-#root {
-  height: 100vh;
-  width: 100vw;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-text-primary font-sans antialiased transition-colors duration-300;
+  }
+}
+
+/* Custom scrollbar for better look in dark mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-600;
 }

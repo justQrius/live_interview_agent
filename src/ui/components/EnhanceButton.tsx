@@ -106,18 +106,18 @@ const EnhanceButton: React.FC<EnhanceButtonProps> = ({ disabled = false }) => {
         onClick={() => setIsOpen(!isOpen)}
         disabled={isDisabled}
         className={`
-          flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md
+          flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg
           transition-all duration-200
           ${isDisabled
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            : 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800'
+            ? 'bg-surface-elevated dark:bg-surface text-text-muted cursor-not-allowed'
+            : 'bg-primary/10 text-primary hover:bg-primary/20'
           }
         `}
         title={isDisabled ? 'Wait for answer to complete' : 'Enhance this answer'}
       >
         {enhancement.isEnhancing ? (
           <>
-            <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <span>Enhancing...</span>
           </>
         ) : (
@@ -155,9 +155,9 @@ const EnhanceButton: React.FC<EnhanceButtonProps> = ({ disabled = false }) => {
 
       {/* Dropdown Menu */}
       {isOpen && !isDisabled && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
+        <div className="absolute right-0 mt-2 w-64 bg-surface dark:bg-surface-elevated rounded-xl shadow-lg border border-border z-50 overflow-hidden">
           <div className="p-2">
-            <p className="text-xs text-gray-500 px-2 py-1 uppercase font-semibold tracking-wide">
+            <p className="text-xs text-text-muted px-2 py-1 uppercase font-semibold tracking-wide">
               Enhance Answer
             </p>
             
@@ -165,15 +165,15 @@ const EnhanceButton: React.FC<EnhanceButtonProps> = ({ disabled = false }) => {
               <div key={option.type}>
                 <button
                   onClick={() => handleEnhance(option.type)}
-                  className="w-full text-left px-3 py-2 rounded-md hover:bg-blue-50 transition-colors group"
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 transition-colors group"
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{option.icon}</span>
                     <div>
-                      <p className="font-medium text-gray-800 group-hover:text-blue-700">
+                      <p className="font-medium text-text-primary group-hover:text-primary">
                         {option.label}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-text-muted">
                         {option.description}
                       </p>
                     </div>
@@ -188,10 +188,10 @@ const EnhanceButton: React.FC<EnhanceButtonProps> = ({ disabled = false }) => {
                         e.stopPropagation();
                         setTonePreference('confident');
                       }}
-                      className={`px-2 py-1 text-xs rounded ${
+                      className={`px-2 py-1 text-xs rounded-md transition-colors ${
                         tonePreference === 'confident'
-                          ? 'bg-blue-100 text-blue-700 font-medium'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : 'bg-surface-elevated dark:bg-surface text-text-secondary hover:bg-primary/5'
                       }`}
                     >
                       Confident
@@ -201,10 +201,10 @@ const EnhanceButton: React.FC<EnhanceButtonProps> = ({ disabled = false }) => {
                         e.stopPropagation();
                         setTonePreference('humble');
                       }}
-                      className={`px-2 py-1 text-xs rounded ${
+                      className={`px-2 py-1 text-xs rounded-md transition-colors ${
                         tonePreference === 'humble'
-                          ? 'bg-blue-100 text-blue-700 font-medium'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : 'bg-surface-elevated dark:bg-surface text-text-secondary hover:bg-primary/5'
                       }`}
                     >
                       Humble

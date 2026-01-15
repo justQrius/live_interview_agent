@@ -43,21 +43,21 @@ export function PreparationButton({ disabled }: PreparationButtonProps) {
   };
 
   const getButtonStyles = () => {
-    const baseStyles = "w-full py-3 px-4 rounded-lg font-medium transition duration-200 text-white";
+    const baseStyles = "w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 text-white shadow-sm";
     
     if (disabled) {
-      return `${baseStyles} bg-gray-400 cursor-not-allowed`;
+      return `${baseStyles} bg-surface-elevated dark:bg-surface text-text-muted cursor-not-allowed shadow-none`;
     }
 
     switch (preparationStatus) {
       case 'preparing':
-        return `${baseStyles} bg-blue-500 cursor-wait`;
+        return `${baseStyles} bg-gradient-to-r from-blue-500 to-blue-600 cursor-wait`;
       case 'ready':
-        return `${baseStyles} bg-green-600 hover:bg-green-700`;
+        return `${baseStyles} bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700`;
       case 'error':
-        return `${baseStyles} bg-red-600 hover:bg-red-700`;
+        return `${baseStyles} bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700`;
       default:
-        return `${baseStyles} bg-purple-600 hover:bg-purple-700`;
+        return `${baseStyles} bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700`;
     }
   };
 

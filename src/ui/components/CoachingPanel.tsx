@@ -39,7 +39,7 @@ export function CoachingPanel() {
             <div className="relative">
               <button
                 onClick={() => setShowStructureHint(false)}
-                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 z-10"
+                className="absolute top-3 right-3 p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-elevated dark:hover:bg-surface transition-colors z-10"
                 title="Hide structure hint"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,12 +51,14 @@ export function CoachingPanel() {
           ) : (
             <button
               onClick={() => setShowStructureHint(true)}
-              className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors flex items-center gap-2"
+              className="w-full text-left p-4 bg-surface dark:bg-surface-elevated border border-border rounded-xl text-sm text-text-secondary hover:bg-surface-elevated dark:hover:bg-surface hover:text-text-primary transition-all flex items-center gap-3 group"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              Show answer structure hint ({structureHint.name})
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+              <span>Show answer structure hint ({structureHint.name})</span>
             </button>
           )}
         </div>

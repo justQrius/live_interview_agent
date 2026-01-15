@@ -79,35 +79,35 @@ export const SessionViewer: React.FC<SessionViewerProps> = ({ sessionId, onBack 
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+      <div className="flex items-center justify-between p-4 bg-surface dark:bg-surface-elevated border-b border-border sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-surface-elevated dark:hover:bg-surface rounded-lg transition-colors"
             aria-label="Go back"
           >
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <div>
-            <h2 className="text-lg font-semibold text-gray-800">
+            <h2 className="text-lg font-semibold text-text-primary">
               {new Date(selectedSession.startedAt).toLocaleString()}
             </h2>
-            <div className="text-sm text-gray-500">
-              {timelineItems.length} events • {selectedSession.contextFiles.length} context files
+            <div className="text-sm text-text-muted">
+              {timelineItems.length} events | {selectedSession.contextFiles.length} context files
             </div>
           </div>
         </div>
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors flex items-center gap-2"
+          className="bg-surface-elevated dark:bg-surface text-text-primary px-4 py-2 rounded-lg hover:bg-primary/10 disabled:opacity-50 transition-colors flex items-center gap-2 border border-border"
         >
           {exporting ? (
-            <span className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></span>
+            <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
           ) : (
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -124,22 +124,22 @@ export const SessionViewer: React.FC<SessionViewerProps> = ({ sessionId, onBack 
             const t = item.data;
             return (
               <div key={`transcription-${index}`} className={`flex flex-col ${t.speaker === 'User' ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[80%] rounded-lg p-4 ${
+                <div className={`max-w-[80%] rounded-xl p-4 ${
                   t.speaker === 'User' 
-                    ? 'bg-blue-50 border border-blue-100' 
-                    : 'bg-white border border-gray-200 shadow-sm'
+                    ? 'bg-primary/5 dark:bg-primary/10 border border-primary/20' 
+                    : 'bg-surface dark:bg-surface-elevated border border-border'
                 }`}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`text-xs font-bold uppercase ${
-                      t.speaker === 'User' ? 'text-blue-600' : 'text-purple-600'
+                      t.speaker === 'User' ? 'text-primary' : 'text-accent'
                     }`}>
                       {t.speaker}
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-text-muted">
                       {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                   </div>
-                  <p className="text-gray-800 leading-relaxed">{t.text}</p>
+                  <p className="text-text-primary leading-relaxed">{t.text}</p>
                 </div>
               </div>
             );
@@ -147,24 +147,24 @@ export const SessionViewer: React.FC<SessionViewerProps> = ({ sessionId, onBack 
             const a = item.data;
             return (
               <div key={`answer-${index}`} className="flex flex-col items-center my-8">
-                <div className="w-full max-w-3xl bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 shadow-sm overflow-hidden">
-                  <div className="bg-indigo-100/50 px-6 py-3 border-b border-indigo-100 flex justify-between items-center">
+                <div className="w-full max-w-3xl bg-surface dark:bg-surface-elevated rounded-xl border border-border overflow-hidden">
+                  <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 dark:from-indigo-500/20 dark:to-purple-500/20 px-6 py-3 border-b border-border flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-indigo-700 uppercase bg-indigo-200 px-2 py-0.5 rounded">
+                      <span className="text-xs font-bold text-white uppercase bg-gradient-to-r from-indigo-500 to-purple-600 px-2.5 py-1 rounded-md">
                         AI Assistant
                       </span>
-                      <span className="text-xs text-indigo-600">re: {a.question.slice(0, 40)}{a.question.length > 40 ? '...' : ''}</span>
+                      <span className="text-xs text-text-secondary">re: {a.question.slice(0, 40)}{a.question.length > 40 ? '...' : ''}</span>
                     </div>
-                    <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      a.confidence === 'high' ? 'bg-green-100 text-green-700' :
-                      a.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
+                    <div className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                      a.confidence === 'high' ? 'bg-success/10 text-success' :
+                      a.confidence === 'medium' ? 'bg-warning/10 text-warning' :
+                      'bg-destructive/10 text-destructive'
                     }`}>
                       {a.confidence} confidence
                     </div>
                   </div>
                   <div className="p-6">
-                    <div className="prose prose-sm max-w-none text-gray-800">
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-text-primary">
                       {a.answer}
                     </div>
                   </div>
@@ -175,7 +175,7 @@ export const SessionViewer: React.FC<SessionViewerProps> = ({ sessionId, onBack 
         })}
         
         {timelineItems.length === 0 && (
-            <div className="text-center py-12 text-gray-400 italic">
+            <div className="text-center py-12 text-text-muted italic">
                 No conversation data recorded for this session.
             </div>
         )}

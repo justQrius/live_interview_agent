@@ -242,8 +242,18 @@ const ContextLoader: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-xl font-semibold mb-4">Context Documents</h2>
+    <div className="bg-surface rounded-xl shadow-sm border border-border p-5 dark:shadow-none transition-colors">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Context Documents</h2>
+          <p className="text-xs text-text-muted">{loadedContextFiles.length} file{loadedContextFiles.length !== 1 ? 's' : ''} loaded</p>
+        </div>
+      </div>
       
       <div className="space-y-3">
         <input
@@ -255,55 +265,53 @@ const ContextLoader: React.FC = () => {
           accept=".pdf,.docx,.txt,.md"
         />
         
-        <button 
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!isConnected || isUploading || isInferring}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-        >
-          {isUploading ? (
-            <span>Processing...</span>
-          ) : isInferring ? (
-            <span>Analyzing...</span>
-          ) : (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
-              <span>Add Documents</span>
-            </>
-          )}
-        </button>
-
+        {/* Upload Zone */}
         <div 
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors duration-200 ${
+          onClick={() => !isUploading && !isInferring && fileInputRef.current?.click()}
+          className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 cursor-pointer ${
             isDragging 
-              ? 'border-blue-500 bg-blue-50' 
-              : 'border-gray-300 hover:border-gray-400'
-          }`}
+              ? 'border-primary bg-blue-50 dark:bg-blue-900/20' 
+              : 'border-border hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+          } ${(isUploading || isInferring) ? 'opacity-60 cursor-not-allowed' : ''}`}
         >
-          <p className="text-gray-500 text-sm">Drag and drop files here</p>
-          <p className="text-gray-400 text-xs mt-1">PDF, DOCX, TXT, MD supported</p>
+          <div className="flex flex-col items-center gap-2">
+            {isUploading ? (
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            ) : isInferring ? (
+              <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg className="w-8 h-8 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            )}
+            <div>
+              <p className="text-sm font-medium text-text-primary">
+                {isUploading ? 'Processing...' : isInferring ? 'Analyzing...' : 'Drop files or click to upload'}
+              </p>
+              <p className="text-xs text-text-muted mt-1">PDF, DOCX, TXT, MD supported</p>
+            </div>
+          </div>
         </div>
 
         {/* Staged Files - Pending Confirmation */}
         {stagedFiles.length > 0 && (
-          <div className="mt-4 border-2 border-blue-200 rounded-lg p-3 bg-blue-50">
-            <h3 className="text-sm font-medium text-blue-800 mb-2 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          <div className="border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4 bg-blue-50/50 dark:bg-blue-900/10">
+            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a10 10 0 11-20 0 10 10 0 0120 0z" />
               </svg>
-              Review & Confirm ({stagedFiles.length} file{stagedFiles.length > 1 ? 's' : ''})
+              Review ({stagedFiles.length} file{stagedFiles.length > 1 ? 's' : ''})
             </h3>
-            <p className="text-xs text-blue-600 mb-3">
-              AI detected document types. Adjust if needed, then confirm.
+            <p className="text-xs text-blue-600 dark:text-blue-400 mb-3">
+              AI detected document types. Adjust if needed.
             </p>
             
-            <ul className="space-y-2 max-h-48 overflow-y-auto">
+            <ul className="space-y-2 max-h-40 overflow-y-auto">
               {stagedFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-2 bg-white rounded border border-blue-200 gap-2">
+                <li key={file.id} className="flex items-center justify-between p-2.5 bg-surface rounded-lg border border-border gap-2">
                   <div className="flex items-center gap-2 overflow-hidden flex-1">
                     <DocumentTypeSelector 
                       value={file.inferredType} 
@@ -311,13 +319,13 @@ const ContextLoader: React.FC = () => {
                       filename={file.name}
                     />
                     <div className="flex flex-col overflow-hidden">
-                      <span className="text-sm text-gray-700 truncate" title={file.name}>
+                      <span className="text-sm text-text-primary truncate" title={file.name}>
                         {file.name}
                       </span>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="flex items-center gap-2 text-xs text-text-muted">
                         <span>{formatFileSize(file.size)}</span>
                         {file.isInferring ? (
-                          <span className="text-blue-600 animate-pulse">Analyzing...</span>
+                          <span className="text-blue-600 dark:text-blue-400 animate-pulse">Analyzing...</span>
                         ) : (
                           <>
                             {getConfidenceBadge(file.confidence)}
@@ -329,11 +337,11 @@ const ContextLoader: React.FC = () => {
                   </div>
                   <button 
                     onClick={() => removeStagedFile(file.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                    className="text-text-muted hover:text-destructive transition-colors p-1"
                     title="Remove file"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </li>
@@ -344,14 +352,14 @@ const ContextLoader: React.FC = () => {
               <button
                 onClick={confirmUpload}
                 disabled={isInferring || isUploading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium py-2 px-4 rounded transition duration-200"
+                className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-700 dark:disabled:to-slate-800 text-white text-sm font-medium py-2 px-4 rounded-lg transition-all shadow-sm hover:shadow"
               >
                 {isUploading ? 'Uploading...' : 'Confirm Upload'}
               </button>
               <button
                 onClick={() => setStagedFiles([])}
                 disabled={isUploading}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium py-2 px-4 rounded transition duration-200"
+                className="bg-surface border border-border text-text-secondary hover:bg-slate-50 dark:hover:bg-slate-800 text-sm font-medium py-2 px-4 rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -360,19 +368,15 @@ const ContextLoader: React.FC = () => {
         )}
 
         {/* Loaded Files */}
-        <div className="mt-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
-            Loaded Documents ({loadedContextFiles.length}):
-          </h3>
-          
-          {loadedContextFiles.length === 0 ? (
-            <div className="p-3 bg-gray-50 rounded text-sm text-gray-500 text-center italic">
-              No documents loaded
-            </div>
-          ) : (
-            <ul className="space-y-2 max-h-60 overflow-y-auto">
+        {loadedContextFiles.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-sm font-medium text-text-secondary mb-2">
+              Loaded ({loadedContextFiles.length})
+            </h3>
+            
+            <ul className="space-y-2 max-h-48 overflow-y-auto">
               {loadedContextFiles.map((file) => (
-                <li key={file.id} className="flex flex-col p-2 bg-gray-50 rounded border border-gray-200 gap-1">
+                <li key={file.id} className="flex flex-col p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-border gap-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 overflow-hidden flex-1">
                       <DocumentTypeSelector 
@@ -381,23 +385,23 @@ const ContextLoader: React.FC = () => {
                         filename={file.name}
                       />
                       <div className="flex flex-col overflow-hidden">
-                        <span className="text-sm text-gray-700 truncate" title={file.name}>
+                        <span className="text-sm text-text-primary truncate" title={file.name}>
                           {file.name}
                         </span>
                         
                         {/* Status Message */}
                         {file.status === 'processing' && (
-                          <span className="text-xs text-gray-500 truncate" title={file.processingMessage}>
+                          <span className="text-xs text-blue-600 dark:text-blue-400 truncate" title={file.processingMessage}>
                             {file.processingMessage || 'Processing...'}
                           </span>
                         )}
                         {file.status === 'error' && (
-                          <span className="text-xs text-red-500 truncate" title={file.processingMessage}>
+                          <span className="text-xs text-destructive truncate" title={file.processingMessage}>
                             Error: {file.processingMessage}
                           </span>
                         )}
                         {file.status === 'pending' && (
-                          <span className="text-xs text-gray-400">Queued...</span>
+                          <span className="text-xs text-text-muted">Queued...</span>
                         )}
                       </div>
                     </div>
@@ -406,24 +410,24 @@ const ContextLoader: React.FC = () => {
                       {/* Extraction Result (Sparkles) */}
                       {file.extractionResult && (
                         <div className="group relative">
-                          <span className="text-yellow-500 cursor-help" aria-label="View Insights">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <span className="text-amber-500 cursor-help" aria-label="View Insights">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" />
                             </svg>
                           </span>
-                          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 bg-gray-800 text-white text-xs p-2 rounded z-10 shadow-lg">
+                          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 bg-slate-800 dark:bg-slate-700 text-white text-xs p-2 rounded-lg z-10 shadow-lg">
                             <p className="font-semibold mb-1">Extraction Insights:</p>
                             <p>{file.extractionResult.storyCount} stories</p>
-                            <p>{file.extractionResult.hasFacts ? '✓ Facts extracted' : '• No facts found'}</p>
-                            <p>{file.extractionResult.hasSummary ? '✓ Summary generated' : '• No summary'}</p>
+                            <p>{file.extractionResult.hasFacts ? 'Facts extracted' : 'No facts found'}</p>
+                            <p>{file.extractionResult.hasSummary ? 'Summary generated' : 'No summary'}</p>
                           </div>
                         </div>
                       )}
 
                       {/* Status Indicators */}
                       {file.status === 'ready' && (
-                        <span className="text-green-500" title="Processing Complete">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <span className="text-success" title="Processing Complete">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
                         </span>
@@ -431,12 +435,12 @@ const ContextLoader: React.FC = () => {
                       
                       {file.status === 'error' && (
                         <div className="group relative">
-                          <span className="text-red-500 cursor-help">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <span className="text-destructive cursor-help">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
                           </span>
-                          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 bg-red-800 text-white text-xs p-2 rounded z-10 shadow-lg">
+                          <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block w-48 bg-red-800 text-white text-xs p-2 rounded-lg z-10 shadow-lg">
                             {file.processingMessage || 'Unknown error occurred'}
                           </div>
                         </div>
@@ -444,11 +448,11 @@ const ContextLoader: React.FC = () => {
 
                       <button 
                         onClick={() => removeContextFile(file.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        className="text-text-muted hover:text-destructive transition-colors p-1"
                         title="Remove file"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
@@ -456,18 +460,24 @@ const ContextLoader: React.FC = () => {
 
                   {/* Progress Bar */}
                   {file.status === 'processing' && (
-                    <div className="w-full bg-gray-200 rounded-full h-1 mt-1 overflow-hidden">
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1 mt-1 overflow-hidden">
                       <div 
-                        className="bg-blue-600 h-1 rounded-full transition-all duration-300" 
+                        className="bg-primary h-1 rounded-full transition-all duration-300" 
                         style={{ width: `${file.progress || 0}%` }}
-                      ></div>
+                      />
                     </div>
                   )}
                 </li>
               ))}
             </ul>
-          )}
-        </div>
+          </div>
+        )}
+
+        {loadedContextFiles.length === 0 && stagedFiles.length === 0 && (
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+            <p className="text-sm text-text-muted italic">No documents loaded yet</p>
+          </div>
+        )}
       </div>
     </div>
   );
