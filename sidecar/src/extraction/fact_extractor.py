@@ -131,8 +131,8 @@ class FactExtractor:
     """
     
     # Maximum characters to send to LLM
-    # Gemini supports 2M tokens (~8M chars), so 200k chars (~50k tokens) is very safe
-    MAX_DOCUMENT_LENGTH = 200000
+    # Gemini supports 2M tokens (~8M chars), so 500k chars (~125k tokens) is very safe
+    MAX_DOCUMENT_LENGTH = 500000
     
     def __init__(
         self, 
