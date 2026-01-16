@@ -169,17 +169,6 @@ const AnswerDisplay: React.FC = () => {
     }
   }, [currentAnswer?.answerText]);
 
-  const getConfidenceColor = (confidence: 'high' | 'medium' | 'low') => {
-    switch (confidence) {
-      case 'high':
-        return 'text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-900/30';
-      case 'medium':
-        return 'text-amber-700 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30';
-      case 'low':
-        return 'text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-900/30';
-    }
-  };
-
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -394,42 +383,6 @@ const AnswerDisplay: React.FC = () => {
             )}
           </div>
         )}
-
-        {/* Confidence Footer */}
-        <div className="flex items-center justify-between text-sm mt-auto pt-4 border-t border-border">
-          <div className="flex items-center group relative cursor-help">
-            <span className="font-medium text-text-muted mr-2">Confidence:</span>
-            {currentAnswer ? (
-              <>
-                <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${getConfidenceColor(currentAnswer.confidence)}`}
-                >
-                  {currentAnswer.confidence.charAt(0).toUpperCase() +
-                    currentAnswer.confidence.slice(1)}
-                </span>
-                <div className="absolute bottom-full left-0 mb-2 w-64 p-3 bg-slate-800 dark:bg-slate-700 text-white text-xs rounded-lg shadow-lg hidden group-hover:block z-50">
-                  {currentAnswer.confidence === 'high' &&
-                    'High confidence: Answer is well-supported by your resume/context.'}
-                  {currentAnswer.confidence === 'medium' &&
-                    'Medium confidence: Standard answer, verify specific details.'}
-                  {currentAnswer.confidence === 'low' &&
-                    'Low confidence: Generic response, use with caution.'}
-                  <div className="absolute -bottom-1 left-4 w-2 h-2 bg-slate-800 dark:bg-slate-700 transform rotate-45" />
-                </div>
-              </>
-            ) : (
-              <span className="text-text-muted">--</span>
-            )}
-          </div>
-          {currentAnswer?.isComplete && (
-            <span className="text-green-600 dark:text-green-400 text-xs font-medium flex items-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              Complete
-            </span>
-          )}
-        </div>
       </div>
     </div>
   );
