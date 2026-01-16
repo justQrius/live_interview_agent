@@ -26,15 +26,15 @@
   }
 
   .dark {
-    /* Dark mode - True Dark / OLED Friendly */
-    --color-background: 0 0% 3%;         /* #080808 - Almost black */
-    --color-surface: 0 0% 7%;            /* #121212 - Material Dark Surface */
-    --color-surface-elevated: 0 0% 11%;  /* #1c1c1c */
-    --color-text-primary: 0 0% 95%;      /* #f2f2f2 */
-    --color-text-secondary: 0 0% 65%;    /* #a6a6a6 */
-    --color-text-muted: 0 0% 45%;        /* #737373 */
-    --color-border: 0 0% 15%;            /* #262626 */
-    --color-border-subtle: 0 0% 10%;     /* #1a1a1a */
+    /* TRUE DARK MODE / OLED Friendly */
+    --color-background: 0 0% 0%;         /* #000000 - Pure black */
+    --color-surface: 0 0% 4%;            /* #0a0a0a - Slightly elevated */
+    --color-surface-elevated: 0 0% 7%;   /* #121212 - Cards/modals */
+    --color-text-primary: 0 0% 95%;      /* #f2f2f2 - Keep same */
+    --color-text-secondary: 0 0% 60%;    /* slightly brighter for contrast */
+    --color-text-muted: 0 0% 40%;        /* slightly brighter */
+    --color-border: 0 0% 12%;            /* #1f1f1f - subtle borders */
+    --color-border-subtle: 0 0% 8%;      /* #141414 */
   }
 }
 
