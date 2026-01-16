@@ -120,7 +120,7 @@ class EnhancedContextManager:
     
     def __init__(
         self,
-        parent_size: int = 2048,
+        parent_size: int = 4096,
         child_size: int = 1024,
         overlap: int = 150
     ):
@@ -128,7 +128,7 @@ class EnhancedContextManager:
         Initialize enhanced context manager.
         
         Args:
-            parent_size: Size of parent chunks in characters (default 2048)
+            parent_size: Size of parent chunks in characters (default 4096)
             child_size: Size of child chunks in characters (default 1024)
             overlap: Overlap between consecutive chunks (default 150)
         """
