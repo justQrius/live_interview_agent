@@ -140,12 +140,14 @@ class StoryExtractor:
         Returns:
             List of STARStory objects
         """
-        # Check for existing stories
-        if not force_regenerate and self.memory_store:
-            existing = self.memory_store.get_all_stories()
-            if existing:
-                logger.info(f"Using {len(existing)} existing stories")
-                return existing
+        # NOTE: Removed global story cache check that was causing issues.
+        # Previously, if ANY stories existed in the DB (from previous sessions),
+        # the extractor would return them instead of generating new stories
+        # from the current document's facts. This led to only 1 story being
+        # extracted across multiple sessions.
+        #
+        # The pipeline now always extracts stories from the provided facts.
+        # Caching should be handled at the document level, not globally.
         
         # Build context from facts
         career_info = self._format_career_info(facts)
