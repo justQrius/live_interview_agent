@@ -152,19 +152,19 @@ live_interview_agent/
 ├── sidecar/               # Python sidecar
 │   └── src/
 │       ├── audio/          # Capture, VAD, diarization, noise reduction
-│       ├── classification/ # Question detection, reformulation, splitting
+│       ├── classification/ # Question detection, reformulation (TopicStack), splitting
 │       ├── coaching/       # Phase 4: Story recall, structure, consistency
 │       ├── context/        # Document parsing, chunking, Gemini cache
 │       ├── extraction/     # Phase 4: Fact/story extraction pipeline
 │       ├── memory/         # Phase 4: Persistent candidate profile
 │       ├── playbook/       # Phase 4: Interview preparation generator
-│       ├── providers/      # STT/LLM Provider implementations
+│       ├── providers/      # STT/LLM Provider implementations (with retry logic)
 │       ├── rag/            # ChromaDB + enhanced retrieval engine
 │       ├── storage/        # Session and context persistence
 │       └── server.py       # WebSocket server
 └── _prism/                # SDLC artifacts
-    ├── planning/           # PRDs (phase1-4)
-    ├── architecture/       # Architecture docs (phase1-4)
+    ├── planning/           # PRDs (phase1-5)
+    ├── architecture/       # Architecture docs (phase1-5)
     └── tasks.md            # Story tracking
 ```
 
@@ -185,12 +185,22 @@ live_interview_agent/
 - **Story Recaller**: Embedding similarity matching (<1s latency)
 - **Structure Suggester**: STAR, PREP, Pyramid frameworks
 - **Consistency Tracker**: Claim logging and contradiction detection
+- **Prepared Q&A Priority**: Pre-prepared answers prioritized in RAG retrieval
 
 ### Phase 5 Features (Gemini Integration)
 - **Context Caching**: 2-hour TTL cache for reduced latency
 - **Answer Enhancement**: 5 enhancement types (detail, specific, STAR, tone, shorten)
 - **Enhanced RAG**: Child-to-parent expansion, question-type awareness
 - **Google Search Grounding**: Autonomous real-time web search for facts, news, and trends
+- **Model Fallback**: Automatic fallback when primary model unavailable
+- **Retry Logic**: Exponential backoff for 503/429 errors
+
+### Recent Enhancements
+- **Multi-Turn Follow-Up Handling**: TopicStack tracks conversation topics across turns
+- **LLM Fallback Reformulation**: Async LLM reformulation when templates fail
+- **Dark Mode UI**: Premium dark theme with glassmorphism effects
+- **Session Isolation**: Clear all persistent data on session stop for privacy
+- **Context Preservation**: Resume context across session restarts
 
 ## Conventions
 

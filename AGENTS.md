@@ -245,6 +245,12 @@ This project uses the Prism SDLC framework.
 - **Structure Suggester**: STAR, PREP, Pyramid framework recommendations
 - **Consistency Tracker**: Claim logging and contradiction detection
 
+### Query Reformulator (`sidecar/src/classification/query_reformulator.py`)
+- **TopicStack**: Tracks topics across all conversation turns
+- **Multi-turn Anaphora**: Resolves "that project", "the first topic" across N turns
+- **LLM Fallback**: Async reformulation when templates fail
+- **3-Tier Architecture**: Template (<5ms) → TopicStack (<20ms) → LLM (~150ms)
+
 ## Key Phase 5 Features
 
 ### Gemini Integration
@@ -252,12 +258,20 @@ This project uses the Prism SDLC framework.
 - **File Uploader** (`file_uploader.py`): Direct Gemini File API integration
 - **Search Grounding** (`gemini_search.py`): Real-time web search for company/interviewer research
 - **Gemini Embeddings** (`gemini_embeddings.py`): Native embedding function
+- **Retry Logic**: Exponential backoff for 503/429 errors with configurable max retries
+- **Model Fallback**: Automatic fallback to alternative models when primary unavailable
 
 ### Enhanced RAG (`sidecar/src/rag/enhanced_engine.py`)
 - Child-to-parent expansion (512 → 2048 chars)
 - Question-type aware retrieval prioritization
 - Sub-question aggregation for multi-part questions
+- Prepared Q&A answer prioritization
 
 ### Answer Enhancement
 - 5 enhancement types via `ENHANCE_ANSWER` message
 - Streaming enhanced response via `ENHANCED_ANSWER_CHUNK`
+
+### Privacy & Session Management
+- Session isolation: Clear memory, cache, and context on session stop
+- Context preservation: Resume context across session restarts
+- Secure API key storage via OS keychain
