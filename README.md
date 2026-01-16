@@ -13,7 +13,9 @@ A cross-platform desktop application that provides real-time AI assistance durin
 
 ### Intelligence Pipeline (Phase 3)
 - **Intelligent Question Detection**: Multi-tier classification of interview questions (behavioral, technical, etc.) with <10ms latency.
-- **Conversational Intelligence**: Advanced query reformulation and question splitting for complex, multi-part, or follow-up questions.
+- **Multi-Turn Follow-Up Handling**: Advanced query reformulation with TopicStack for resolving references across conversation turns ("that project", "the first topic", "go back to earlier").
+- **LLM Fallback Reformulation**: When template-based expansion fails, async LLM reformulation ensures complex follow-ups are handled correctly.
+- **Question Splitting**: Compound questions are split into sub-questions for comprehensive RAG retrieval.
 - **Session History**: Persistent session storage with export capabilities (Markdown, JSON, TXT).
 
 ### Interview Coach (Phase 4)
@@ -24,18 +26,31 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Consistency Tracking**: Prevents contradictions between answers during the interview.
 - **Document Extraction Pipeline**: Automatic extraction of skills, timeline, achievements, and metrics from uploaded documents.
 - **Smart Document Classification**: LLM-based automatic detection of document types (resume, job description, company info) with confidence scoring.
+- **Prepared Q&A Priority**: Pre-prepared Q&A answers are prioritized in RAG retrieval for faster, more accurate responses.
 
 ### Gemini Integration (Phase 5)
 - **Context Caching**: Reduced latency and cost through Gemini context caching for long sessions.
 - **Answer Enhancement**: On-demand answer refinement (add detail, make specific, suggest STAR, adjust tone, shorten).
 - **Enhanced RAG**: Hierarchical chunking with child-to-parent expansion for richer context.
 - **Google Search Grounding**: Autonomous real-time web search for company news, industry trends, and factual queries. The AI intelligently decides when to search vs. use internal context.
+- **Model Fallback**: Automatic fallback to alternative models when primary model is unavailable.
+
+### User Interface
+- **Dark Mode**: Premium dark theme with glassmorphism effects and smooth animations.
+- **Real-time Status Indicators**: Visual feedback for transcription, processing, and answer generation states.
+- **Coaching Panel**: Integrated panel showing story suggestions, structure hints, and consistency warnings.
 
 ### Low-Latency Architecture
 - **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.
 - **Model Pre-warming**: ML models load at app startup for <1s session starts.
 - **Speculative Retrieval**: RAG queries begin before the interviewer finishes speaking.
 - **Parallel Processing**: Audio pipeline optimized for <1.5s end-to-end latency.
+- **Gemini Retry Logic**: Automatic retry with exponential backoff for 503/429 errors.
+
+### Privacy & Session Management
+- **Session Isolation**: Clear all persistent data (memory, cache, context) on session stop.
+- **Context Preservation**: Resume context across session restarts within the same app session.
+- **Secure Key Storage**: API keys stored in OS keychain, never in plaintext.
 
 ## Getting Started
 
