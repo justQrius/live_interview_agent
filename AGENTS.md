@@ -119,8 +119,10 @@ live_interview_agent/
 │       │   ├── CoachingPanel.tsx         # Phase 4: Coaching container
 │       │   ├── ConsistencyPanel.tsx      # Phase 4: Claim tracking
 │       │   ├── DocumentTypeSelector.tsx
+│       │   ├── EnhanceButton.tsx         # Relocated to Answer Header
 │       │   ├── PreparationButton.tsx
 │       │   ├── PreparationSummary.tsx
+│       │   ├── SettingsModal.tsx         # New overlay settings
 │       │   ├── StorySuggestionCard.tsx   # Phase 4: STAR story recall
 │       │   ├── StructureHintCard.tsx     # Phase 4: Answer frameworks
 │       │   └── ...

@@ -222,17 +222,20 @@ const AnswerDisplay: React.FC = () => {
             <p className="text-xs text-text-muted">Real-time assistance</p>
           </div>
         </div>
-        {(transcriptionHistory.length > 0 || answerHistory.length > 0) && (
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            className="text-xs font-medium text-primary hover:text-primary-hover flex items-center gap-1 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showHistory ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
-            </svg>
-            {showHistory ? 'Hide History' : `History (${answerHistory.length})`}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <EnhanceButton disabled={!currentAnswer?.isComplete} />
+          {(transcriptionHistory.length > 0 || answerHistory.length > 0) && (
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="text-xs font-medium text-primary hover:text-primary-hover flex items-center gap-1 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showHistory ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+              </svg>
+              {showHistory ? 'Hide History' : `History (${answerHistory.length})`}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* History Panel */}
@@ -319,7 +322,6 @@ const AnswerDisplay: React.FC = () => {
               </svg>
               <h3 className="font-medium text-sm text-green-700 dark:text-green-300">Answer</h3>
             </div>
-            <EnhanceButton disabled={!currentAnswer?.isComplete} />
           </div>
           <AnswerContent 
             text={currentAnswer?.answerText || ''} 

@@ -36,7 +36,8 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Model Fallback**: Automatic fallback to alternative models when primary model is unavailable.
 
 ### User Interface
-- **Dark Mode**: Premium dark theme with glassmorphism effects and smooth animations.
+- **True Dark Mode**: OLED-friendly deep dark theme (`#080808` background) for reduced eye strain and premium aesthetics.
+- **Settings Overlay**: Clean, non-intrusive settings modal for managing keys and preferences.
 - **Real-time Status Indicators**: Visual feedback for transcription, processing, and answer generation states.
 - **Coaching Panel**: Integrated panel showing story suggestions, structure hints, and consistency warnings.
 
