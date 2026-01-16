@@ -53,8 +53,9 @@ class LLMProvider(ABC):
     Supports candidate profile injection for personalized responses.
     """
     
-    # Maximum tokens for injected profile (conservative estimate)
-    MAX_PROFILE_TOKENS = 1000
+    # Maximum tokens for injected profile
+    # 1500 tokens allows full candidate context including STAR story summaries
+    MAX_PROFILE_TOKENS = 1500
     
     def __init__(self):
         """Initialize base LLM provider with profile support."""
