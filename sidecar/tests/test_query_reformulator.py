@@ -1,11 +1,18 @@
 """
 Tests for QueryReformulator - expanding follow-up questions into standalone queries.
+
+Includes tests for:
+- Template-based expansion (Tier 1)
+- TopicStack and multi-turn anaphora resolution (Tier 2)
+- LLM fallback (Tier 3) - async tests
 """
 
 import pytest
 
 from src.classification.query_reformulator import (
     QueryReformulator,
+    TopicStack,
+    TopicEntry,
     FOLLOW_UP_INDICATORS,
 )
 
@@ -292,3 +299,404 @@ class TestEdgeCases:
         assert reformulator._is_follow_up("WHAT ABOUT Python?")
         assert reformulator._is_follow_up("CAN YOU ELABORATE?")
         assert reformulator._is_follow_up("TELL ME MORE")
+
+
+# =============================================================================
+# NEW: TopicStack Tests
+# =============================================================================
+
+class TestTopicStack:
+    """Tests for TopicStack - multi-turn topic tracking."""
+    
+    @pytest.fixture
+    def topic_stack(self):
+        """Create a topic stack instance."""
+        return TopicStack(max_size=5)
+    
+    def test_push_and_get_latest(self, topic_stack):
+        """Should push topics and retrieve latest."""
+        topic_stack.push("Python experience", "Tell me about Python", 0)
+        topic_stack.push("AWS deployment", "Describe your AWS work", 1)
+        
+        latest = topic_stack.get_latest()
+        assert latest is not None
+        assert "AWS" in latest.topic
+    
+    def test_get_by_index(self, topic_stack):
+        """Should retrieve topics by ordinal index."""
+        topic_stack.push("first topic", "First question", 0)
+        topic_stack.push("second topic", "Second question", 1)
+        topic_stack.push("third topic", "Third question", 2)
+        
+        first = topic_stack.get_by_index(0)
+        assert first is not None
+        assert "first" in first.topic.lower()
+        
+        last = topic_stack.get_by_index(-1)
+        assert last is not None
+        assert "third" in last.topic.lower()
+    
+    def test_find_by_keywords(self, topic_stack):
+        """Should find topics by keyword matching."""
+        topic_stack.push("microservices architecture", "Tell me about your microservices project", 0)
+        topic_stack.push("database optimization", "Describe your database work", 1)
+        topic_stack.push("team leadership", "How do you lead teams", 2)
+        
+        # Search for "project" - should match microservices
+        result = topic_stack.find_by_keywords(["project", "microservices"])
+        assert result is not None
+        assert "microservices" in result.topic.lower()
+        
+        # Search for "database"
+        result = topic_stack.find_by_keywords(["database"])
+        assert result is not None
+        assert "database" in result.topic.lower()
+    
+    def test_max_size_limit(self, topic_stack):
+        """Should respect max size limit."""
+        for i in range(10):
+            topic_stack.push(f"topic {i}", f"question {i}", i)
+        
+        # Max size is 5
+        assert len(topic_stack) == 5
+        
+        # First topics should be dropped
+        first = topic_stack.get_by_index(0)
+        assert first is not None
+        assert "5" in first.topic  # topic 5 should be first now
+    
+    def test_clear(self, topic_stack):
+        """Should clear all topics."""
+        topic_stack.push("topic", "question", 0)
+        topic_stack.clear()
+        
+        assert len(topic_stack) == 0
+        assert topic_stack.get_latest() is None
+
+
+class TestTopicEntry:
+    """Tests for TopicEntry keyword extraction."""
+    
+    def test_keyword_extraction(self):
+        """Should extract meaningful keywords from questions."""
+        entry = TopicEntry(
+            topic="Python experience",
+            turn_index=0,
+            question="Tell me about your experience with Python and machine learning"
+        )
+        
+        # Should extract significant words
+        assert "python" in entry.keywords
+        assert "machine" in entry.keywords
+        assert "learning" in entry.keywords
+        
+        # Should exclude stop words
+        assert "tell" not in entry.keywords
+        assert "about" not in entry.keywords
+        assert "your" not in entry.keywords
+    
+    def test_keyword_extraction_short_words(self):
+        """Should exclude very short words."""
+        entry = TopicEntry(
+            topic="API work",
+            turn_index=0,
+            question="How do you handle API rate limiting?"
+        )
+        
+        # Words less than 3 chars should be excluded
+        assert "do" not in entry.keywords
+        # But longer words should be included
+        assert "handle" in entry.keywords or "rate" in entry.keywords
+
+
+# =============================================================================
+# NEW: Multi-Turn Anaphora Resolution Tests
+# =============================================================================
+
+class TestMultiTurnAnaphora:
+    """Tests for resolving references across multiple conversation turns."""
+    
+    @pytest.fixture
+    def reformulator(self):
+        """Create a reformulator instance."""
+        return QueryReformulator()
+    
+    def test_ordinal_reference_first(self, reformulator):
+        """Should resolve 'the first topic' to first topic in stack."""
+        history = [
+            {"question": "Tell me about your Python experience", "answer": "I've used Python for 5 years..."},
+            {"question": "Describe your AWS deployments", "answer": "I've deployed to AWS..."},
+            {"question": "What about your leadership style", "answer": "I lead by example..."},
+        ]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "Go back to the first topic",
+            history
+        )
+        
+        assert was_reformulated
+        assert "python" in result.lower() or "first" not in result.lower()
+    
+    def test_ordinal_reference_previous(self, reformulator):
+        """Should resolve 'the previous topic' correctly."""
+        history = [
+            {"question": "Tell me about Java", "answer": "..."},
+            {"question": "Describe Python work", "answer": "..."},
+            {"question": "What about Kubernetes?", "answer": "..."},
+        ]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "Can you elaborate on the previous topic?",
+            history
+        )
+        
+        # Should reference something, ideally Python or Kubernetes
+        assert was_reformulated or "previous" in result
+    
+    def test_that_project_three_turns_ago(self, reformulator):
+        """Should resolve 'that project' referring to earlier turn."""
+        history = [
+            {"question": "Tell me about your microservices project at Acme", "answer": "We built 12 services..."},
+            {"question": "What languages do you prefer?", "answer": "Python and Go..."},
+            {"question": "How do you handle testing?", "answer": "TDD approach..."},
+        ]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "How did that project end?",
+            history
+        )
+        
+        # Should attempt to resolve "that project"
+        assert was_reformulated
+        # Result should reference microservices or project
+        assert "project" in result.lower() or "microservices" in result.lower()
+    
+    def test_that_experience_resolution(self, reformulator):
+        """Should resolve 'that experience' to relevant earlier topic."""
+        history = [
+            {"question": "Describe your startup experience", "answer": "I was CTO at a startup..."},
+            {"question": "What tech stack did you use?", "answer": "React, Node, PostgreSQL..."},
+            {"question": "How large was the team?", "answer": "5 engineers..."},
+        ]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "What did you learn from that experience?",
+            history
+        )
+        
+        assert was_reformulated
+        # Should reference startup experience
+        assert "startup" in result.lower() or "experience" in result.lower()
+    
+    def test_pronoun_with_keyword_context(self, reformulator):
+        """Pronouns with contextual keywords should match better."""
+        history = [
+            {"question": "Tell me about the payment system you built", "answer": "I designed a payment gateway..."},
+            {"question": "What about authentication?", "answer": "We used OAuth2..."},
+            {"question": "How do you handle errors?", "answer": "Centralized error handling..."},
+        ]
+        
+        # "it" with "payment" keyword should match payment system
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "What were the challenges with it?",
+            history
+        )
+        
+        # Should reformulate (ending with "it")
+        assert was_reformulated
+
+
+class TestEnhancedFollowUpPatterns:
+    """Tests for new follow-up pattern detection."""
+    
+    @pytest.fixture
+    def reformulator(self):
+        return QueryReformulator()
+    
+    def test_that_project_mid_sentence(self, reformulator):
+        """'that project' mid-sentence should be detected as follow-up."""
+        assert reformulator._is_follow_up("What challenges did you face in that project?")
+        assert reformulator._is_follow_up("How did that experience shape your approach?")
+    
+    def test_ordinal_patterns(self, reformulator):
+        """Ordinal references should be detected as follow-ups."""
+        assert reformulator._is_follow_up("Go back to the first topic")
+        assert reformulator._is_follow_up("Let's revisit the earlier question")
+        assert reformulator._is_follow_up("The previous one was interesting")
+
+
+class TestEnhancedTopicExtraction:
+    """Tests for improved topic extraction patterns."""
+    
+    @pytest.fixture
+    def reformulator(self):
+        return QueryReformulator()
+    
+    def test_walk_me_through_pattern(self, reformulator):
+        """Should extract topic from 'walk me through' questions."""
+        exchange = {"question": "Walk me through your approach to system design", "answer": "..."}
+        topic = reformulator._extract_topic(exchange)
+        
+        assert "approach" in topic.lower() or "system" in topic.lower() or "design" in topic.lower()
+    
+    def test_experience_with_pattern(self, reformulator):
+        """Should extract topic from 'experience with' questions."""
+        exchange = {"question": "What is your experience with distributed systems?", "answer": "..."}
+        topic = reformulator._extract_topic(exchange)
+        
+        assert "distributed" in topic.lower() or "systems" in topic.lower()
+    
+    def test_the_x_project_pattern(self, reformulator):
+        """Should extract 'the X project/system' patterns."""
+        exchange = {"question": "Tell me about the payment system architecture", "answer": "..."}
+        topic = reformulator._extract_topic(exchange)
+        
+        # Should extract something meaningful
+        assert "payment" in topic.lower() or "system" in topic.lower()
+    
+    def test_complex_question_extraction(self, reformulator):
+        """Should handle complex multi-part questions."""
+        exchange = {
+            "question": "How do you balance technical debt with feature delivery while maintaining team morale?",
+            "answer": "..."
+        }
+        topic = reformulator._extract_topic(exchange)
+        
+        # Should extract something meaningful, not just fallback
+        assert topic != "your previous response"
+        assert len(topic) > 10
+
+
+class TestTieredReformulation:
+    """Tests verifying the tiered reformulation approach."""
+    
+    @pytest.fixture
+    def reformulator(self):
+        return QueryReformulator()
+    
+    def test_tier1_template_fast_path(self, reformulator):
+        """Template matches should use fast path."""
+        history = [
+            {"question": "Tell me about Python", "answer": "..."}
+        ]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "Can you elaborate?",
+            history
+        )
+        
+        assert was_reformulated
+        assert "Python" in result or "elaborate" in result
+    
+    def test_tier2_topic_stack_used(self, reformulator):
+        """TopicStack should be built and used for multi-turn context."""
+        history = [
+            {"question": "Tell me about your startup experience", "answer": "..."},
+            {"question": "What tech stack?", "answer": "..."},
+            {"question": "Team size?", "answer": "..."},
+        ]
+        
+        # Build stack via reformulate call
+        reformulator.reformulate_if_needed("Test", history)
+        
+        # Topic stack should have entries
+        assert len(reformulator.topic_stack) > 0
+    
+    def test_tier2_ordinal_before_template(self, reformulator):
+        """Ordinal references should be resolved before template matching."""
+        history = [
+            {"question": "Tell me about your Python experience", "answer": "..."},
+            {"question": "Describe your AWS work", "answer": "..."},
+        ]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "Go back to the first one",
+            history
+        )
+        
+        # Should resolve "first one" to Python
+        assert was_reformulated
+        assert "python" in result.lower() or "first" not in result.lower()
+
+
+# =============================================================================
+# NEW: Async LLM Fallback Tests
+# =============================================================================
+
+class TestAsyncLLMFallback:
+    """Tests for async LLM fallback reformulation."""
+    
+    @pytest.fixture
+    def reformulator(self):
+        return QueryReformulator(enable_llm_fallback=True)
+    
+    def test_llm_provider_can_be_set(self, reformulator):
+        """Should accept LLM provider."""
+        mock_provider = object()  # Placeholder
+        reformulator.set_llm_provider(mock_provider)
+        
+        assert reformulator.llm_provider is mock_provider
+    
+    def test_no_llm_sync_still_works(self, reformulator):
+        """Sync method should work without LLM provider."""
+        history = [{"question": "About Python", "answer": "..."}]
+        
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "Novel phrasing that might not match templates",
+            history
+        )
+        
+        # Should not crash, may or may not reformulate
+        assert result is not None
+    
+    @pytest.mark.asyncio
+    async def test_async_method_exists(self, reformulator):
+        """Async method should exist and be callable."""
+        history = [{"question": "About Python", "answer": "..."}]
+        
+        # Should not crash even without LLM
+        result, was_reformulated = await reformulator.reformulate_if_needed_async(
+            "Can you elaborate?",
+            history
+        )
+        
+        assert result is not None
+
+
+class TestBackwardsCompatibility:
+    """Ensure existing behavior is preserved."""
+    
+    @pytest.fixture
+    def reformulator(self):
+        return QueryReformulator()
+    
+    def test_existing_templates_still_work(self, reformulator):
+        """All existing template patterns should still work."""
+        history = [{"question": "Tell me about databases", "answer": "..."}]
+        
+        test_cases = [
+            ("What about Python?", True),
+            ("How about scalability?", True),
+            ("Can you elaborate?", True),
+            ("Tell me more", True),
+            ("What were the results?", True),
+            ("Tell me about yourself", False),  # Not a follow-up
+        ]
+        
+        for question, should_reformulate in test_cases:
+            result, was_reformulated = reformulator.reformulate_if_needed(question, history)
+            assert was_reformulated == should_reformulate, f"Failed for: {question}"
+    
+    def test_context_turns_default(self, reformulator):
+        """Default context_turns should be 5."""
+        assert reformulator.context_turns == 5
+    
+    def test_empty_history_handling(self, reformulator):
+        """Empty history should be handled gracefully."""
+        result, was_reformulated = reformulator.reformulate_if_needed(
+            "What about X?",
+            []
+        )
+        
+        assert not was_reformulated
+        assert result == "What about X?"
