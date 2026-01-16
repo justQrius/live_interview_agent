@@ -33,13 +33,14 @@ class OpenAILLMProvider(LLMProvider):
     DEFAULT_PRESENCE_PENALTY = 0.25  # Encourage topic diversity
     DEFAULT_TOP_P = 0.9  # Nucleus sampling for quality
     
-    def __init__(self, api_key: str, model: str = "gpt-4o"):
+    def __init__(self, api_key: str, model: str = "gpt-4o", thinking_budget: int | None = None):
         """
         Initialize the OpenAI provider.
         
         Args:
             api_key: OpenAI API key
             model: Model to use (default: gpt-4o)
+            thinking_budget: Optional token budget for thinking (simulated via CoT prompt)
         """
         super().__init__()
         
@@ -54,6 +55,7 @@ class OpenAILLMProvider(LLMProvider):
             
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
+        self._thinking_budget = thinking_budget
         
     async def generate_response(
         self, 
@@ -118,6 +120,10 @@ class OpenAILLMProvider(LLMProvider):
             candidate_profile=self._candidate_profile or ""
         )
         
+        # Add CoT instruction if thinking budget is set
+        if self._thinking_budget:
+            system_content += "\n\nThinking Process:\nBefore answering, think through the requirements, user intent, and potential pitfalls step-by-step in <thinking> tags. Then provide the final answer."
+
         formatted_context = format_context_for_prompt(context, question_type)
         
         messages: List[Dict[str, str]] = [

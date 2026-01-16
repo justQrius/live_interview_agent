@@ -6,7 +6,7 @@ Implements fallback chains and caching for STT, LLM, and Embedding providers.
 import logging
 from typing import Dict, List, Optional, Any
 
-from .base import STTProvider, LLMProvider, EmbeddingProvider
+from .base import STTProvider, LLMProvider, EmbeddingProvider, SearchProvider
 from .config import ProviderConfig, ProviderType
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,11 @@ class ProviderFactory:
         ProviderType.GEMINI,    # Always available as fallback
     ]
 
+    DEFAULT_SEARCH_ORDER = [
+        ProviderType.GEMINI,    # Integrated LLM+Search
+        ProviderType.DUCKDUCKGO # Free, privacy-focused
+    ]
+
     def __init__(self, config: ProviderConfig):
         """
         Initialize the factory with configuration.
@@ -52,10 +57,12 @@ class ProviderFactory:
         self._stt_cache: Dict[ProviderType, STTProvider] = {}
         self._llm_cache: Dict[ProviderType, LLMProvider] = {}
         self._embedding_cache: Dict[ProviderType, EmbeddingProvider] = {}
+        self._search_cache: Dict[ProviderType, SearchProvider] = {}
 
         # Mock providers (for testing)
         self._mock_stt_providers: Optional[Dict[ProviderType, STTProvider]] = None
         self._mock_llm_providers: Optional[Dict[ProviderType, LLMProvider]] = None
+        self._mock_search_providers: Optional[Dict[ProviderType, SearchProvider]] = None
 
     def get_stt_fallback_order(self) -> List[ProviderType]:
         """
@@ -90,6 +97,15 @@ class ProviderFactory:
             return order
         return self.DEFAULT_LLM_ORDER.copy()
 
+    def get_search_fallback_order(self) -> List[ProviderType]:
+        """
+        Get the Search provider fallback order.
+
+        Returns:
+            List of ProviderTypes in fallback order
+        """
+        return self.DEFAULT_SEARCH_ORDER.copy()
+
     def get_available_stt_providers(self) -> List[ProviderType]:
         """
         Get list of STT providers that have API keys configured.
@@ -118,6 +134,19 @@ class ProviderFactory:
             ProviderType.ANTHROPIC,
         ]
         return [p for p in llm_providers if self.config.has_api_key(p)]
+
+    def get_available_search_providers(self) -> List[ProviderType]:
+        """
+        Get list of Search providers that have API keys configured (or are free).
+
+        Returns:
+            List of available ProviderTypes for Search
+        """
+        search_providers = [
+            ProviderType.GEMINI,
+            ProviderType.DUCKDUCKGO,
+        ]
+        return [p for p in search_providers if self.config.has_api_key(p) or p == ProviderType.DUCKDUCKGO]
 
     def get_stt_provider(self, preferred: Optional[ProviderType] = None) -> STTProvider:
         """
@@ -219,8 +248,60 @@ class ProviderFactory:
             + ", ".join(p.value for p in self.DEFAULT_LLM_ORDER)
         )
 
+    def get_search_provider(self, preferred: Optional[ProviderType] = None) -> SearchProvider:
+        """
+        Get a Search provider, with fallback chain.
+
+        Args:
+            preferred: Override preference for this call (optional)
+
+        Returns:
+            Available Search provider
+
+        Raises:
+            ProviderError: If no Search providers are available
+        """
+        # Use mock providers if set (for testing)
+        if self._mock_search_providers is not None:
+            # Simple mock retrieval for brevity
+            for p_type, p in self._mock_search_providers.items():
+                if p.is_available():
+                    return p
+
+        # Determine fallback order
+        order = self.get_search_fallback_order()
+        if preferred and preferred in order:
+             # Move preferred to front
+             order.remove(preferred)
+             order.insert(0, preferred)
+
+        # Try providers in order
+        for provider_type in order:
+            # Skip if no API key (DDG returns "free" which is valid string)
+            if not self.config.has_api_key(provider_type) and provider_type != ProviderType.DUCKDUCKGO:
+                continue
+
+            # Check cache first
+            if provider_type in self._search_cache:
+                provider = self._search_cache[provider_type]
+                if provider.is_available():
+                    return provider
+
+            # Create new provider
+            provider = self._create_search_provider(provider_type)
+            if provider is not None:
+                self._search_cache[provider_type] = provider
+                if provider.is_available():
+                    logger.info(f"Using Search provider: {provider_type.value}")
+                    return provider
+
+        raise ProviderError("No Search providers available.")
+
     def _get_mock_stt_provider(self, preferred: Optional[ProviderType]) -> STTProvider:
         """Get mock STT provider for testing."""
+        if self._mock_stt_providers is None:
+            raise ProviderError("Mock STT providers not initialized")
+
         if preferred and preferred in self._mock_stt_providers:
             p = self._mock_stt_providers[preferred]
             if p.is_available():
@@ -238,6 +319,9 @@ class ProviderFactory:
 
     def _get_mock_llm_provider(self, preferred: Optional[ProviderType]) -> LLMProvider:
         """Get mock LLM provider for testing."""
+        if self._mock_llm_providers is None:
+            raise ProviderError("Mock LLM providers not initialized")
+            
         if preferred and preferred in self._mock_llm_providers:
             p = self._mock_llm_providers[preferred]
             if p.is_available():
@@ -324,11 +408,35 @@ class ProviderFactory:
 
         return None
 
+    def _create_search_provider(self, provider_type: ProviderType) -> Optional[SearchProvider]:
+        """
+        Create a Search provider instance.
+        """
+        try:
+            if provider_type == ProviderType.GEMINI:
+                api_key = self.config.get_api_key(provider_type)
+                if not api_key:
+                    return None
+                from .search.gemini import GeminiSearchProvider
+                return GeminiSearchProvider(api_key)
+                
+            elif provider_type == ProviderType.DUCKDUCKGO:
+                from .search.duckduckgo import DuckDuckGoSearchProvider
+                return DuckDuckGoSearchProvider()
+                
+        except ImportError as e:
+            logger.warning(f"Failed to import {provider_type.value} Search provider: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to create {provider_type.value} Search provider: {e}")
+
+        return None
+
     def clear_cache(self) -> None:
         """Clear all cached provider instances."""
         self._stt_cache.clear()
         self._llm_cache.clear()
         self._embedding_cache.clear()
+        self._search_cache.clear()
         logger.info("Provider cache cleared")
 
     def get_status(self) -> Dict[str, Any]:
@@ -351,6 +459,12 @@ class ProviderFactory:
                 active_llm = provider_type.value
                 break
 
+        active_search = None
+        for provider_type, provider in self._search_cache.items():
+            if provider.is_available():
+                active_search = provider_type.value
+                break
+
         return {
             "stt": {
                 "active": active_stt,
@@ -362,4 +476,9 @@ class ProviderFactory:
                 "available": [p.value for p in self.get_available_llm_providers()],
                 "fallback_order": [p.value for p in self.get_llm_fallback_order()],
             },
+            "search": {
+                "active": active_search,
+                "available": [p.value for p in self.get_available_search_providers()],
+                "fallback_order": [p.value for p in self.get_search_fallback_order()],
+            }
         }

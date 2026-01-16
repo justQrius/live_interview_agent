@@ -62,6 +62,7 @@ class ProviderType(Enum):
     DEEPGRAM = "deepgram"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    DUCKDUCKGO = "duckduckgo"
 
 
 @dataclass
@@ -175,5 +176,6 @@ class ProviderConfig:
             ProviderType.DEEPGRAM: self.deepgram_api_key,
             ProviderType.OPENAI: self.openai_api_key,
             ProviderType.ANTHROPIC: self.anthropic_api_key,
+            ProviderType.DUCKDUCKGO: "free",
         }
         return key_mapping.get(provider_type)
