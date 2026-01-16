@@ -36,6 +36,9 @@ groq>=0.4.0
 # Deepgram
 deepgram-sdk>=3.0.0
 
+# Search
+duckduckgo-search>=6.0.0
+
 # Vector database
 chromadb==0.4.24
 

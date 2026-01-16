@@ -15,6 +15,56 @@ class TranscriptionResult:
     speaker: Optional[str] = None
     language: str = "en"
 
+@dataclass
+class GroundingSource:
+    """A source used for grounding the response."""
+    title: str
+    url: str
+    snippet: Optional[str] = None
+
+@dataclass  
+class GroundedResponse:
+    """Response with grounding metadata."""
+    text: str
+    search_queries: List[str]
+    sources: List[GroundingSource]
+
+class SearchProvider(ABC):
+    """
+    Abstract Base Class for Search/Grounding providers.
+    """
+    
+    def is_available(self) -> bool:
+        """Check if the provider is available."""
+        return True
+        
+    @abstractmethod
+    async def search(self, query: str, limit: int = 5) -> List[GroundingSource]:
+        """
+        Perform a basic web search.
+        
+        Args:
+            query: Search query
+            limit: Number of results
+            
+        Returns:
+            List of GroundingSource objects
+        """
+        pass
+        
+    @abstractmethod
+    async def research(self, topic: str) -> GroundedResponse:
+        """
+        Perform deep research on a topic and return a summarized, cited response.
+        
+        Args:
+            topic: The topic to research
+            
+        Returns:
+            GroundedResponse with text summary and sources
+        """
+        pass
+
 class STTProvider(ABC):
     """
     Abstract Base Class for Speech-to-Text providers.
