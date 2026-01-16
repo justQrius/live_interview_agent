@@ -89,6 +89,21 @@ class ProfileGenerator:
         """Set or update the memory store."""
         self.memory_store = store
     
+    def _safe_numeric(self, value: Any, default: float = 0.0) -> float:
+        """Safely convert a value to numeric, handling strings and None."""
+        if value is None:
+            return default
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                # Handle strings like "5", "5.0", "5+"
+                cleaned = value.strip().rstrip('+').rstrip(' years')
+                return float(cleaned) if cleaned else default
+            except (ValueError, TypeError):
+                return default
+        return default
+    
     def generate(
         self,
         facts: ExtractedFacts,
@@ -280,7 +295,8 @@ class ProfileGenerator:
             
             # Years bonus
             if skill.years:
-                score += min(skill.years / 2, 3)  # Cap at 3 points
+                years_val = self._safe_numeric(skill.years)
+                score += min(years_val / 2, 3)  # Cap at 3 points
             
             # Context bonus (has usage context)
             if skill.context:
@@ -360,17 +376,18 @@ class ProfileGenerator:
         """
         strengths = []
         
-        # Experience-based strengths
-        if facts.total_experience_years >= 10:
+        # Experience-based strengths (safely handle None)
+        experience_years = self._safe_numeric(facts.total_experience_years)
+        if experience_years >= 10:
             strengths.append("Extensive industry experience")
-        elif facts.total_experience_years >= 5:
+        elif experience_years >= 5:
             strengths.append("Strong professional foundation")
         
         # Skill-based strengths
         expert_skills = [
             s for s in facts.skills 
             if s.proficiency == SkillProficiency.EXPERT or 
-            (s.years and s.years >= 5)
+            (s.years and self._safe_numeric(s.years) >= 5)
         ]
         if len(expert_skills) >= 3:
             top_expert_names = [s.name for s in expert_skills[:3]]
@@ -425,8 +442,9 @@ class ProfileGenerator:
         target_lower = target_role.lower()
         
         # Check for common role requirements
+        experience_years = self._safe_numeric(facts.total_experience_years)
         if "senior" in target_lower or "lead" in target_lower:
-            if facts.total_experience_years < 5:
+            if experience_years < 5:
                 gaps.append("May need to emphasize leadership experience")
         
         if "manager" in target_lower:

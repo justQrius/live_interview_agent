@@ -133,10 +133,29 @@ const ContextLoader: React.FC = () => {
       setStagedFiles(prev => [...prev, ...newStagedFiles]);
       setIsInferring(true);
       
-      // Request LLM-based type inference
+      // Fetch API keys for LLM-based document type inference
+      const apiKeys: Record<string, string> = {};
+      const providers = ['gemini', 'groq', 'openai', 'anthropic', 'deepgram'];
+      
+      try {
+        await Promise.all(providers.map(async (provider) => {
+          try {
+            const key = await invoke<string>('get_api_key', { provider });
+            if (key) {
+              apiKeys[provider] = key;
+            }
+          } catch {
+            // Ignore missing keys
+          }
+        }));
+      } catch (e) {
+        console.warn('Failed to fetch API keys for inference:', e);
+      }
+      
+      // Request LLM-based type inference (with API keys for provider initialization)
       sendMessage({
         type: 'INFER_DOCUMENT_TYPES',
-        data: { files: inferencePayload }
+        data: { files: inferencePayload, apiKeys }
       });
     }
   };
