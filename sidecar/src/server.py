@@ -1732,7 +1732,7 @@ Provide a concise, punchy version that hits the key points quickly."""
 
     def _session_summary_to_dict(self, session) -> dict:
         """Convert a SessionSummary or SessionData object to a summary dict."""
-        from storage.session_store import SessionSummary, SessionData
+        from src.storage.session_store import SessionSummary, SessionData
         
         # Determine counts based on object type
         if isinstance(session, SessionSummary):
@@ -1754,7 +1754,7 @@ Provide a concise, punchy version that hits the key points quickly."""
 
     def _session_to_full_dict(self, session) -> dict:
         """Convert a Session object to a full dict with all data."""
-        from storage.session_store import SessionData
+        from src.storage.session_store import SessionData
         s: SessionData = session
         return {
             "id": s.id,

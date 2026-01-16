@@ -157,6 +157,25 @@ class FactExtractor:
         """Set or update the memory store."""
         self.memory_store = store
     
+    def _safe_int(self, value: Any, default: int = 0) -> int:
+        """Safely convert a value to int, handling strings and None."""
+        if value is None:
+            return default
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                # Handle strings like "5", "5.0", "5+"
+                cleaned = value.strip().rstrip('+').rstrip(' years')
+                if '.' in cleaned:
+                    return int(float(cleaned))
+                return int(cleaned) if cleaned else default
+            except (ValueError, TypeError):
+                return default
+        return default
+    
     async def extract_facts(
         self,
         document_id: str,
@@ -278,7 +297,7 @@ class FactExtractor:
                 
                 skills.append(SkillEntry(
                     name=skill_data.get("name", ""),
-                    years=skill_data.get("years"),
+                    years=self._safe_int(skill_data.get("years")),
                     proficiency=prof_enum,
                     last_used=skill_data.get("last_used"),
                     context=skill_data.get("context"),
@@ -331,12 +350,12 @@ class FactExtractor:
             timeline=timeline,
             achievements=achievements,
             education=education,
-            certifications=data.get("certifications", []),
-            total_experience_years=data.get("total_experience_years", 0),
-            current_role=data.get("current_role", ""),
-            current_company=data.get("current_company", ""),
-            industries=data.get("industries", []),
-            languages=data.get("languages", []),
+            certifications=data.get("certifications", []) or [],
+            total_experience_years=self._safe_int(data.get("total_experience_years")),
+            current_role=data.get("current_role", "") or "",
+            current_company=data.get("current_company", "") or "",
+            industries=data.get("industries", []) or [],
+            languages=data.get("languages", []) or [],
             document_id=document_id,
             extracted_at=datetime.now(),
         )
