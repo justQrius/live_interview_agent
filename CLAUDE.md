@@ -140,6 +140,8 @@ live_interview_agent/
 │       │   ├── AnswerDisplay.tsx
 │       │   ├── CoachingPanel.tsx       # Phase 4: Coaching hints container
 │       │   ├── ConsistencyPanel.tsx    # Phase 4: Claim tracking
+│       │   ├── EnhanceButton.tsx
+│       │   ├── SettingsModal.tsx       # Settings overlay
 │       │   ├── StorySuggestionCard.tsx # Phase 4: STAR story recall
 │       │   ├── StructureHintCard.tsx   # Phase 4: Answer frameworks
 │       │   └── ...
@@ -198,7 +200,8 @@ live_interview_agent/
 ### Recent Enhancements
 - **Multi-Turn Follow-Up Handling**: TopicStack tracks conversation topics across turns
 - **LLM Fallback Reformulation**: Async LLM reformulation when templates fail
-- **Dark Mode UI**: Premium dark theme with glassmorphism effects
+- **True Dark Mode UI**: OLED-friendly deep dark theme with refined palette
+- **Settings Overlay**: Dedicated modal for configuration
 - **Session Isolation**: Clear all persistent data on session stop for privacy
 - **Context Preservation**: Resume context across session restarts
 
