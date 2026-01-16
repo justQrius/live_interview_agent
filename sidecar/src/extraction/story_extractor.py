@@ -297,9 +297,12 @@ class StoryExtractor:
         for entry in facts.timeline[:5]:  # Top 5 positions
             end = entry.end_date or "Present"
             lines.append(f"- {entry.role} at {entry.company} ({entry.start_date} - {end})")
-            for highlight in entry.highlights[:3]:
+            # Defensive: ensure highlights/metrics are lists before slicing
+            highlights = entry.highlights if isinstance(entry.highlights, list) else []
+            metrics = entry.metrics if isinstance(entry.metrics, list) else []
+            for highlight in highlights[:3]:
                 lines.append(f"  * {highlight}")
-            for metric in entry.metrics[:2]:
+            for metric in metrics[:2]:
                 lines.append(f"  * {metric}")
         
         return "\n".join(lines)
@@ -344,15 +347,18 @@ class StoryExtractor:
         
         # Create stories from career highlights
         for entry in facts.timeline[:3]:
-            for highlight in entry.highlights[:2]:
+            # Defensive: ensure highlights/metrics are lists before slicing
+            highlights = entry.highlights if isinstance(entry.highlights, list) else []
+            entry_metrics = entry.metrics if isinstance(entry.metrics, list) else []
+            for highlight in highlights[:2]:
                 story = STARStory(
                     id=str(uuid.uuid4()),
                     title=self._generate_title(highlight),
                     situation=f"While working as {entry.role} at {entry.company}...",
                     task="I needed to address a key challenge.",
                     action=highlight,
-                    result=f"Metrics: {', '.join(entry.metrics) if entry.metrics else 'Successfully delivered.'}",
-                    metrics=entry.metrics,
+                    result=f"Metrics: {', '.join(entry_metrics) if entry_metrics else 'Successfully delivered.'}",
+                    metrics=entry_metrics,
                     tags=self._infer_tags(highlight),
                     source_company=entry.company,
                     source_role=entry.role,

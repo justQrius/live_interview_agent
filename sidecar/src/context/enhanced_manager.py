@@ -99,9 +99,11 @@ SECTION_PATTERNS: Dict[DocumentType, Dict[str, str]] = {
 
 # Q&A detection patterns for SAMPLE_QA documents
 QA_PATTERNS = [
-    r"^(?:Q\d*[:.\s]|Question\s*\d*[:.\s])",  # Q: or Q1: or Question:
-    r"^(?:\*\*Q\d*[:.\s]|\*\*Question)",  # **Q: markdown
-    r"^(?:[-*]\s*Q[:.\s])",  # - Q: bullet
+    r"^(?:Q\d*[:.\\s]|Question\\s*\\d*[:.\\s])",  # Q: or Q1: or Question:
+    r"^(?:\\*\\*Q\\d*[:.\\s]|\\*\\*Question)",  # **Q: markdown
+    r"^(?:[-*]\\s*Q[:.\\s])",  # - Q: bullet
+    r"^#+\\s*\\d+\\.\\s+",  # ## 10. (markdown numbered headers)
+    r"^\\d+\\.\\s+[A-Z]",  # 10. Title (numbered sections at start of line)
 ]
 
 
@@ -468,6 +470,8 @@ class EnhancedContextManager:
         - Question 1: ... Answer: ...
         - **Q1:** ... (markdown)
         - Numbered questions followed by answers
+        - ## 10. Question Title (markdown headers)
+        - ### Subsections within questions
         
         Args:
             text: Full Q&A document text
@@ -476,8 +480,8 @@ class EnhancedContextManager:
             List of Q&A pair strings
         """
         # Combined pattern to detect question starts (handles leading whitespace)
-        # Match: newline/start + optional whitespace + Q marker
-        question_pattern = r"(?:^|\n)\s*(?:Q\d*[:.\s]|Question\s*\d*[:.\s]|\*\*Q\d*[:.\s]|[-*]\s*Q[:.\s]|\d+\.\s*(?:Q[:.\s])?)"
+        # Match: newline/start + optional whitespace + Q marker OR markdown numbered header
+        question_pattern = r"(?:^|\n)\s*(?:Q\d*[:.\\s]|Question\s*\d*[:.\\s]|\*\*Q\d*[:.\\s]|[-*]\s*Q[:.\\s]|\d+\.\s*(?:Q[:.\\s])?|#{1,3}\s*\d+\.\s+)"
         
         # Find all question positions
         matches = list(re.finditer(question_pattern, text, re.IGNORECASE | re.MULTILINE))
