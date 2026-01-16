@@ -681,37 +681,19 @@ class SidecarServer:
             
             # ============================================================
             # PHASE 4: Start extraction pipelines in background
+            # Rate-limited: Process sequentially to avoid API rate limits
+            # Previous behavior spawned all concurrently → 429 cascade
             # ============================================================
             if self.extraction_enabled and self.extraction_pipeline and self.llm:
                 import uuid
                 self.extraction_pipeline.set_llm_provider(self.llm)
                 
-                for filename, content, memory_doc_type in files_for_extraction:
-                    doc_id = str(uuid.uuid4())
-                    
-                    # Create a closure that captures the current websocket, doc_id, and filename
-                    async def make_extraction_progress(ws: ServerConnection, d_id: str, fname: str):
-                        async def extraction_progress(stage: str, progress: float, msg: str = ""):
-                            try:
-                                progress_msg = create_extraction_progress_message(
-                                    stage=stage,
-                                    progress=progress,
-                                    document_id=d_id,
-                                    filename=fname,
-                                    message=msg
-                                )
-                                await ws.send(progress_msg.to_json())
-                            except Exception as e:
-                                logger.debug(f"Failed to send progress: {e}")
-                        return extraction_progress
-                    
-                    # Get the callback for this specific websocket
-                    extraction_progress = await make_extraction_progress(websocket, doc_id, filename)
-                    
-                    # Run extraction in background
-                    self._create_background_task(self._run_extraction(
-                        websocket, doc_id, content, memory_doc_type, filename, extraction_progress
-                    ))
+                # Run extractions sequentially in a single background task
+                # to avoid overwhelming the LLM API with parallel requests
+                self._create_background_task(self._run_extractions_sequentially(
+                    websocket=websocket,
+                    files_for_extraction=files_for_extraction,
+                ))
             elif self.extraction_enabled and not self.llm:
                 logger.warning("Skipping extraction - No LLM provider available yet")
 
@@ -747,6 +729,61 @@ class SidecarServer:
                  self.session_state.status = SessionStatus.IDLE
                  
             await websocket.send(create_status_message(self.session_state.status).to_json())
+    
+    async def _run_extractions_sequentially(
+        self,
+        websocket: ServerConnection,
+        files_for_extraction: List[tuple],
+    ) -> None:
+        """
+        Run extraction pipelines sequentially to avoid API rate limits.
+        
+        Previously, all extractions were launched concurrently, causing 429 errors
+        when many files are uploaded at once. This method processes files one at a time
+        with a small delay between them.
+        
+        Args:
+            websocket: WebSocket connection for sending progress
+            files_for_extraction: List of (filename, content, memory_doc_type) tuples
+        """
+        import uuid
+        
+        logger.info(f"Starting sequential extraction for {len(files_for_extraction)} files...")
+        
+        for i, (filename, content, memory_doc_type) in enumerate(files_for_extraction):
+            doc_id = str(uuid.uuid4())
+            
+            # Create progress callback for this document
+            async def make_extraction_progress(ws: ServerConnection, d_id: str, fname: str):
+                async def extraction_progress(stage: str, progress: float, msg: str = ""):
+                    try:
+                        progress_msg = create_extraction_progress_message(
+                            stage=stage,
+                            progress=progress,
+                            document_id=d_id,
+                            filename=fname,
+                            message=msg
+                        )
+                        await ws.send(progress_msg.to_json())
+                    except Exception as e:
+                        logger.debug(f"Failed to send progress: {e}")
+                return extraction_progress
+            
+            extraction_progress = await make_extraction_progress(websocket, doc_id, filename)
+            
+            logger.info(f"Extracting [{i+1}/{len(files_for_extraction)}]: {filename}")
+            
+            # Run extraction for this document (awaited, not background)
+            await self._run_extraction(
+                websocket, doc_id, content, memory_doc_type, filename, extraction_progress
+            )
+            
+            # Small delay between documents to avoid rate limit bursts
+            # Skip delay on last document
+            if i < len(files_for_extraction) - 1:
+                await asyncio.sleep(0.5)
+        
+        logger.info(f"Sequential extraction complete for {len(files_for_extraction)} files")
     
     async def _run_extraction(
         self,
