@@ -10,6 +10,7 @@ Extends ContextManager to support:
 """
 
 import base64
+import hashlib
 import logging
 import re
 import uuid
@@ -138,6 +139,9 @@ class EnhancedContextManager:
         self._enhanced_chunks: List[EnhancedChunk] = []
         self._parent_map: Dict[str, EnhancedChunk] = {}  # parent_id -> parent chunk
         self.processed_files: Dict[str, dict] = {}
+        # Hash-based deduplication: content_hash -> list of chunk IDs
+        self._content_hashes: Dict[str, List[str]] = {}
+        self._hash_to_chunks: Dict[str, List[EnhancedChunk]] = {}
     
     async def process_file(
         self,
@@ -150,9 +154,10 @@ class EnhancedContextManager:
         
         Pipeline:
         1. Decode and parse file content
-        2. Detect section boundaries on FULL TEXT (before chunking)
-        3. Apply document-type-specific chunking strategy
-        4. Create hierarchical parent-child chunks with rich metadata
+        2. Compute content hash for deduplication
+        3. Detect section boundaries on FULL TEXT (before chunking)
+        4. Apply document-type-specific chunking strategy
+        5. Create hierarchical parent-child chunks with rich metadata
         
         Args:
             filename: Name of the file
@@ -169,6 +174,18 @@ class EnhancedContextManager:
             logger.error(f"Failed to decode base64 content for {filename}: {e}")
             raise ValueError(f"Invalid base64 content for {filename}")
         
+        # Step 2: Compute content hash for deduplication
+        content_hash = hashlib.sha256(content).hexdigest()
+        
+        # Check if this exact content was already processed
+        if content_hash in self._content_hashes:
+            existing_chunks = self._hash_to_chunks.get(content_hash, [])
+            logger.info(
+                f"Skipping duplicate content for {filename} (hash={content_hash[:12]}..., "
+                f"{len(existing_chunks)} chunks already exist)"
+            )
+            return existing_chunks
+        
         parser = get_parser_for_file(filename)
         text = parser.parse(content, filename)
         
@@ -178,16 +195,16 @@ class EnhancedContextManager:
         
         logger.info(f"Processing {filename} as {document_type.value} ({len(text)} chars)")
         
-        # Step 2: Pre-chunking section detection on FULL TEXT
+        # Step 3: Pre-chunking section detection on FULL TEXT
         section_map = self._detect_all_sections(text, document_type)
         
-        # Step 3: Apply document-type-specific chunking
+        # Step 4: Apply document-type-specific chunking
         if document_type == DocumentType.SAMPLE_QA:
             enhanced_chunks = self._chunk_qa_document(text, document_type, filename, section_map)
         else:
             enhanced_chunks = self._chunk_hierarchical(text, document_type, filename, section_map)
         
-        # Step 4: Store chunks
+        # Step 5: Store chunks
         if document_type not in self.documents_by_type:
             self.documents_by_type[document_type] = []
         self.documents_by_type[document_type].extend(enhanced_chunks)
@@ -198,12 +215,17 @@ class EnhancedContextManager:
             if chunk.level == "parent":
                 self._parent_map[chunk.id] = chunk
         
+        # Store content hash for deduplication
+        self._content_hashes[content_hash] = [c.id for c in enhanced_chunks]
+        self._hash_to_chunks[content_hash] = enhanced_chunks
+        
         self.processed_files[filename] = {
             "id": str(uuid.uuid4()),
             "document_type": document_type.value,
             "chunk_count": len(enhanced_chunks),
             "parent_count": sum(1 for c in enhanced_chunks if c.level == "parent"),
             "child_count": sum(1 for c in enhanced_chunks if c.level == "child"),
+            "content_hash": content_hash,
         }
         
         logger.info(
@@ -676,4 +698,6 @@ class EnhancedContextManager:
         self._enhanced_chunks.clear()
         self._parent_map.clear()
         self.processed_files.clear()
+        self._content_hashes.clear()
+        self._hash_to_chunks.clear()
         logger.info("Enhanced context cleared")
