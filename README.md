@@ -35,6 +35,13 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Google Search Grounding**: Autonomous real-time web search for company news, industry trends, and factual queries. The AI intelligently decides when to search vs. use internal context.
 - **Model Fallback**: Automatic fallback to alternative models when primary model is unavailable.
 
+### Utterance Accumulation (Phase 6)
+- **Multi-Segment Question Detection**: Accumulates speech segments across natural pauses to detect complete questions like "Tell me about... [pause] ...and how you handled it".
+- **4-Tier Completeness Detection**: Punctuation (<1ms) → Syntax (<5ms) → Timing (<1ms) → LLM (~150ms) for semantic completeness.
+- **Per-Speaker Buffering**: Separate buffers for interviewer and user with configurable timeouts.
+- **Real-time Accumulation Indicator**: UI shows buffering state with segment count and preview.
+- **Configurable Thresholds**: All timeouts and limits controllable via environment variables.
+
 ### User Interface
 - **True Dark Mode**: OLED-friendly deep dark theme (`#080808` background) for reduced eye strain and premium aesthetics.
 - **Settings Overlay**: Clean, non-intrusive settings modal for managing keys and preferences.
@@ -207,8 +214,9 @@ graph TB
 | Phase 1 | MVP Foundation | 20/20 | ✅ Complete |
 | Phase 2 | Multi-Provider & Optimization | 13/13 | ✅ Complete |
 | Phase 3 | Intelligence Pipeline | 19/19 | ✅ Complete |
-| Phase 4 | Interview Coach Evolution | In Progress | 🟡 Implemented |
-| Phase 5 | Gemini Integration | In Progress | 🟡 Implemented |
+| Phase 4 | Interview Coach Evolution | - | 🟡 Implemented |
+| Phase 5 | Gemini Integration | - | 🟡 Implemented |
+| Phase 6 | Utterance Accumulation | - | ✅ Complete |
 
 ## License
 
