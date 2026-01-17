@@ -20,6 +20,7 @@ type CombinedHistoryItem =
     };
 
 // Patterns that indicate LLM "thinking" vs actual answer content
+// Expanded to catch more thinking patterns while avoiding false positives
 const THINKING_PATTERNS = [
   /^\*\*[^*]+\*\*$/m,           // **Bold headers** on their own line
   /^My focus/m,                 // "My focus is..."
@@ -29,45 +30,68 @@ const THINKING_PATTERNS = [
   /^Analyzing/m,                // "Analyzing..."
   /^\*[^*]+\*$/m,               // *Italic notes*
   /^I view the/m,               // Bridge phrases before actual answer
+  /^Let me think/m,             // "Let me think..."
+  /^Let me analyze/m,           // "Let me analyze..."
+  /^First,? I'll/m,             // "First, I'll..."
+  /^To answer this,/m,          // "To answer this, I need to..."
+  /^The key points? are:/m,     // "The key points are:"
+  /^Based on (?:the|my)/m,      // "Based on the/my..."
+  /^From (?:my )?(?:experience|background),/m,  // References to context
+  /^\[?Reasoning[?:\]:]?\s*/mi, // Explicit reasoning markers
+  /^I'll structure/m,           // "I'll structure..."
+  /^Here's my approach/m,       // "Here's my approach..."
+  /^For (?:this|that) (?:question|scenario),/m, // For question scenarios
 ];
 
 // Try to separate thinking from answer
 function separateThinkingFromAnswer(text: string): { thinking: string | null; answer: string } {
   if (!text) return { thinking: null, answer: '' };
-  
+
   // Look for patterns that mark the start of actual answer
-  // Common patterns: first-person statements about real experience
+  // Comprehensive list of answer markers
   const answerMarkers = [
-    /\n\nI had a situation/,
-    /\n\nAt my previous/,
-    /\n\nIn my role/,
-    /\n\nWhen I was/,
-    /\n\nDuring my time/,
-    /\n\nAt \w+,/,           // "At Company,"
-    /\n\nI remember/,
-    /\n\nOne example/,
-    /\n\nFor example/,
-    /\n\nHere's what happened/,
-    /\n\nLet me share/,
-    /\n\n---\n/,            // Explicit separator
+    // STAR format markers
+    /\n\n(?:Situation|Task|Action|Result)[:\s]/,
+    /\n\nI had a situation/,     // Classic STAR opener
+    /\n\nAt my previous/,        // Experience opener
+    /\n\nIn my role/,            // Role opener
+    /\n\nWhen I was/,            // Past experience
+    /\n\nDuring my time/,        // Experience opener
+    /\n\nAt \w+,/,               // "At Company,"
+    /\n\nI remember/,            // Story recall
+    /\n\nOne example/,           // Example opener
+    /\n\nFor example/,           // Example
+    /\n\nFor instance/,          // Instance
+    /\n\nHere's what happened/,  // Story
+    /\n\nLet me share/,          // Sharing experience
+    /\n\nThis (?:led|resulted|helped|achieved)/,  // Results
+    /\n\nThe outcome was/,       // Outcome
+    /\n\nAs a result,/,          // Result
+    /\n\nI (?:successfully|managed to|was able to)/,  // Success statements
+    /\n\nMy (?:key|major) (?:achievement|contribution|impact)/,  // Achievements
+    /\n\n---\n/,                  // Explicit separator
+
+    // Bullet points that indicate answer content
+    /\n\n[-•*]\s+\w+/,          // List items after double newline
   ];
-  
+
   // Check if text starts with thinking patterns
-  const hasThinkingStart = THINKING_PATTERNS.some(pattern => pattern.test(text.split('\n')[0]));
-  
+  const firstLine = text.split('\n')[0];
+  const hasThinkingStart = THINKING_PATTERNS.some(pattern => pattern.test(firstLine));
+
   if (!hasThinkingStart) {
     return { thinking: null, answer: text };
   }
-  
+
   // Find where the actual answer starts
   for (const marker of answerMarkers) {
     const match = text.match(marker);
     if (match && match.index !== undefined) {
       const thinkingPart = text.substring(0, match.index).trim();
       const answerPart = text.substring(match.index).trim();
-      
-      // Only separate if thinking is substantial (more than just a header)
-      if (thinkingPart.length > 50 && answerPart.length > 50) {
+
+      // Only separate if thinking is substantial and answer is meaningful
+      if (thinkingPart.length > 30 && answerPart.length > 30) {
         return {
           thinking: thinkingPart,
           answer: answerPart
@@ -75,7 +99,17 @@ function separateThinkingFromAnswer(text: string): { thinking: string | null; an
       }
     }
   }
-  
+
+  // If no clear answer marker found but thinking was detected at start
+  // Check if the thinking part is just section headers
+  const isJustHeaders = THINKING_PATTERNS.some(p =>
+    p.test(firstLine) && !p.toString().includes('Let me') && !p.toString().includes('Based on')
+  ) && text.length < 200;
+
+  if (isJustHeaders) {
+    return { thinking: null, answer: text };
+  }
+
   return { thinking: null, answer: text };
 }
 
@@ -145,6 +179,7 @@ function AnswerContent({ text }: { text: string; isComplete?: boolean }) {
 }
 
 const AnswerDisplay: React.FC = () => {
+  const status = useSessionStore((state) => state.status);
   const currentTranscription = useSessionStore((state) => state.currentTranscription);
   const interimTranscript = useSessionStore((state) => state.interimTranscript);
   const currentAnswer = useSessionStore((state) => state.currentAnswer);
@@ -153,14 +188,60 @@ const AnswerDisplay: React.FC = () => {
   const enhancement = useSessionStore((state) => state.enhancement);
   const applyEnhancement = useSessionStore((state) => state.applyEnhancement);
   const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
+  const addTranscription = useSessionStore((state) => state.addTranscription);
+  const startAnswer = useSessionStore((state) => state.startAnswer);
+  const setInterimTranscript = useSessionStore((state) => state.setInterimTranscript);
+  const setStorySuggestion = useSessionStore((state) => state.setStorySuggestion);
+  const setStructureHint = useSessionStore((state) => state.setStructureHint);
+  const setConsistencyWarnings = useSessionStore((state) => state.setConsistencyWarnings);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showHistory, setShowHistory] = useState(false);
-  
-  const { sendMessage } = useWebSocket();
+  const [manualQuestion, setManualQuestion] = useState('');
+
+  const { sendMessage, isConnected } = useWebSocket();
   
   const handleCancelEnhancement = () => {
     sendMessage({ type: 'CANCEL_ENHANCEMENT' });
     cancelEnhancement();
+  };
+
+  const handleSendManualQuestion = () => {
+    const trimmedQuestion = manualQuestion.trim();
+    if (!trimmedQuestion || !isConnected || status !== 'listening') {
+      return;
+    }
+
+    const timestamp = Date.now();
+
+    // Update local state so UI reflects the manual question immediately
+    addTranscription({
+      speaker: 'Interviewer',
+      text: trimmedQuestion,
+      timestamp,
+      confidence: 1.0,
+    });
+
+    // Prepare answer buffer with the question
+    startAnswer(trimmedQuestion, timestamp);
+    setInterimTranscript(null);
+
+    // Clear coaching data for the new question
+    setStorySuggestion(null);
+    setStructureHint(null);
+    setConsistencyWarnings([]);
+
+    sendMessage({
+      type: 'MANUAL_QUESTION',
+      data: { question: trimmedQuestion },
+    });
+    setManualQuestion('');
+  };
+
+  const handleQuestionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendManualQuestion();
+    }
   };
 
   useEffect(() => {
@@ -381,6 +462,25 @@ const AnswerDisplay: React.FC = () => {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Manual Question Input - In main chat window */}
+        {status === 'listening' && (
+          <div className="pt-3 border-t border-border">
+            <label htmlFor="manual-question" className="block text-xs font-medium text-text-secondary mb-1.5">
+              Ask Manually
+            </label>
+            <textarea
+              id="manual-question"
+              value={manualQuestion}
+              onChange={(e) => setManualQuestion(e.target.value)}
+              onKeyDown={handleQuestionKeyDown}
+              placeholder="Type & Enter to ask a question..."
+              className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-border rounded-lg resize-none focus:ring-1 focus:ring-primary focus:border-primary text-text-primary placeholder:text-text-muted transition-colors"
+              rows={2}
+              disabled={!isConnected || status !== 'listening'}
+            />
           </div>
         )}
       </div>

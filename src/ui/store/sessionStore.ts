@@ -114,6 +114,9 @@ export interface SessionState {
   isScreenInvisible: boolean;
   voiceProfileActive: boolean;
 
+  // Context loading status (for status indicator)
+  contextStatus: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'error';
+
   /**
    * API key for Gemini API.
    *
@@ -165,6 +168,7 @@ export interface SessionState {
   setApiKey: (key: string | null) => void;
   setPreferredSttProvider: (provider: Provider | 'auto') => void;
   setPreferredLlmProvider: (provider: Provider | 'auto') => void;
+  setContextStatus: (status: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'error') => void;
   setCurrentTranscription: (transcription: Transcription | null) => void;
   setCurrentAnswer: (answer: Answer | null) => void;
   setLastError: (error: string | null) => void;
@@ -211,6 +215,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   isScreenInvisible: false,
   voiceProfileActive: false,
   apiKey: null,
+  contextStatus: 'empty',
 
   // Preferences
   preferredSttProvider: (localStorage.getItem('preferredSttProvider') as Provider | 'auto') || 'auto',
@@ -267,6 +272,8 @@ export const useSessionStore = create<SessionState>((set) => ({
     localStorage.setItem('preferredLlmProvider', provider);
     set({ preferredLlmProvider: provider });
   },
+
+  setContextStatus: (status: SessionState['contextStatus']) => set({ contextStatus: status }),
 
   setCurrentTranscription: (transcription) => set({ currentTranscription: transcription }),
 

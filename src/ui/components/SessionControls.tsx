@@ -9,12 +9,8 @@ const SessionControls: React.FC = () => {
   const clearSession = useSessionStore((state) => state.clearSession);
   const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
   const preferredSttProvider = useSessionStore((state) => state.preferredSttProvider);
-  const addTranscription = useSessionStore((state) => state.addTranscription);
-  const startAnswer = useSessionStore((state) => state.startAnswer);
-  const setInterimTranscript = useSessionStore((state) => state.setInterimTranscript);
   const { sendMessage, isConnected } = useWebSocket();
 
-  const [manualQuestion, setManualQuestion] = useState('');
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [hasPrimaryKey, setHasPrimaryKey] = useState<boolean | null>(null);
 
@@ -99,49 +95,14 @@ const SessionControls: React.FC = () => {
     // Cancel any ongoing enhancement first
     sendMessage({ type: 'CANCEL_ENHANCEMENT' });
     cancelEnhancement();
-    
+
     sendMessage({ type: 'STOP_SESSION' });
     clearSession();
-    setManualQuestion('');
     setShowStopConfirm(false);
   };
 
   const cancelStopSession = () => {
     setShowStopConfirm(false);
-  };
-
-  const handleSendManualQuestion = () => {
-    const trimmedQuestion = manualQuestion.trim();
-    if (!trimmedQuestion || !isConnected || status !== "listening") {
-      return;
-    }
-
-    const timestamp = Date.now();
-    
-    // Update local state so UI reflects the manual question immediately
-    addTranscription({
-      speaker: "Interviewer",
-      text: trimmedQuestion,
-      timestamp,
-      confidence: 1.0,
-    });
-    
-    // Prepare answer buffer with the question
-    startAnswer(trimmedQuestion, timestamp);
-    setInterimTranscript(null);
-
-    sendMessage({
-      type: "MANUAL_QUESTION",
-      data: { question: trimmedQuestion }
-    });
-    setManualQuestion("");
-  };
-
-  const handleQuestionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendManualQuestion();
-    }
   };
 
   const handleCalibrateVoice = () => {
@@ -255,25 +216,6 @@ const SessionControls: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Manual Question Input */}
-      {status === 'listening' && (
-        <div className="pt-3 border-t border-border">
-          <label htmlFor="manual-question" className="block text-xs font-medium text-text-secondary mb-1.5">
-            Ask Manually
-          </label>
-          <textarea
-            id="manual-question"
-            value={manualQuestion}
-            onChange={(e) => setManualQuestion(e.target.value)}
-            onKeyDown={handleQuestionKeyDown}
-            placeholder="Type & Enter..."
-            className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-border rounded-lg resize-none focus:ring-1 focus:ring-primary focus:border-primary text-text-primary placeholder:text-text-muted transition-colors"
-            rows={2}
-            disabled={!isConnected || status !== 'listening'}
-          />
-        </div>
-      )}
 
       {/* Stop Session Confirmation Modal */}
       {showStopConfirm && (

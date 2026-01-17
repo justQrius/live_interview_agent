@@ -18,11 +18,12 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const status = useSessionStore((state) => state.status);
+  const contextStatus = useSessionStore((state) => state.contextStatus);
   const preparationSummary = useSessionStore((state) => state.preparationSummary);
   const isPreparationExpanded = useSessionStore((state) => state.isPreparationExpanded);
   const setPreparationExpanded = useSessionStore((state) => state.setPreparationExpanded);
   const loadedContextFiles = useSessionStore((state) => state.loadedContextFiles);
-  
+
   const { isConnected } = useWebSocket();
 
   // Auto-collapse sidebar when session starts
@@ -37,6 +38,7 @@ function App() {
     if (!isConnected) {
       return { color: 'bg-red-500', text: 'Offline', pulse: false };
     }
+
     switch (status) {
       case 'listening':
         return { color: 'bg-green-500', text: 'Listening', pulse: true };
@@ -45,7 +47,23 @@ function App() {
       case 'calibrating':
         return { color: 'bg-amber-500', text: 'Calibrating', pulse: true };
       default:
-        return { color: 'bg-emerald-500', text: 'Ready', pulse: false };
+        // Use contextStatus for idle state
+        switch (contextStatus) {
+          case 'empty':
+            return { color: 'bg-emerald-500', text: 'Ready', pulse: false };
+          case 'analyzing':
+            return { color: 'bg-amber-500', text: 'Analyzing', pulse: true };
+          case 'uploading':
+            return { color: 'bg-amber-500', text: 'Caching...', pulse: true };
+          case 'cache_ready':
+            return { color: 'bg-blue-500', text: 'Cache Ready', pulse: false };
+          case 'rag_ready':
+            return { color: 'bg-emerald-500', text: 'RAG Ready', pulse: false };
+          case 'error':
+            return { color: 'bg-red-500', text: 'Error', pulse: false };
+          default:
+            return { color: 'bg-emerald-500', text: 'Ready', pulse: false };
+        }
     }
   };
 
