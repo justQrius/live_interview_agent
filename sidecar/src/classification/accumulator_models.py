@@ -54,9 +54,9 @@ class AccumulatorConfig:
     and feature flags for the accumulation system.
 
     Attributes:
-        merge_gap_ms: Segments less than this apart merge automatically (default: 500ms)
-        soft_timeout_ms: Pause duration suggesting completion (default: 2000ms)
-        hard_timeout_ms: Maximum wait time from first segment (default: 5000ms)
+        merge_gap_ms: Segments less than this apart merge automatically (default: 750ms)
+        soft_timeout_ms: Pause duration suggesting completion (default: 3000ms)
+        hard_timeout_ms: Maximum wait time from first segment (default: 8000ms)
         max_tokens: Maximum buffer size in tokens (approximate) (default: 500)
         max_characters: Maximum buffer size in characters (default: 2000)
         max_duration_s: Maximum time from first segment in seconds (default: 30.0)
@@ -70,9 +70,10 @@ class AccumulatorConfig:
     """
 
     # Timing thresholds (milliseconds)
-    merge_gap_ms: int = 500
-    soft_timeout_ms: int = 2000
-    hard_timeout_ms: int = 5000
+    # Phase 7 tuning: Increased from 500/2000/5000 to allow more natural pauses
+    merge_gap_ms: int = 750
+    soft_timeout_ms: int = 3000
+    hard_timeout_ms: int = 8000
 
     # Buffer limits
     max_tokens: int = 500
@@ -97,9 +98,9 @@ class AccumulatorConfig:
 
         Environment variables (with defaults):
             ACCUMULATOR_ENABLED: "true" (default) / "false"
-            ACCUMULATOR_MERGE_GAP_MS: 500
-            ACCUMULATOR_SOFT_TIMEOUT_MS: 2000
-            ACCUMULATOR_HARD_TIMEOUT_MS: 5000
+            ACCUMULATOR_MERGE_GAP_MS: 750
+            ACCUMULATOR_SOFT_TIMEOUT_MS: 3000
+            ACCUMULATOR_HARD_TIMEOUT_MS: 8000
             ACCUMULATOR_MAX_TOKENS: 500
             ACCUMULATOR_MAX_CHARACTERS: 2000
             ACCUMULATOR_MAX_DURATION_S: 30.0
@@ -131,9 +132,9 @@ class AccumulatorConfig:
                 return default
 
         return cls(
-            merge_gap_ms=get_int("ACCUMULATOR_MERGE_GAP_MS", 500),
-            soft_timeout_ms=get_int("ACCUMULATOR_SOFT_TIMEOUT_MS", 2000),
-            hard_timeout_ms=get_int("ACCUMULATOR_HARD_TIMEOUT_MS", 5000),
+            merge_gap_ms=get_int("ACCUMULATOR_MERGE_GAP_MS", 750),
+            soft_timeout_ms=get_int("ACCUMULATOR_SOFT_TIMEOUT_MS", 3000),
+            hard_timeout_ms=get_int("ACCUMULATOR_HARD_TIMEOUT_MS", 8000),
             max_tokens=get_int("ACCUMULATOR_MAX_TOKENS", 500),
             max_characters=get_int("ACCUMULATOR_MAX_CHARACTERS", 2000),
             max_duration_s=get_float("ACCUMULATOR_MAX_DURATION_S", 30.0),

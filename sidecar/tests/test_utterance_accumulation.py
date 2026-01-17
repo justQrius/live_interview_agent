@@ -39,12 +39,13 @@ class TestAccumulatorConfigDefaults:
     """Test AccumulatorConfig default values."""
 
     def test_default_timing_thresholds(self):
-        """Default timing thresholds should be set correctly."""
+        """Default timing thresholds should be set correctly (Phase 7 tuning)."""
         config = AccumulatorConfig()
 
-        assert config.merge_gap_ms == 500
-        assert config.soft_timeout_ms == 2000
-        assert config.hard_timeout_ms == 5000
+        # Phase 7: Increased from 500/2000/5000 to allow more natural pauses
+        assert config.merge_gap_ms == 750
+        assert config.soft_timeout_ms == 3000
+        assert config.hard_timeout_ms == 8000
 
     def test_default_buffer_limits(self):
         """Default buffer limits should be set correctly."""
@@ -91,12 +92,13 @@ class TestAccumulatorConfigFromEnv:
     """Test AccumulatorConfig.from_env() factory method."""
 
     def test_from_env_with_no_env_vars_uses_defaults(self):
-        """from_env with no environment variables should use defaults."""
+        """from_env with no environment variables should use defaults (Phase 7 tuning)."""
         # Clear any existing env vars
         with patch.dict(os.environ, {}, clear=True):
             config = AccumulatorConfig.from_env()
 
-        assert config.merge_gap_ms == 500
+        # Phase 7: Increased from 500 to 750
+        assert config.merge_gap_ms == 750
         assert config.enabled is True
 
     def test_from_env_reads_boolean_true_values(self):
@@ -176,8 +178,8 @@ class TestAccumulatorConfigFromEnv:
         with patch.dict(os.environ, env_vars, clear=True):
             config = AccumulatorConfig.from_env()
 
-        # Should fall back to default
-        assert config.merge_gap_ms == 500
+        # Should fall back to default (new default is 750ms)
+        assert config.merge_gap_ms == 750
 
     def test_from_env_handles_invalid_float(self):
         """from_env should use default for invalid float values."""
@@ -554,11 +556,12 @@ class TestCompletenessDetectorTier3Timing:
 
     @pytest.mark.asyncio
     async def test_pause_above_soft_timeout_is_complete(self, detector: CompletenessDetector):
-        """Pause above soft timeout (2000ms) should increase confidence."""
+        """Pause above soft timeout (3000ms) should increase confidence."""
         # Text that wouldn't be complete by other tiers alone
         text = "What about the thing"
 
-        result = await detector.is_complete(text, pause_duration_ms=2500)
+        # New soft timeout is 3000ms, so use 3500ms to trigger timing-based completion
+        result = await detector.is_complete(text, pause_duration_ms=3500)
 
         assert result.is_complete is True
         assert result.tier_used == DetectionTier.TIER3_TIMING.value

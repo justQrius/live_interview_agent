@@ -411,12 +411,23 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   clearSession: () =>
     set({
-      status: 'idle',
+      status: "idle",
       currentTranscription: null,
       currentAnswer: null,
       transcriptionHistory: [],
       answerHistory: [],
       lastError: null,
+      storySuggestion: null,
+      structureHint: null,
+      consistencyWarnings: [],
+      interimTranscript: null,
+      accumulating: {
+        isAccumulating: false,
+        speaker: null,
+        bufferPreview: null,
+        segmentCount: 0,
+        durationSeconds: 0,
+      },
     }),
 
   // Session History Actions (Phase 3: STORY-040)

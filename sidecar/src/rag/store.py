@@ -214,6 +214,61 @@ class VectorStore:
             logger.error(f"Failed to embed query: {e}")
             return []
 
+    def embed_queries(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings for multiple query texts in a single batch call.
+        
+        This is more efficient than calling embed_query() multiple times
+        as it makes a single API request for all texts.
+        
+        Args:
+            texts: List of query texts to embed.
+            
+        Returns:
+            List of embedding vectors (one per input text).
+        """
+        if not texts:
+            return []
+        try:
+            embeddings = self.embedding_function(input=texts)
+            return embeddings if embeddings else []
+        except Exception as e:
+            logger.error(f"Failed to batch embed queries: {e}")
+            return []
+
+    def query_with_embedding(
+        self,
+        query_embedding: List[float],
+        n_results: int = 5,
+        where: Optional[Dict[str, Any]] = None,
+        where_document: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Query using a pre-computed embedding vector.
+        
+        This avoids re-embedding the same query text multiple times
+        when querying with different filters.
+        
+        Args:
+            query_embedding: Pre-computed embedding vector.
+            n_results: Number of results to return (default 5).
+            where: Metadata filter dict (same as query_with_filter).
+            where_document: Document content filter.
+        
+        Returns:
+            Dict containing 'ids', 'distances', 'metadatas', 'documents'.
+        """
+        try:
+            return self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=n_results,
+                where=where,
+                where_document=where_document
+            )
+        except Exception as e:
+            logger.error(f"Failed to query with embedding: {e}")
+            return {}
+
     def clear(self) -> None:
         """Clear the vector store (delete collection and recreate)."""
         logger.info("Clearing vector store")
