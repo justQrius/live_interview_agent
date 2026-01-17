@@ -79,6 +79,10 @@ from src.coaching.structure_suggester import StructureSuggester
 from src.coaching.consistency_tracker import ConsistencyTracker
 from src.classification.document_classifier import DocumentClassifier
 
+# Phase 7: Streaming STT for low-latency semantic endpointing
+from src.providers.stt.streaming_manager import StreamingSTTManager, StreamingSTTCallbacks
+from src.providers.stt.streaming_base import StreamingConfig, EndOfTurnEvent, EndpointingType
+
 # Phase 6: Utterance Accumulation
 from src.classification.utterance_accumulator import UtteranceAccumulator
 from src.classification.accumulator_models import AccumulatorConfig
@@ -191,6 +195,10 @@ class SidecarServer:
         
         # Phase 5: Enhancement task tracking for cancellation
         self._enhancement_task: Optional[asyncio.Task] = None
+        
+        # Phase 7: Streaming STT Manager for low-latency semantic endpointing
+        self.streaming_stt_manager: Optional[StreamingSTTManager] = None
+        self.streaming_stt_enabled = True  # Feature flag for rollout
 
     def _create_background_task(self, coro) -> asyncio.Task:
         """Create and track a background task."""
@@ -440,6 +448,30 @@ class SidecarServer:
             return
 
         logger.info("Session started - audio processing active")
+        
+        # Phase 7: Initialize Streaming STT for low-latency semantic endpointing
+        if self.streaming_stt_enabled and self.provider_factory:
+            try:
+                self.streaming_stt_manager = StreamingSTTManager(self.provider_factory)
+                
+                # Create callbacks for streaming events
+                callbacks = StreamingSTTCallbacks(
+                    on_interim=self._on_streaming_interim,
+                    on_final=self._on_streaming_final,
+                    on_end_of_turn=self._on_streaming_end_of_turn,
+                    on_error=self._on_streaming_error,
+                )
+                
+                # Start streaming session in background (non-blocking)
+                streaming_started = await self.streaming_stt_manager.start_session(callbacks)
+                if streaming_started:
+                    logger.info(f"Streaming STT started: {self.streaming_stt_manager.provider_name} "
+                               f"(semantic={self.streaming_stt_manager.supports_semantic_endpointing})")
+                else:
+                    logger.info("Streaming STT not available, using batch STT only")
+            except Exception as e:
+                logger.warning(f"Failed to start streaming STT: {e}")
+                self.streaming_stt_manager = None
 
         status_msg = create_status_message(self.session_state.status)
         await websocket.send(status_msg.to_json())
@@ -506,6 +538,14 @@ class SidecarServer:
         
         # Stop audio processing
         await self._stop_audio_processing()
+        
+        # Phase 7: Stop streaming STT session
+        if self.streaming_stt_manager:
+            try:
+                await self.streaming_stt_manager.stop_session()
+                logger.info("Stopped streaming STT session")
+            except Exception as e:
+                logger.warning(f"Error stopping streaming STT: {e}")
         
         # Phase 6: Reset utterance accumulator
         if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
@@ -1967,6 +2007,12 @@ Provide a concise, punchy version that hits the key points quickly."""
         
         try:
             async for chunk in self.audio_capture.get_audio_stream():
+                # Phase 7: Route audio to streaming STT for real-time transcription
+                # This runs in parallel with VAD-based batch STT
+                if self.streaming_stt_manager and self.streaming_stt_manager.is_active:
+                    # Send audio chunk to streaming provider (non-blocking)
+                    await self.streaming_stt_manager.send_audio(chunk)
+                
                 segments = await self.vad.process_chunk(chunk)
                 
                 for segment in segments:
@@ -1999,6 +2045,179 @@ Provide a concise, punchy version that hits the key points quickly."""
             await self.broadcast(error_msg)
             self.session_state.status = SessionStatus.IDLE
             await self.broadcast(create_status_message(SessionStatus.IDLE))
+
+    # =========================================================================
+    # Phase 7: Streaming STT Callbacks
+    # These handle real-time transcription and semantic endpointing events
+    # =========================================================================
+    
+    def _on_streaming_interim(self, text: str, speaker: Speaker) -> None:
+        """Handle interim transcription from streaming STT."""
+        if not text:
+            return
+        
+        # Broadcast interim transcription to UI (non-blocking)
+        asyncio.create_task(self._broadcast_interim_transcription(text, speaker))
+    
+    async def _broadcast_interim_transcription(self, text: str, speaker: Speaker) -> None:
+        """Broadcast interim transcription to UI."""
+        import time
+        interim_msg = create_interim_transcription_message(
+            text=text,
+            timestamp=time.time(),
+            speaker=speaker
+        )
+        await self.broadcast(interim_msg)
+    
+    def _on_streaming_final(self, text: str, speaker: Speaker, confidence: float) -> None:
+        """Handle final transcription from streaming STT (before end-of-turn)."""
+        if not text:
+            return
+        
+        logger.debug(f"Streaming final ({speaker.value}, conf={confidence:.2f}): {text[:50]}...")
+        # Final transcripts are handled by end-of-turn or batch fallback
+    
+    def _on_streaming_end_of_turn(
+        self, 
+        text: str, 
+        speaker: Speaker, 
+        confidence: float, 
+        endpointing_type: EndpointingType
+    ) -> None:
+        """
+        Handle end-of-turn event from streaming STT provider.
+        
+        This is the semantic endpointing signal that indicates the speaker
+        has finished their utterance. Can be acoustic (pause-based) or
+        semantic (meaning-based from providers like AssemblyAI or OpenAI).
+        
+        Args:
+            text: Final transcribed text for the turn
+            speaker: Speaker identifier
+            confidence: Confidence score (0.0-1.0)
+            endpointing_type: ACOUSTIC or SEMANTIC
+        """
+        if not text:
+            return
+        
+        logger.info(f"Streaming end-of-turn ({speaker.value}, {endpointing_type.value}, "
+                   f"conf={confidence:.2f}): {text[:60]}...")
+        
+        # Fire the end-of-turn processing in background
+        asyncio.create_task(self._process_streaming_end_of_turn(
+            text, speaker, confidence, endpointing_type
+        ))
+    
+    async def _process_streaming_end_of_turn(
+        self,
+        text: str,
+        speaker: Speaker,
+        confidence: float,
+        endpointing_type: EndpointingType
+    ) -> None:
+        """
+        Process end-of-turn event from streaming STT.
+        
+        This integrates with the UtteranceAccumulator in hybrid mode:
+        - If confidence is high enough, bypass timing-based detection
+        - Trigger question processing pipeline directly
+        """
+        import time
+        pipeline_start = time.time()
+        
+        # Broadcast final transcription to UI
+        transcription_msg = create_transcription_message(
+            speaker=speaker,
+            text=text,
+            timestamp=pipeline_start,
+            confidence=confidence
+        )
+        await self.broadcast(transcription_msg)
+        logger.info(f"Streaming transcribed ({speaker.value}): {text[:50]}...")
+        
+        # Persist transcription to session history
+        if self.session_persistence_enabled and self.session_state.persistent_session_id:
+            try:
+                self.session_store.add_transcription(
+                    session_id=self.session_state.persistent_session_id,
+                    speaker=speaker.value,
+                    text=text,
+                    timestamp=pipeline_start,
+                    confidence=confidence
+                )
+            except Exception as e:
+                logger.warning(f"Failed to persist streaming transcription: {e}")
+        
+        # Only process interviewer speech for answer generation
+        if speaker != Speaker.INTERVIEWER:
+            return
+        
+        # Phase 7: Integrate with UtteranceAccumulator in hybrid mode
+        # High-confidence semantic endpointing can bypass timing-based detection
+        if (self.accumulation_enabled and 
+            hasattr(self, 'utterance_accumulator') and 
+            self.utterance_accumulator):
+            
+            # Use the accumulator's streaming endpoint handler
+            is_semantic = endpointing_type == EndpointingType.SEMANTIC
+            complete_utterance = await self.utterance_accumulator.on_streaming_end_of_turn(
+                text=text,
+                speaker=speaker.value,
+                confidence=confidence,
+                is_semantic=is_semantic,
+                timestamp=pipeline_start,
+            )
+            
+            if complete_utterance is not None:
+                # Streaming endpoint accepted - use the complete utterance
+                text = complete_utterance.text
+                logger.info(f"Streaming endpoint accepted ({complete_utterance.tier_used}): {text[:80]}...")
+            else:
+                # Low confidence - fall back to timing-based accumulation
+                complete_utterance = await self.utterance_accumulator.add_segment(
+                    text=text,
+                    speaker=speaker.value,
+                    timestamp=pipeline_start,
+                    is_final=True
+                )
+                
+                if complete_utterance is None:
+                    # Still buffering
+                    buffer = self.utterance_accumulator.get_buffer(speaker.value)
+                    if buffer and self.utterance_accumulator.config.emit_accumulating_status:
+                        preview = self.utterance_accumulator.get_buffer_preview(speaker.value)
+                        accumulating_msg = create_accumulating_message(
+                            speaker=speaker.value,
+                            buffer_preview=preview,
+                            segment_count=buffer.segment_count,
+                            duration_s=buffer.duration_s
+                        )
+                        await self.broadcast(accumulating_msg)
+                    return
+                
+                # Use accumulated text
+                text = complete_utterance.text
+                logger.info(f"Streaming accumulated complete: {text[:80]}...")
+        
+        # Question detection and answer generation
+        if self.question_detection_enabled:
+            is_question, q_confidence, q_type = await self.question_detector.is_actionable_question_async(
+                text,
+                self.session_state.conversation_history
+            )
+            logger.info(f"Streaming question detection: {q_type} (confidence={q_confidence:.2f})")
+            
+            if is_question and q_confidence >= self.question_confidence_threshold:
+                await self._process_question_pipeline(text, q_type, pipeline_start)
+            else:
+                logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
+        else:
+            await self._generate_answer_for_question(text, pipeline_start)
+    
+    def _on_streaming_error(self, error: Exception) -> None:
+        """Handle streaming STT error."""
+        logger.error(f"Streaming STT error: {error}")
+        # Don't broadcast to UI - graceful degradation to batch STT
 
     async def _run_speculative_cycle(self) -> None:
         """

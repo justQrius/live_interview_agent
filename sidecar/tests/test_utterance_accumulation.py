@@ -82,7 +82,9 @@ class TestAccumulatorConfigDefaults:
             "max_tokens", "max_characters", "max_duration_s",
             "tier1_confidence", "tier2_confidence", "tier3_confidence",
             "llm_fallback_threshold", "enabled", "use_llm_fallback",
-            "emit_accumulating_status"
+            "emit_accumulating_status",
+            # Phase 7: Streaming STT integration
+            "endpointing_mode", "streaming_confidence_threshold"
         }
 
         assert set(config_dict.keys()) == expected_keys
