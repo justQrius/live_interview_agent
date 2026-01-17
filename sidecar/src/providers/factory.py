@@ -2,12 +2,14 @@
 Provider Factory for creating and managing AI providers.
 
 Implements fallback chains and caching for STT, LLM, and Embedding providers.
+Supports both batch and streaming STT providers.
 """
 import logging
 from typing import Dict, List, Optional, Any
 
 from .base import STTProvider, LLMProvider, EmbeddingProvider, SearchProvider
-from .config import ProviderConfig, ProviderType
+from .config import ProviderConfig, ProviderType, StreamingMode
+from .stt.streaming_base import StreamingSTTProvider
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,13 @@ class ProviderFactory:
         ProviderType.DUCKDUCKGO # Free, privacy-focused
     ]
 
+    # Streaming STT provider order (for real-time transcription)
+    DEFAULT_STREAMING_STT_ORDER = [
+        StreamingMode.DEEPGRAM,      # Fast, reliable (~150ms)
+        StreamingMode.ASSEMBLYAI,    # Semantic endpointing
+        StreamingMode.OPENAI_REALTIME,  # Best semantic VAD (expensive)
+    ]
+
     def __init__(self, config: ProviderConfig):
         """
         Initialize the factory with configuration.
@@ -58,6 +67,7 @@ class ProviderFactory:
         self._llm_cache: Dict[ProviderType, LLMProvider] = {}
         self._embedding_cache: Dict[ProviderType, EmbeddingProvider] = {}
         self._search_cache: Dict[ProviderType, SearchProvider] = {}
+        self._streaming_stt_cache: Dict[StreamingMode, StreamingSTTProvider] = {}
 
         # Mock providers (for testing)
         self._mock_stt_providers: Optional[Dict[ProviderType, STTProvider]] = None
@@ -297,6 +307,123 @@ class ProviderFactory:
 
         raise ProviderError("No Search providers available.")
 
+    def get_streaming_stt_provider(
+        self, 
+        preferred: Optional[StreamingMode] = None
+    ) -> Optional[StreamingSTTProvider]:
+        """
+        Get a streaming STT provider for real-time transcription.
+
+        Streaming providers offer lower latency through WebSocket-based
+        real-time transcription with interim results and semantic endpointing.
+
+        Args:
+            preferred: Override streaming mode preference for this call
+
+        Returns:
+            StreamingSTTProvider or None if streaming disabled/unavailable
+        """
+        # Check if streaming is disabled
+        mode = preferred or self.config.streaming_mode
+        if mode == StreamingMode.DISABLED:
+            return None
+
+        # Determine order to try
+        if mode == StreamingMode.AUTO:
+            order = self.DEFAULT_STREAMING_STT_ORDER
+        else:
+            # Put preferred first, then rest
+            order = [mode] + [m for m in self.DEFAULT_STREAMING_STT_ORDER if m != mode]
+
+        # Try providers in order
+        for streaming_mode in order:
+            # Check if we have API key for this provider
+            if not self._has_streaming_api_key(streaming_mode):
+                continue
+
+            # Check cache first
+            if streaming_mode in self._streaming_stt_cache:
+                provider = self._streaming_stt_cache[streaming_mode]
+                if provider.is_available():
+                    return provider
+
+            # Create new provider
+            provider = self._create_streaming_stt_provider(streaming_mode)
+            if provider is not None:
+                self._streaming_stt_cache[streaming_mode] = provider
+                if provider.is_available():
+                    logger.info(f"Using streaming STT provider: {streaming_mode.value}")
+                    return provider
+
+        # No streaming providers available
+        logger.info("No streaming STT providers available, will use batch STT")
+        return None
+
+    def _has_streaming_api_key(self, streaming_mode: StreamingMode) -> bool:
+        """Check if API key exists for streaming provider."""
+        if streaming_mode == StreamingMode.DEEPGRAM:
+            return self.config.has_api_key(ProviderType.DEEPGRAM)
+        elif streaming_mode == StreamingMode.ASSEMBLYAI:
+            return self.config.has_api_key(ProviderType.ASSEMBLYAI)
+        elif streaming_mode == StreamingMode.OPENAI_REALTIME:
+            return self.config.has_api_key(ProviderType.OPENAI)
+        return False
+
+    def _create_streaming_stt_provider(
+        self, 
+        streaming_mode: StreamingMode
+    ) -> Optional[StreamingSTTProvider]:
+        """
+        Create a streaming STT provider instance.
+
+        Args:
+            streaming_mode: Type of streaming provider to create
+
+        Returns:
+            StreamingSTTProvider instance or None if creation fails
+        """
+        try:
+            if streaming_mode == StreamingMode.DEEPGRAM:
+                api_key = self.config.get_api_key(ProviderType.DEEPGRAM)
+                if not api_key:
+                    return None
+                from .stt.deepgram_streaming import DeepgramStreamingProvider
+                return DeepgramStreamingProvider(api_key)
+
+            elif streaming_mode == StreamingMode.ASSEMBLYAI:
+                api_key = self.config.get_api_key(ProviderType.ASSEMBLYAI)
+                if not api_key:
+                    return None
+                from .stt.assemblyai_streaming import AssemblyAIStreamingProvider
+                return AssemblyAIStreamingProvider(api_key)
+
+            elif streaming_mode == StreamingMode.OPENAI_REALTIME:
+                api_key = self.config.get_api_key(ProviderType.OPENAI)
+                if not api_key:
+                    return None
+                from .stt.openai_realtime import OpenAIRealtimeProvider
+                return OpenAIRealtimeProvider(api_key)
+
+        except ImportError as e:
+            logger.warning(f"Failed to import {streaming_mode.value} streaming provider: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to create {streaming_mode.value} streaming provider: {e}")
+
+        return None
+
+    def get_available_streaming_providers(self) -> List[StreamingMode]:
+        """
+        Get list of streaming STT providers that have API keys configured.
+
+        Returns:
+            List of available StreamingMode values
+        """
+        available = []
+        for mode in [StreamingMode.DEEPGRAM, StreamingMode.ASSEMBLYAI, StreamingMode.OPENAI_REALTIME]:
+            if self._has_streaming_api_key(mode):
+                available.append(mode)
+        return available
+
     def _get_mock_stt_provider(self, preferred: Optional[ProviderType]) -> STTProvider:
         """Get mock STT provider for testing."""
         if self._mock_stt_providers is None:
@@ -437,6 +564,7 @@ class ProviderFactory:
         self._llm_cache.clear()
         self._embedding_cache.clear()
         self._search_cache.clear()
+        self._streaming_stt_cache.clear()
         logger.info("Provider cache cleared")
 
     def get_status(self) -> Dict[str, Any]:
@@ -465,11 +593,22 @@ class ProviderFactory:
                 active_search = provider_type.value
                 break
 
+        active_streaming_stt = None
+        for streaming_mode, provider in self._streaming_stt_cache.items():
+            if provider.is_available():
+                active_streaming_stt = streaming_mode.value
+                break
+
         return {
             "stt": {
                 "active": active_stt,
                 "available": [p.value for p in self.get_available_stt_providers()],
                 "fallback_order": [p.value for p in self.get_stt_fallback_order()],
+            },
+            "streaming_stt": {
+                "active": active_streaming_stt,
+                "mode": self.config.streaming_mode.value,
+                "available": [m.value for m in self.get_available_streaming_providers()],
             },
             "llm": {
                 "active": active_llm,
