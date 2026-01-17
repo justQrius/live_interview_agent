@@ -131,7 +131,7 @@ npm run tauri build
 graph TB
     subgraph "Tauri App"
         UI[React UI]
-        BrowserVAD[Browser VAD<br/>(ONNX)]
+        BrowserVAD["Browser VAD<br/>(ONNX)"]
         Config[Config Store]
     end
 
@@ -144,10 +144,10 @@ graph TB
             Deepgram[Deepgram STT]
             OpenAI[OpenAI STT/LLM]
             Anthropic[Anthropic LLM]
-            Gemini[Gemini STT/LLM/Cache]
+            Gemini["Gemini STT/LLM/Cache<br/>(File API)"]
         end
         
-        Models[Pre-warmed Models<br/>(VAD/Diarization)]
+        Models["Pre-warmed Models<br/>(VAD/Diarization)"]
         
         subgraph "Intelligence Pipeline"
             Detector[Question Detector]
@@ -191,7 +191,6 @@ graph TB
 - **`src/`**: React frontend (UI, Hooks, VAD, Coaching UI).
 - **`src-tauri/`**: Rust backend (OS integration, Keyring).
 - **`sidecar/`**: Python engine (Audio, Classification, Providers, RAG, Memory, Coaching).
-- **`_prism/`**: SDLC documentation.
 
 ### Testing
 
