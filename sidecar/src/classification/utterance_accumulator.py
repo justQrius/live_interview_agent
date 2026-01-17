@@ -337,6 +337,114 @@ class UtteranceAccumulator:
         buffer.reset()
         return completed
     
+    async def on_streaming_end_of_turn(
+        self,
+        text: str,
+        speaker: str,
+        confidence: float,
+        is_semantic: bool = False,
+        timestamp: Optional[float] = None,
+    ) -> Optional[CompleteUtterance]:
+        """
+        Handle end-of-turn signal from streaming STT provider.
+        
+        In hybrid mode, this method allows streaming providers to signal
+        utterance completion with semantic confidence. High-confidence
+        semantic endpoints can bypass timing-based detection.
+        
+        Args:
+            text: Final transcribed text from streaming provider
+            speaker: Speaker identifier
+            confidence: Endpointing confidence (0.0-1.0)
+            is_semantic: True if semantic endpoint, False if acoustic
+            timestamp: Optional timestamp (defaults to now)
+        
+        Returns:
+            CompleteUtterance if we should process this as complete,
+            None if confidence is too low (fall through to timing-based)
+        """
+        import time as time_module
+        
+        if timestamp is None:
+            timestamp = time_module.time()
+        
+        # Check endpointing mode
+        if self.config.endpointing_mode == "timing":
+            # Timing-only mode: ignore streaming endpoints
+            self._logger.debug("Timing-only mode, ignoring streaming endpoint")
+            return None
+        
+        # Check confidence threshold for semantic endpoints
+        if is_semantic and confidence >= self.config.streaming_confidence_threshold:
+            # High-confidence semantic endpoint - finalize immediately
+            self._logger.info(
+                f"Streaming semantic endpoint accepted (conf={confidence:.2f}): "
+                f"'{text[:60]}...'"
+            )
+            
+            # Get existing buffer if any
+            buffer = self.buffers.get(speaker)
+            
+            if buffer and not buffer.is_empty:
+                # Combine buffer with streaming text
+                combined_text = f"{buffer.text} {text}".strip()
+                self._logger.info(f"Combined buffer with streaming: '{combined_text[:80]}...'")
+                
+                completed = CompleteUtterance(
+                    text=combined_text,
+                    speaker=speaker,
+                    start_time=buffer.first_segment_time,
+                    end_time=timestamp,
+                    segment_count=buffer.segment_count + 1,
+                    completion_reason="streaming_semantic: tier0_streaming",
+                    confidence=confidence,
+                    tier_used="tier0_streaming",
+                    is_partial=False,
+                )
+                buffer.reset()
+                return completed
+            else:
+                # No buffer, use streaming text directly
+                return CompleteUtterance(
+                    text=text,
+                    speaker=speaker,
+                    start_time=timestamp,
+                    end_time=timestamp,
+                    segment_count=1,
+                    completion_reason="streaming_semantic: tier0_streaming",
+                    confidence=confidence,
+                    tier_used="tier0_streaming",
+                    is_partial=False,
+                )
+        
+        # Low confidence or acoustic endpoint in hybrid mode
+        # Fall through to timing-based detection via add_segment
+        if self.config.endpointing_mode == "streaming":
+            # Streaming-only mode: accept all streaming endpoints
+            self._logger.info(
+                f"Streaming endpoint accepted (conf={confidence:.2f}, "
+                f"semantic={is_semantic}): '{text[:60]}...'"
+            )
+            return CompleteUtterance(
+                text=text,
+                speaker=speaker,
+                start_time=timestamp,
+                end_time=timestamp,
+                segment_count=1,
+                completion_reason=f"streaming_{'semantic' if is_semantic else 'acoustic'}: tier0_streaming",
+                confidence=confidence,
+                tier_used="tier0_streaming",
+                is_partial=not is_semantic,
+            )
+        
+        # Hybrid mode with low confidence: return None to signal
+        # that timing-based detection should be used
+        self._logger.debug(
+            f"Streaming endpoint below threshold (conf={confidence:.2f} < "
+            f"{self.config.streaming_confidence_threshold}), using timing-based"
+        )
+        return None
+    
     def reset(self, speaker: Optional[str] = None) -> None:
         """
         Reset buffer(s) for a new session or after processing.

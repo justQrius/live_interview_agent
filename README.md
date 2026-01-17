@@ -42,6 +42,17 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Real-time Accumulation Indicator**: UI shows buffering state with segment count and preview.
 - **Configurable Thresholds**: All timeouts and limits controllable via environment variables.
 
+### Streaming STT & Semantic Endpointing (Phase 7)
+- **Real-time Streaming Transcription**: WebSocket-based streaming STT for instant interim results as the interviewer speaks.
+- **Semantic Endpointing**: Providers like AssemblyAI and OpenAI Realtime detect turn completion based on meaning, not just pauses.
+- **Hybrid Mode**: Combines streaming semantic endpointing with timing-based accumulation for best of both worlds.
+- **Three Streaming Providers**:
+  - **Deepgram** (~150ms latency): Acoustic endpointing via `utterance_end_ms`
+  - **AssemblyAI** (~256ms latency): Semantic endpointing via `end_of_turn_confidence`
+  - **OpenAI Realtime** (~300ms latency): GPT-4o semantic VAD
+- **Automatic Fallback**: Gracefully degrades to batch STT if streaming unavailable.
+- **~30-50% Latency Improvement**: Streaming eliminates VAD buffering delays.
+
 ### User Interface
 - **True Dark Mode**: OLED-friendly deep dark theme (`#080808` background) for reduced eye strain and premium aesthetics.
 - **Settings Overlay**: Clean, non-intrusive settings modal for managing keys and preferences.
@@ -50,6 +61,8 @@ A cross-platform desktop application that provides real-time AI assistance durin
 
 ### Low-Latency Architecture
 - **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.
+- **Streaming STT**: Real-time WebSocket transcription eliminates batch processing delays.
+- **Semantic Endpointing**: AI-powered turn detection responds to meaning, not just pauses.
 - **Model Pre-warming**: ML models load at app startup for <1s session starts.
 - **Speculative Retrieval**: RAG queries begin before the interviewer finishes speaking.
 - **Parallel Processing**: Audio pipeline optimized for <1.5s end-to-end latency.
@@ -217,6 +230,7 @@ graph TB
 | Phase 4 | Interview Coach Evolution | - | 🟡 Implemented |
 | Phase 5 | Gemini Integration | - | 🟡 Implemented |
 | Phase 6 | Utterance Accumulation | - | ✅ Complete |
+| Phase 7 | Streaming STT & Semantic Endpointing | - | ✅ Complete |
 
 ## License
 

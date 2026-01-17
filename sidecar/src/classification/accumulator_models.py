@@ -90,6 +90,13 @@ class AccumulatorConfig:
     enabled: bool = True
     use_llm_fallback: bool = True
     emit_accumulating_status: bool = True
+    
+    # Phase 7: Streaming STT integration
+    # "timing" = use only timing-based detection (Tiers 1-4)
+    # "streaming" = use only streaming provider endpointing
+    # "hybrid" = prefer streaming semantic endpointing, fall back to timing
+    endpointing_mode: str = "hybrid"
+    streaming_confidence_threshold: float = 0.7  # Min confidence to trust streaming endpoint
 
     @classmethod
     def from_env(cls) -> "AccumulatorConfig":
@@ -145,6 +152,8 @@ class AccumulatorConfig:
             enabled=get_bool("ACCUMULATOR_ENABLED", True),
             use_llm_fallback=get_bool("ACCUMULATOR_USE_LLM_FALLBACK", True),
             emit_accumulating_status=get_bool("ACCUMULATOR_EMIT_STATUS", True),
+            endpointing_mode=os.getenv("ACCUMULATOR_ENDPOINTING_MODE", "hybrid"),
+            streaming_confidence_threshold=get_float("ACCUMULATOR_STREAMING_CONFIDENCE", 0.7),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -163,6 +172,8 @@ class AccumulatorConfig:
             "enabled": self.enabled,
             "use_llm_fallback": self.use_llm_fallback,
             "emit_accumulating_status": self.emit_accumulating_status,
+            "endpointing_mode": self.endpointing_mode,
+            "streaming_confidence_threshold": self.streaming_confidence_threshold,
         }
 
 
