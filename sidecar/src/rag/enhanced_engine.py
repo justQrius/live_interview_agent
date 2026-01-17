@@ -122,10 +122,11 @@ class EnhancedRAGEngine(RAGEngine):
         Retrieve context with question-type-aware filtering.
         
         Pipeline:
-        1. Get document priorities for question type
-        2. Query child chunks with type filter
-        3. Expand to parent chunks for full context (NEW: actually does it!)
-        4. Aggregate across sub-questions if provided
+        1. Batch embed all queries (main question + sub-questions) in ONE API call
+        2. Get document priorities for question type
+        3. Query child chunks with type filter using pre-computed embeddings
+        4. Expand to parent chunks for full context
+        5. Aggregate across sub-questions if provided
         
         Args:
             question: The main question text.
@@ -148,20 +149,44 @@ class EnhancedRAGEngine(RAGEngine):
         
         logger.info(f"Retrieving for question type '{question_type}' with priorities: {[p.value for p in priorities]}")
         
+        # ============================================================
+        # PHASE 7 OPTIMIZATION: Batch embed all queries in ONE API call
+        # Previously: Each query_with_filter() call re-embedded the same question
+        # Now: Embed once, reuse the vector for all filtered queries
+        # ============================================================
+        all_queries = [question]
+        if sub_questions:
+            all_queries.extend(sub_questions)
+        
+        # Batch embed all unique queries
+        embeddings = self.vector_store.embed_queries(all_queries)
+        if not embeddings:
+            logger.warning("Failed to embed queries, falling back to text-based queries")
+            return self._retrieve_for_question_legacy(question, question_type, sub_questions, limit)
+        
+        # Create query -> embedding map
+        query_embeddings: Dict[str, List[float]] = {}
+        for i, q in enumerate(all_queries):
+            if i < len(embeddings):
+                query_embeddings[q] = embeddings[i]
+        
+        question_embedding = query_embeddings.get(question)
+        if not question_embedding:
+            logger.warning("Failed to get embedding for main question")
+            return self._retrieve_for_question_legacy(question, question_type, sub_questions, limit)
+        
+        logger.info(f"Batch embedded {len(all_queries)} queries in single API call")
+        
         all_results: List[RetrievalResult] = []
         seen_texts: Set[str] = set()  # Use text hash for dedup
         
-        # Build priority index map for stable sorting
-        # SAMPLE_QA first means it gets index 0, RESUME gets index 1, etc.
-        priority_values = [p.value for p in priorities]
-        
-        # Query each priority document type
+        # Query each priority document type using pre-computed embedding
         results_per_type = max(2, limit // len(priorities))
         
         for priority_idx, doc_type in enumerate(priorities):
             try:
-                type_results = self._query_by_type(
-                    query=question,
+                type_results = self._query_by_type_with_embedding(
+                    query_embedding=question_embedding,
                     doc_type=doc_type,
                     limit=results_per_type
                 )
@@ -179,10 +204,15 @@ class EnhancedRAGEngine(RAGEngine):
                 logger.warning(f"Failed to query for doc_type {doc_type.value}: {e}")
                 continue
         
-        # Handle sub-questions if provided
+        # Handle sub-questions if provided (using their pre-computed embeddings)
         if sub_questions:
             for sub_q in sub_questions:
-                sub_results = self._query_general(sub_q, limit=2)
+                sub_embedding = query_embeddings.get(sub_q)
+                if sub_embedding:
+                    sub_results = self._query_general_with_embedding(sub_embedding, limit=2)
+                else:
+                    sub_results = self._query_general(sub_q, limit=2)
+                    
                 for result in sub_results:
                     text_key = result.text[:200] if len(result.text) > 200 else result.text
                     if text_key not in seen_texts:
@@ -205,6 +235,153 @@ class EnhancedRAGEngine(RAGEngine):
         )
         
         return sorted_results[:limit]
+    
+    def _retrieve_for_question_legacy(
+        self,
+        question: str,
+        question_type: str,
+        sub_questions: Optional[List[str]] = None,
+        limit: int = 5
+    ) -> List[RetrievalResult]:
+        """
+        Legacy retrieval method using text-based queries (fallback).
+        
+        Used when batch embedding fails.
+        """
+        priorities = DOC_PRIORITY_BY_QUESTION_TYPE.get(
+            question_type,
+            DEFAULT_PRIORITIES
+        )
+        
+        all_results: List[RetrievalResult] = []
+        seen_texts: Set[str] = set()
+        results_per_type = max(2, limit // len(priorities))
+        
+        for priority_idx, doc_type in enumerate(priorities):
+            try:
+                type_results = self._query_by_type(
+                    query=question,
+                    doc_type=doc_type,
+                    limit=results_per_type
+                )
+                
+                for result in type_results:
+                    text_key = result.text[:200] if len(result.text) > 200 else result.text
+                    if text_key not in seen_texts:
+                        seen_texts.add(text_key)
+                        result.metadata["_priority_idx"] = priority_idx
+                        all_results.append(result)
+                        
+            except Exception as e:
+                logger.warning(f"Failed to query for doc_type {doc_type.value}: {e}")
+                continue
+        
+        if sub_questions:
+            for sub_q in sub_questions:
+                sub_results = self._query_general(sub_q, limit=2)
+                for result in sub_results:
+                    text_key = result.text[:200] if len(result.text) > 200 else result.text
+                    if text_key not in seen_texts:
+                        seen_texts.add(text_key)
+                        result.metadata["_priority_idx"] = len(priorities)
+                        all_results.append(result)
+        
+        if self.expand_to_parent:
+            expanded_results = self._expand_to_parents(all_results)
+        else:
+            expanded_results = all_results
+        
+        sorted_results = sorted(
+            expanded_results, 
+            key=lambda r: (r.metadata.get("_priority_idx", 999), r.distance)
+        )
+        
+        return sorted_results[:limit]
+    
+    def _query_by_type_with_embedding(
+        self,
+        query_embedding: List[float],
+        doc_type: DocumentType,
+        limit: int = 5
+    ) -> List[RetrievalResult]:
+        """
+        Query for chunks of a specific document type using pre-computed embedding.
+        
+        Args:
+            query_embedding: Pre-computed embedding vector.
+            doc_type: Document type to filter by.
+            limit: Maximum results.
+            
+        Returns:
+            List of RetrievalResult objects.
+        """
+        try:
+            # Try to filter by document type and child level first
+            where_filter = {
+                "$and": [
+                    {"document_type": doc_type.value},
+                    {"level": "child"}
+                ]
+            }
+            
+            results = self.vector_store.query_with_embedding(
+                query_embedding=query_embedding,
+                n_results=limit,
+                where=where_filter
+            )
+            
+            parsed = self._parse_results(results)
+            if parsed:
+                return parsed
+            
+            # If no child chunks, try without level filter
+            results = self.vector_store.query_with_embedding(
+                query_embedding=query_embedding,
+                n_results=limit,
+                where={"document_type": doc_type.value}
+            )
+            return self._parse_results(results)
+            
+        except Exception as e:
+            logger.error(f"Error querying by type with embedding {doc_type.value}: {e}")
+            return []
+    
+    def _query_general_with_embedding(
+        self,
+        query_embedding: List[float],
+        limit: int = 5
+    ) -> List[RetrievalResult]:
+        """
+        General query without type filtering using pre-computed embedding.
+        
+        Args:
+            query_embedding: Pre-computed embedding vector.
+            limit: Maximum results.
+            
+        Returns:
+            List of RetrievalResult objects.
+        """
+        try:
+            # Prefer child chunks for precision
+            results = self.vector_store.query_with_embedding(
+                query_embedding=query_embedding,
+                n_results=limit,
+                where={"level": "child"}
+            )
+            parsed = self._parse_results(results)
+            if parsed:
+                return parsed
+            
+            # Fallback to all chunks
+            results = self.vector_store.query_with_embedding(
+                query_embedding=query_embedding,
+                n_results=limit
+            )
+            return self._parse_results(results)
+            
+        except Exception as e:
+            logger.error(f"Error in general query with embedding: {e}")
+            return []
     
     def _query_by_type(
         self,

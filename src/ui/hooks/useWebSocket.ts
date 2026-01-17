@@ -160,6 +160,9 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         state: 'listening' | 'processing' | 'idle' | 'calibrating';
       };
       store.setStatus(data.state);
+      if (data.state === "idle") {
+        store.clearAccumulating();
+      }
       break;
     }
 
