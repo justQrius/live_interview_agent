@@ -993,6 +993,12 @@ class SidecarServer:
         status_msg = create_status_message(SessionStatus.PROCESSING)
         await websocket.send(status_msg.to_json())
 
+        # Phase 4E: Trigger coaching pipeline (story recall & structure suggestion)
+        q_type = classify_question(question)
+        if q_type in ("behavioral", "interview_question", "intro", "weakness", "conflict", "leadership"):
+            asyncio.create_task(self._recall_and_suggest_story(question, q_type))
+        asyncio.create_task(self._suggest_structure(question, q_type))
+
         retrieval_results = []
         context_chunks = []
         rag_confidence = ConfidenceLevel.LOW

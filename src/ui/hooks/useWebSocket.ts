@@ -67,9 +67,9 @@ let reconnectTimeoutId: number | undefined;
 
 const connectionListeners = new Set<ConnectionListener>();
 
-// Custom message handlers for components that need raw message access
-type MessageHandler = (message: WebSocketMessage) => void;
-const customMessageHandlers = new Set<MessageHandler>();
+  // Custom message handlers for components that need raw message access
+  type MessageHandler = (message: WebSocketMessage) => void;
+  const customMessageHandlers = new Set<MessageHandler>();
 
 const notifyConnectionListeners = () => {
   for (const listener of connectionListeners) {
@@ -118,6 +118,10 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       if (data.speaker === 'Interviewer') {
         store.startAnswer(data.text, data.timestamp);
         store.setInterimTranscript(null); // Clear interim on final
+        // Clear coaching data for the new question
+        store.setStorySuggestion(null);
+        store.setStructureHint(null);
+        store.setConsistencyWarnings([]);
       }
 
       store.addTranscription(data);

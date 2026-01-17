@@ -22,6 +22,7 @@ const ContextLoader: React.FC = () => {
   const addContextFile = useSessionStore((state) => state.addContextFile);
   const updateContextFile = useSessionStore((state) => state.updateContextFile);
   const removeContextFile = useSessionStore((state) => state.removeContextFile);
+  const setContextStatus = useSessionStore((state) => state.setContextStatus);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -29,10 +30,11 @@ const ContextLoader: React.FC = () => {
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isInferring, setIsInferring] = useState(false);
 
-  // Handle DOCUMENT_TYPE_SUGGESTIONS message from backend
+  // Handle messages from backend
   useEffect(() => {
     const handleMessage = (message: { type: string; data?: unknown }) => {
       if (message.type === 'DOCUMENT_TYPE_SUGGESTIONS') {
+        // After analysis, still analyzing until user confirms upload
         const data = message.data as {
           suggestions: Array<{
             id: string;
@@ -42,7 +44,7 @@ const ContextLoader: React.FC = () => {
             reason: string;
           }>;
         };
-        
+
         // Update staged files with inferred types
         setStagedFiles(prev => prev.map(file => {
           const suggestion = data.suggestions.find(s => s.id === file.id);
@@ -58,12 +60,44 @@ const ContextLoader: React.FC = () => {
           return { ...file, isInferring: false };
         }));
         setIsInferring(false);
+        // Keep 'analyzing' status until user confirms upload
+      } else if (message.type === 'PREPARATION_READY') {
+        // RAG processing is complete
+        setContextStatus('rag_ready');
       }
     };
 
     addMessageHandler(handleMessage);
     return () => removeMessageHandler(handleMessage);
-  }, [addMessageHandler, removeMessageHandler]);
+  }, [addMessageHandler, removeMessageHandler, setContextStatus]);
+
+  // Track context status based on loaded files
+  useEffect(() => {
+    if (loadedContextFiles.length === 0) {
+      setContextStatus('empty');
+      return;
+    }
+
+    const allReady = loadedContextFiles.every(f => f.status === 'ready');
+    const anyError = loadedContextFiles.some(f => f.status === 'error');
+    const anyProcessing = loadedContextFiles.some(f => f.status === 'processing');
+
+    if (anyError) {
+      setContextStatus('error');
+    } else if (allReady) {
+      // All files ready, but RAG might still be processing
+      // Check if we have preparation summary (RAG ready indicator)
+      const preparationStatus = useSessionStore.getState().preparationStatus;
+      if (preparationStatus === 'ready') {
+        setContextStatus('rag_ready');
+      } else {
+        setContextStatus('cache_ready');
+      }
+    } else if (anyProcessing) {
+      // Files are being processed (extraction, RAG, etc.)
+      setContextStatus('uploading');
+    }
+  }, [loadedContextFiles, setContextStatus]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -132,6 +166,7 @@ const ContextLoader: React.FC = () => {
     if (newStagedFiles.length > 0) {
       setStagedFiles(prev => [...prev, ...newStagedFiles]);
       setIsInferring(true);
+      setContextStatus('analyzing');
       
       // Fetch API keys for LLM-based document type inference
       const apiKeys: Record<string, string> = {};
@@ -174,8 +209,9 @@ const ContextLoader: React.FC = () => {
 
   const confirmUpload = async () => {
     if (stagedFiles.length === 0) return;
-    
+
     setIsUploading(true);
+    setContextStatus('uploading');
     
     // Fetch API keys for sidecar auto-initialization
     const apiKeys: Record<string, string> = {};
