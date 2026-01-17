@@ -108,6 +108,15 @@ export interface EnhancementState {
   originalAnswer: string | null;
 }
 
+// Accumulation State (Phase 6)
+export interface AccumulatingState {
+  isAccumulating: boolean;
+  speaker: string | null;
+  bufferPreview: string | null;
+  segmentCount: number;
+  durationSeconds: number;
+}
+
 export interface SessionState {
   // Session status
   status: 'idle' | 'calibrating' | 'listening' | 'processing';
@@ -161,6 +170,9 @@ export interface SessionState {
   // Enhancement State (Phase 5)
   enhancement: EnhancementState;
 
+  // Accumulating State (Phase 6)
+  accumulating: AccumulatingState;
+
   // Actions
   setStatus: (status: SessionState['status']) => void;
   setScreenInvisibility: (enabled: boolean) => void;
@@ -207,6 +219,10 @@ export interface SessionState {
   completeEnhancement: () => void;
   cancelEnhancement: () => void;
   applyEnhancement: () => void;
+
+  // Accumulating Actions (Phase 6)
+  setAccumulating: (state: AccumulatingState) => void;
+  clearAccumulating: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -252,6 +268,15 @@ export const useSessionStore = create<SessionState>((set) => ({
     enhancedText: '',
     originalQuestion: null,
     originalAnswer: null,
+  },
+
+  // Accumulating initial state (Phase 6)
+  accumulating: {
+    isAccumulating: false,
+    speaker: null,
+    bufferPreview: null,
+    segmentCount: 0,
+    durationSeconds: 0,
   },
 
   // Actions
@@ -499,5 +524,20 @@ export const useSessionStore = create<SessionState>((set) => ({
           originalAnswer: null,
         },
       };
+    }),
+
+  // Accumulating Actions (Phase 6)
+  setAccumulating: (accumulatingState) =>
+    set({ accumulating: accumulatingState }),
+
+  clearAccumulating: () =>
+    set({
+      accumulating: {
+        isAccumulating: false,
+        speaker: null,
+        bufferPreview: null,
+        segmentCount: 0,
+        durationSeconds: 0,
+      },
     }),
 }));
