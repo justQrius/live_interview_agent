@@ -62,7 +62,17 @@ class ProviderType(Enum):
     DEEPGRAM = "deepgram"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    ASSEMBLYAI = "assemblyai"
     DUCKDUCKGO = "duckduckgo"
+
+
+class StreamingMode(Enum):
+    """Streaming STT mode preference."""
+    DISABLED = "disabled"  # Use batch STT only
+    AUTO = "auto"          # Auto-select best available
+    DEEPGRAM = "deepgram"  # Prefer Deepgram streaming
+    ASSEMBLYAI = "assemblyai"  # Prefer AssemblyAI streaming
+    OPENAI_REALTIME = "openai_realtime"  # Prefer OpenAI Realtime
 
 
 @dataclass
@@ -80,10 +90,14 @@ class ProviderConfig:
     deepgram_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    assemblyai_api_key: Optional[str] = None
 
     # Preferences (None means use fallback chain / auto)
     preferred_stt: Optional[ProviderType] = None
     preferred_llm: Optional[ProviderType] = None
+    
+    # Streaming STT preference
+    streaming_mode: StreamingMode = StreamingMode.AUTO
 
     # Fallback settings
     fallback_enabled: bool = True
@@ -132,6 +146,15 @@ class ProviderConfig:
             except ValueError:
                 pass  # Invalid provider, use auto
 
+        # Parse streaming mode preference
+        streaming_mode = StreamingMode.AUTO
+        streaming_pref = preferences.get("streamingMode")
+        if streaming_pref:
+            try:
+                streaming_mode = StreamingMode(streaming_pref)
+            except ValueError:
+                pass  # Invalid mode, use auto
+
         # Search is enabled by default, can be disabled via preferences
         search_enabled = preferences.get("searchEnabled", True)
         
@@ -141,8 +164,10 @@ class ProviderConfig:
             deepgram_api_key=api_keys.get("deepgram"),
             openai_api_key=api_keys.get("openai"),
             anthropic_api_key=api_keys.get("anthropic"),
+            assemblyai_api_key=api_keys.get("assemblyai"),
             preferred_stt=preferred_stt,
             preferred_llm=preferred_llm,
+            streaming_mode=streaming_mode,
             thinking_budget=preferences.get("thinkingBudget"),
             search_enabled=search_enabled
         )
@@ -176,6 +201,7 @@ class ProviderConfig:
             ProviderType.DEEPGRAM: self.deepgram_api_key,
             ProviderType.OPENAI: self.openai_api_key,
             ProviderType.ANTHROPIC: self.anthropic_api_key,
+            ProviderType.ASSEMBLYAI: self.assemblyai_api_key,
             ProviderType.DUCKDUCKGO: "free",
         }
         return key_mapping.get(provider_type)
