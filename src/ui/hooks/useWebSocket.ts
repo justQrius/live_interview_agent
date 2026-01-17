@@ -5,7 +5,7 @@ import {
   StorySuggestion, 
   StructureHint, 
   Contradiction,
-  ExtractionResult 
+  ExtractionResult
 } from '../store/sessionStore';
 
 // WebSocket message types (as per architecture)
@@ -49,7 +49,9 @@ export type MessageType =
   | 'ENHANCED_ANSWER_COMPLETE'
   // Document Type Inference (Phase 5)
   | 'INFER_DOCUMENT_TYPES'
-  | 'DOCUMENT_TYPE_SUGGESTIONS';
+  | 'DOCUMENT_TYPE_SUGGESTIONS'
+  // Utterance Accumulation (Phase 6)
+  | 'ACCUMULATING';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -112,6 +114,9 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         timestamp: number;
         confidence: number;
       };
+
+      // Clear accumulating state since we got a final transcription
+      store.clearAccumulating();
 
       // When interviewer asks a new question, start a fresh answer buffer
       // This clears the previous answer and associates the new question text
@@ -309,6 +314,24 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
 
     case 'ENHANCED_ANSWER_COMPLETE': {
       store.completeEnhancement();
+      break;
+    }
+
+    // Utterance Accumulation (Phase 6)
+    case 'ACCUMULATING': {
+      const data = message.data as {
+        speaker: string;
+        bufferPreview: string;
+        segmentCount: number;
+        durationSeconds: number;
+      };
+      store.setAccumulating({
+        isAccumulating: true,
+        speaker: data.speaker,
+        bufferPreview: data.bufferPreview,
+        segmentCount: data.segmentCount,
+        durationSeconds: data.durationSeconds,
+      });
       break;
     }
 

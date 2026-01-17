@@ -9,6 +9,7 @@ import { HistoryPanel } from './components/HistoryPanel';
 import { PreparationButton } from './components/PreparationButton';
 import { PreparationSummary } from './components/PreparationSummary';
 import { CoachingPanel } from './components/CoachingPanel';
+import { AccumulatingIndicator } from './components/AccumulatingIndicator';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useWebSocket } from './hooks/useWebSocket';
 
@@ -213,6 +214,9 @@ function App() {
               isExpanded={isPreparationExpanded} 
               onToggle={() => setPreparationExpanded(!isPreparationExpanded)} 
             />
+            
+            {/* Accumulating Indicator - shows when buffering speech segments */}
+            <AccumulatingIndicator />
             
             {/* Coaching Panel */}
             <CoachingPanel />

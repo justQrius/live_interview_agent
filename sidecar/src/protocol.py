@@ -58,6 +58,9 @@ class MessageType(str, Enum):
     ENHANCED_ANSWER_CHUNK = "ENHANCED_ANSWER_CHUNK"  # Phase 5: Enhanced answer chunk
     ENHANCED_ANSWER_COMPLETE = "ENHANCED_ANSWER_COMPLETE"  # Phase 5: Enhancement done
     DOCUMENT_TYPE_SUGGESTIONS = "DOCUMENT_TYPE_SUGGESTIONS"  # Phase 5: LLM-inferred document types
+    
+    # Phase 6: Utterance Accumulation
+    ACCUMULATING = "ACCUMULATING"  # Phase 6: Buffering interviewer speech
 
 
 class SessionStatus(str, Enum):
@@ -450,5 +453,33 @@ def create_document_type_suggestions_message(
         type=MessageType.DOCUMENT_TYPE_SUGGESTIONS,
         data={
             "suggestions": suggestions
+        }
+    )
+
+
+# Utterance Accumulation Helper Functions
+
+def create_accumulating_message(
+    speaker: str,
+    buffer_preview: str,
+    segment_count: int,
+    duration_s: float
+) -> Message:
+    """
+    Create an ACCUMULATING message to notify UI that speech is being buffered.
+    
+    Args:
+        speaker: Speaker identifier (e.g., "Interviewer")
+        buffer_preview: Preview of accumulated text (truncated)
+        segment_count: Number of segments accumulated so far
+        duration_s: Time since first segment in seconds
+    """
+    return Message(
+        type=MessageType.ACCUMULATING,
+        data={
+            "speaker": speaker,
+            "bufferPreview": buffer_preview,
+            "segmentCount": segment_count,
+            "durationSeconds": duration_s
         }
     )

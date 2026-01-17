@@ -79,6 +79,11 @@ from src.coaching.structure_suggester import StructureSuggester
 from src.coaching.consistency_tracker import ConsistencyTracker
 from src.classification.document_classifier import DocumentClassifier
 
+# Phase 6: Utterance Accumulation
+from src.classification.utterance_accumulator import UtteranceAccumulator
+from src.classification.accumulator_models import AccumulatorConfig
+from src.protocol import create_accumulating_message
+
 # Phase 5: Gemini Features
 from src.context.gemini_cache import GeminiCacheManager
 from src.context.file_uploader import GeminiFileUploader, DocumentType as FileDocumentType
@@ -169,6 +174,10 @@ class SidecarServer:
         # Phase 3C: Conversational Intelligence
         self.query_reformulator = QueryReformulator()
         self.question_splitter = QuestionSplitter()
+        
+        # Phase 6: Utterance Accumulation for multi-segment questions
+        self.utterance_accumulator = UtteranceAccumulator()
+        self.accumulation_enabled = True  # Feature flag for rollout
         
         self.session_persistence_enabled = True  # Feature flag for rollout 
         
@@ -396,6 +405,10 @@ class SidecarServer:
                 # Phase 4C: Set LLM for Tier 3 Question Detection
                 self.question_detector.set_llm_provider(self.llm)
                 
+                # Phase 6: Set LLM for Tier 4 Completeness Detection (Utterance Accumulator)
+                if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
+                    self.utterance_accumulator.set_llm_provider(self.llm)
+                
             except Exception as e:
                 logger.warning(f"No LLM provider available: {e}")
                 self.llm = None
@@ -493,6 +506,10 @@ class SidecarServer:
         
         # Stop audio processing
         await self._stop_audio_processing()
+        
+        # Phase 6: Reset utterance accumulator
+        if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
+            self.utterance_accumulator.reset()
         
         # Cancel any ongoing enhancement task
         if self._enhancement_task and not self._enhancement_task.done():
@@ -2066,6 +2083,36 @@ Provide a concise, punchy version that hits the key points quickly."""
                 logger.warning(f"Failed to persist transcription: {e}")
         
         if speaker == Speaker.INTERVIEWER:
+            # Phase 6: Utterance Accumulation
+            # Buffer segments from the same speaker until the utterance is semantically complete
+            if self.accumulation_enabled and hasattr(self, 'utterance_accumulator'):
+                import time as time_module
+                complete_utterance = await self.utterance_accumulator.add_segment(
+                    text=text,
+                    speaker=speaker.value,
+                    timestamp=time_module.time(),
+                    is_final=True
+                )
+                
+                if complete_utterance is None:
+                    # Still buffering - send status update to UI
+                    buffer = self.utterance_accumulator.get_buffer(speaker.value)
+                    if buffer and self.utterance_accumulator.config.emit_accumulating_status:
+                        preview = self.utterance_accumulator.get_buffer_preview(speaker.value)
+                        accumulating_msg = create_accumulating_message(
+                            speaker=speaker.value,
+                            buffer_preview=preview,
+                            segment_count=buffer.segment_count,
+                            duration_s=buffer.duration_s
+                        )
+                        await self.broadcast(accumulating_msg)
+                    logger.info(f"Accumulating: {text[:50]}... (buffering)")
+                    return  # Don't process further until utterance is complete
+                
+                # Use the complete utterance text for question detection
+                text = complete_utterance.text
+                logger.info(f"Accumulated complete ({complete_utterance.completion_reason}): {text[:80]}...")
+            
             # Phase 3: Question detection before answer generation
             if self.question_detection_enabled:
                 is_question, confidence, q_type = await self.question_detector.is_actionable_question_async(
