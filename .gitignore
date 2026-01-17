@@ -1,11 +1,9 @@
 # Node
 node_modules/
 dist/
-package-lock.json
 
 # Tauri
 src-tauri/target/
-src-tauri/Cargo.lock
 
 # Python Sidecar
 sidecar/venv/
@@ -39,8 +37,11 @@ coverage/
 # Build
 build/
 
-#claude code files
+# Dev Tools & Documentation (Keep Local)
 .claude/
-
-# opencode files
 .opencode/
+_prism/
+docs/
+AGENTS.md
+CLAUDE.md
+.sisyphus/
