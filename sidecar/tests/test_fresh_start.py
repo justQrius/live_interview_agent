@@ -20,9 +20,13 @@ def mock_stores(tmp_path):
     return mem_store, sess_store, str(memory_db), str(session_db)
 
 @pytest.mark.asyncio
-async def test_fresh_start_on_stop(mock_stores):
+async def test_stop_session_preserves_context(mock_stores):
     """
-    Verify that MemoryStore and SessionStore are cleared when STOP_SESSION is handled.
+    Verify that STOP_SESSION preserves Memory/Context for quick restart.
+    
+    The server intentionally preserves context (RAG, Cache, Profile) across
+    session stops to allow restarting without re-uploading documents.
+    Only conversation history is cleared.
     """
     mem_store, sess_store, mem_path, sess_path = mock_stores
     
@@ -56,17 +60,53 @@ async def test_fresh_start_on_stop(mock_stores):
     with patch.object(server, '_stop_audio_processing', new_callable=AsyncMock):
         await server._handle_stop_session(websocket, message)
     
-    # 4. Verify Persistent Stores are CLEARED
+    # 4. Verify Persistent Stores are PRESERVED (intentional design)
     
-    # Profile should be gone
-    assert mem_store.get_profile() is None
+    # Profile should still exist (for quick restart)
+    assert mem_store.get_profile() is not None
     
-    # Sessions should be gone
-    assert len(sess_store.list_sessions()) == 0
+    # Sessions should still exist (history is valuable)
+    assert len(sess_store.list_sessions()) == 1
     
-    # Verify context manager was cleared (existing logic)
-    server.context_manager.clear_context.assert_called_once()
+    # Context manager clear should NOT be called (intentional)
+    server.context_manager.clear_context.assert_not_called()
+    
+    # Conversation history should be cleared (ephemeral)
+    assert len(server.session_state.conversation_history) == 0
 
     # Cleanup
+    mem_store.close()
+    sess_store.close()
+
+
+@pytest.mark.asyncio
+async def test_stop_session_clears_conversation_history(mock_stores):
+    """Verify that conversation history is cleared on stop."""
+    mem_store, sess_store, mem_path, sess_path = mock_stores
+    
+    server = SidecarServer()
+    server.memory_store = mem_store
+    server.session_store = sess_store
+    server.context_manager = MagicMock()
+    server._stop_audio_processing = AsyncMock()
+    
+    # Add conversation history
+    server.session_state.conversation_history = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hi there!"}
+    ]
+    
+    websocket = AsyncMock()
+    message = Message(type=MessageType.STOP_SESSION)
+    
+    with patch.object(server, '_stop_audio_processing', new_callable=AsyncMock):
+        await server._handle_stop_session(websocket, message)
+    
+    # Conversation history should be cleared
+    assert len(server.session_state.conversation_history) == 0
+    
+    # Session status should be IDLE
+    assert server.session_state.status == SessionStatus.IDLE
+    
     mem_store.close()
     sess_store.close()

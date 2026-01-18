@@ -61,7 +61,13 @@ class TestServerRagIntegration:
             mock_init_rag.assert_called_with("test-key")
 
 
-    async def test_stop_session_clears_vector_store(self, server, mock_vector_store):
+    async def test_stop_session_preserves_vector_store(self, server, mock_vector_store):
+        """
+        Verify that STOP_SESSION preserves vector store for quick restart.
+        
+        The server intentionally preserves context (RAG, Cache, Profile) across
+        session stops to allow restarting without re-uploading documents.
+        """
         websocket = AsyncMock()
         server.vector_store = mock_vector_store
         
@@ -69,8 +75,10 @@ class TestServerRagIntegration:
         
         await server._handle_stop_session(websocket, message)
         
-        mock_vector_store.clear.assert_called_once()
-        assert server.vector_store is None
+        # Vector store should NOT be cleared (intentional design)
+        mock_vector_store.clear.assert_not_called()
+        # Vector store should still be available
+        assert server.vector_store is not None
 
     async def test_upload_context_adds_to_vector_store(self, server, mock_vector_store):
         websocket = AsyncMock()

@@ -42,12 +42,12 @@ describe('ProviderSettings', () => {
     render(<ProviderSettings />);
     
     // Wait for loading to finish by finding one of the inputs
-    const input = await screen.findByPlaceholderText('Enter OpenAI API Key', {}, { timeout: 3000 });
-    expect(input).toBeInTheDocument();
+    // Placeholder is now generic "Enter API key"
+    const inputs = await screen.findAllByPlaceholderText('Enter API key', {}, { timeout: 3000 });
+    expect(inputs.length).toBeGreaterThan(0);
 
-    // Find input for OpenAI
-    const inputs = screen.getAllByPlaceholderText(/Enter.*API Key/);
-    const openaiInput = inputs[3]; // OpenAI is 4th in the list
+    // OpenAI is 4th in the list (index 3)
+    const openaiInput = inputs[3];
     
     fireEvent.change(openaiInput, { target: { value: 'sk-test-key' } });
     
