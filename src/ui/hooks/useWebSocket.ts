@@ -535,6 +535,11 @@ export const useWebSocket = () => {
     const prefs = {
       sttProvider: store.preferredSttProvider,
       llmProvider: store.preferredLlmProvider,
+      // Model selections (Phase 7)
+      llmModel: store.preferredLlmModel,
+      sttModel: store.preferredSttModel,
+      streamingSttProvider: store.preferredStreamingSttProvider,
+      streamingSttModel: store.preferredStreamingSttModel,
     };
 
     sendMessage({

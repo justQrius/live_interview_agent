@@ -8,7 +8,11 @@ import logging
 from typing import Dict, List, Optional, Any
 
 from .base import STTProvider, LLMProvider, EmbeddingProvider, SearchProvider
-from .config import ProviderConfig, ProviderType, StreamingMode
+from .config import (
+    ProviderConfig, ProviderType, StreamingMode,
+    DeepgramModels, AssemblyAIModels, OpenAIModels,
+    GeminiModels, AnthropicModels, GroqModels,
+)
 from .stt.streaming_base import StreamingSTTProvider
 
 logger = logging.getLogger(__name__)
@@ -388,21 +392,27 @@ class ProviderFactory:
                 if not api_key:
                     return None
                 from .stt.deepgram_streaming import DeepgramStreamingProvider
-                return DeepgramStreamingProvider(api_key)
+                # Use configured model or default
+                model = self.config.streaming_stt_model or DeepgramModels.DEFAULT_STT
+                return DeepgramStreamingProvider(api_key, model=model)
 
             elif streaming_mode == StreamingMode.ASSEMBLYAI:
                 api_key = self.config.get_api_key(ProviderType.ASSEMBLYAI)
                 if not api_key:
                     return None
                 from .stt.assemblyai_streaming import AssemblyAIStreamingProvider
-                return AssemblyAIStreamingProvider(api_key)
+                # Use configured model or default
+                model = self.config.streaming_stt_model or AssemblyAIModels.DEFAULT_STT
+                return AssemblyAIStreamingProvider(api_key, model=model)
 
             elif streaming_mode == StreamingMode.OPENAI_REALTIME:
                 api_key = self.config.get_api_key(ProviderType.OPENAI)
                 if not api_key:
                     return None
                 from .stt.openai_realtime import OpenAIRealtimeProvider
-                return OpenAIRealtimeProvider(api_key)
+                # Use configured model or default
+                model = self.config.streaming_stt_model or OpenAIModels.REALTIME
+                return OpenAIRealtimeProvider(api_key, model=model)
 
         except ImportError as e:
             logger.warning(f"Failed to import {streaming_mode.value} streaming provider: {e}")
@@ -482,16 +492,24 @@ class ProviderFactory:
             # Lazy imports to avoid loading all provider dependencies
             if provider_type == ProviderType.GEMINI:
                 from .stt.gemini import GeminiSTTProvider
-                return GeminiSTTProvider(api_key)
+                # Use configured model or default
+                model = self.config.stt_model or GeminiModels.DEFAULT_STT
+                return GeminiSTTProvider(api_key, model_name=model)
             elif provider_type == ProviderType.GROQ:
                 from .stt.groq import GroqSTTProvider
-                return GroqSTTProvider(api_key)
+                # Use configured model or default
+                model = self.config.stt_model or GroqModels.DEFAULT_STT
+                return GroqSTTProvider(api_key, model=model)
             elif provider_type == ProviderType.DEEPGRAM:
                 from .stt.deepgram import DeepgramSTTProvider
-                return DeepgramSTTProvider(api_key)
+                # Use configured model or default
+                model = self.config.stt_model or DeepgramModels.DEFAULT_STT
+                return DeepgramSTTProvider(api_key, model=model)
             elif provider_type == ProviderType.OPENAI:
                 from .stt.openai import OpenAISTTProvider
-                return OpenAISTTProvider(api_key)
+                # Use configured model or default
+                model = self.config.stt_model or OpenAIModels.DEFAULT_STT
+                return OpenAISTTProvider(api_key, model=model)
         except ImportError as e:
             logger.warning(f"Failed to import {provider_type.value} STT provider: {e}")
         except Exception as e:
@@ -517,17 +535,24 @@ class ProviderFactory:
             # Lazy imports to avoid loading all provider dependencies
             if provider_type == ProviderType.GEMINI:
                 from .llm.gemini import GeminiLLMProvider
+                # Use configured model or default
+                model = self.config.llm_model or GeminiModels.DEFAULT_LLM
                 return GeminiLLMProvider(
                     api_key, 
+                    model_name=model,
                     thinking_budget=self.config.thinking_budget,
                     search_enabled=self.config.search_enabled
                 )
             elif provider_type == ProviderType.OPENAI:
                 from .llm.openai import OpenAILLMProvider
-                return OpenAILLMProvider(api_key)
+                # Use configured model or default
+                model = self.config.llm_model or OpenAIModels.DEFAULT_LLM
+                return OpenAILLMProvider(api_key, model=model)
             elif provider_type == ProviderType.ANTHROPIC:
                 from .llm.anthropic import AnthropicLLMProvider
-                return AnthropicLLMProvider(api_key)
+                # Use configured model or default
+                model = self.config.llm_model or AnthropicModels.DEFAULT_LLM
+                return AnthropicLLMProvider(api_key, model=model)
         except ImportError as e:
             logger.warning(f"Failed to import {provider_type.value} LLM provider: {e}")
         except Exception as e:

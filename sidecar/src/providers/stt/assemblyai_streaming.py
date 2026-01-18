@@ -39,27 +39,30 @@ except ImportError:
 
 class AssemblyAIStreamingProvider(StreamingSTTProvider):
     """
-    AssemblyAI streaming STT provider using WebSocket API.
+    AssemblyAI streaming STT provider using WebSocket API (v3).
     
-    Uses Universal-2 model with semantic end-of-turn detection
+    Uses Universal-2/Best model with semantic end-of-turn detection
     that returns a confidence score (0-1) for turn completion.
     
-    Pricing: $0.0025/15sec (~$0.01/min streaming)
+    Pricing: ~$0.15/hour (Universal model)
     Latency: P50 ~256ms for interim results
     
     Key feature: end_of_turn_confidence provides semantic
-    understanding of when a speaker's turn is complete,
-    not just acoustic silence detection.
+    understanding of when a speaker's turn is complete.
     """
     
-    # AssemblyAI WebSocket endpoint
-    WS_URL = "wss://api.assemblyai.com/v2/realtime/ws"
+    # AssemblyAI WebSocket endpoint (v3)
+    WS_URL = "wss://api.assemblyai.com/v3/realtime/ws"
     
     # Minimum confidence to consider turn complete
     DEFAULT_END_OF_TURN_THRESHOLD = 0.7
     
-    def __init__(self, api_key: str):
+    # Default model
+    DEFAULT_MODEL = "best"
+    
+    def __init__(self, api_key: str, model: str = "best"):
         super().__init__(api_key)
+        self.model = model or self.DEFAULT_MODEL
         if not WEBSOCKETS_AVAILABLE:
             raise ImportError(
                 "websockets is required for AssemblyAI streaming. "
