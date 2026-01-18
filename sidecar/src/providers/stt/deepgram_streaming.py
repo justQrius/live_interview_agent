@@ -35,8 +35,8 @@ try:
     SDK_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"Failed to import deepgram SDK: {e}")
-    AsyncDeepgramClient = None  # type: ignore
-    EventType = None  # type: ignore
+    AsyncDeepgramClient = Any  # type: ignore
+    EventType = Any  # type: ignore
 
 
 class DeepgramStreamingProvider(StreamingSTTProvider):
@@ -303,7 +303,7 @@ class DeepgramStreamingSession(StreamingSession):
         if self._connection and self._context_manager:
             try:
                 # Send close control message
-                from deepgram.extensions.types.sockets import ListenV1ControlMessage
+                from deepgram.extensions.types.sockets import ListenV1ControlMessage  # type: ignore
                 control = ListenV1ControlMessage(type="CloseStream")
                 await self._connection.send_control(control)
             except Exception as e:
@@ -327,7 +327,7 @@ class DeepgramStreamingSession(StreamingSession):
         
         try:
             # Send finalize control message
-            from deepgram.extensions.types.sockets import ListenV1ControlMessage
+            from deepgram.extensions.types.sockets import ListenV1ControlMessage  # type: ignore
             control = ListenV1ControlMessage(type="FinishStream")
             await self._connection.send_control(control)
             
