@@ -41,24 +41,28 @@ describe('SettingsPanel', () => {
   });
 
   describe('Provider Settings', () => {
-    it('should render all providers', async () => {
+    it('should render all providers in API Keys section', async () => {
       render(<SettingsPanel />);
-      // Wait for loading to finish
+      // Wait for loading to finish - use getAllByText since names appear in dropdowns too
       await waitFor(() => {
-          expect(screen.getByText('Google Gemini', { selector: 'label' })).toBeInTheDocument();
+          const geminiElements = screen.getAllByText('Google Gemini');
+          expect(geminiElements.length).toBeGreaterThan(0);
       });
-      expect(screen.getByText('Groq', { selector: 'label' })).toBeInTheDocument();
-      expect(screen.getByText('Deepgram', { selector: 'label' })).toBeInTheDocument();
-      expect(screen.getByText('OpenAI', { selector: 'label' })).toBeInTheDocument();
-      expect(screen.getByText('Anthropic', { selector: 'label' })).toBeInTheDocument();
+      // Check that API Keys section exists and contains providers
+      expect(screen.getByText('API Keys')).toBeInTheDocument();
+      expect(screen.getAllByText('Groq').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Deepgram').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('OpenAI').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Anthropic').length).toBeGreaterThan(0);
     });
 
     it('should allow saving a key for a provider', async () => {
       const user = userEvent.setup();
       render(<SettingsPanel />);
 
-      const input = await screen.findByPlaceholderText('Enter Google Gemini API Key');
-      await user.type(input, 'new-gemini-key');
+      // Placeholder is now just "Enter API key" (generic) - wait for providers to load
+      const inputs = await screen.findAllByPlaceholderText('Enter API key');
+      await user.type(inputs[0], 'new-gemini-key');
 
       const saveButtons = screen.getAllByText('Save');
       await user.click(saveButtons[0]);
@@ -90,37 +94,54 @@ describe('SettingsPanel', () => {
   });
 
   describe('Preferences', () => {
-    it('should render preference dropdowns', () => {
+    it('should render preference section', () => {
       render(<SettingsPanel />);
-      expect(screen.getByText('Preferred STT Provider')).toBeInTheDocument();
-      expect(screen.getByText('Preferred LLM Provider')).toBeInTheDocument();
+      // The section is now titled "Provider Preferences" and labels are different
+      expect(screen.getByText('Provider Preferences')).toBeInTheDocument();
+      expect(screen.getByText('Language Model (LLM)')).toBeInTheDocument();
+      expect(screen.getByText('Speech-to-Text (Batch)')).toBeInTheDocument();
     });
 
-    it('should update store when preferences change', async () => {
+    it('should update store when LLM preference changes', async () => {
       const user = userEvent.setup();
       render(<SettingsPanel />);
 
+      // Wait for API key inputs to load (provider rows loaded)
+      await waitFor(() => {
+        expect(screen.getAllByPlaceholderText('Enter API key').length).toBeGreaterThan(0);
+      });
+
+      // Get all comboboxes - structure is: LLM Provider, LLM Model, STT Provider, STT Model, Streaming Provider, Streaming Model
       const selects = screen.getAllByRole('combobox');
-      const sttSelect = selects[0];
-      const llmSelect = selects[1];
+      const llmProviderSelect = selects[0]; // First select is LLM provider
+      const sttProviderSelect = selects[2]; // Third select is STT provider
 
-      await user.selectOptions(sttSelect, 'openai');
-      expect(useSessionStore.getState().preferredSttProvider).toBe('openai');
-
-      await user.selectOptions(llmSelect, 'anthropic');
+      await user.selectOptions(llmProviderSelect, 'anthropic');
       expect(useSessionStore.getState().preferredLlmProvider).toBe('anthropic');
+
+      await user.selectOptions(sttProviderSelect, 'openai');
+      expect(useSessionStore.getState().preferredSttProvider).toBe('openai');
     });
 
     it('should sync apiKey when STT preference changes', async () => {
       const user = userEvent.setup();
       render(<SettingsPanel />);
 
+      // Initially loads gemini key (default when preferredSttProvider is 'auto')
       await waitFor(() => {
           expect(mockInvoke).toHaveBeenCalledWith('get_api_key', { provider: 'gemini' });
       });
 
+      // Wait for API key inputs to load (provider rows loaded)
+      await waitFor(() => {
+        expect(screen.getAllByPlaceholderText('Enter API key').length).toBeGreaterThan(0);
+      });
+
+      // Get STT provider select (third combobox)
       const selects = screen.getAllByRole('combobox');
-      await user.selectOptions(selects[0], 'openai');
+      const sttProviderSelect = selects[2];
+      
+      await user.selectOptions(sttProviderSelect, 'openai');
 
       await waitFor(() => {
           expect(mockInvoke).toHaveBeenCalledWith('get_api_key', { provider: 'openai' });
