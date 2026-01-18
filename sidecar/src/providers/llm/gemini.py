@@ -244,11 +244,18 @@ class GeminiLLMProvider(LLMProvider):
                             yielded_any = True
                         elif hasattr(chunk, 'candidates') and chunk.candidates:
                              # Fallback for structured response access
-                             parts = chunk.candidates[0].content.parts
-                             for part in parts:
-                                 if part.text:
-                                     yield part.text
-                                     yielded_any = True
+                             if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
+                                 parts = chunk.candidates[0].content.parts
+                                 for part in parts:
+                                     # Handle thinking trace (Phase 7 Gen 1)
+                                     if hasattr(part, 'thought') and part.thought:
+                                         # Format thoughts as blockquotes for UI rendering
+                                         yield f"\n> *Thinking: {part.thought}*\n\n"
+                                         yielded_any = True
+                                     
+                                     if hasattr(part, 'text') and part.text:
+                                         yield part.text
+                                         yielded_any = True
                     
                     # If we finished successfully, break the fallback loop (return from function)
                     return
