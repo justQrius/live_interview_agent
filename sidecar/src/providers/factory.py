@@ -7,7 +7,7 @@ Supports both batch and streaming STT providers.
 import logging
 from typing import Dict, List, Optional, Any
 
-from .base import STTProvider, LLMProvider, EmbeddingProvider, SearchProvider
+from .base import STTProvider, LLMProvider, SearchProvider
 from .config import (
     ProviderConfig, ProviderType, StreamingMode,
     DeepgramModels, AssemblyAIModels, OpenAIModels,
@@ -71,7 +71,7 @@ class ProviderFactory:
         # Provider caches
         self._stt_cache: Dict[ProviderType, STTProvider] = {}
         self._llm_cache: Dict[ProviderType, LLMProvider] = {}
-        self._embedding_cache: Dict[ProviderType, EmbeddingProvider] = {}
+        self._embedding_cache: Dict[ProviderType, Any] = {}  # ChromaDB EmbeddingFunction
         self._search_cache: Dict[ProviderType, SearchProvider] = {}
         self._streaming_stt_cache: Dict[StreamingMode, StreamingSTTProvider] = {}
 

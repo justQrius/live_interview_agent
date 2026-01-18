@@ -174,30 +174,6 @@ class LLMProvider(ABC):
         """
         pass
 
-class EmbeddingProvider(ABC):
-    """
-    Abstract Base Class for Embedding providers.
-    """
-
-    def is_available(self) -> bool:
-        """
-        Check if the provider is available and ready to use.
-
-        Returns:
-            True if provider is ready to accept requests
-        """
-        return True
-
-    @abstractmethod
-    async def embed_text(self, text: str) -> List[float]:
-        """
-        Generate embeddings for a single text string.
-        """
-        pass
-    
-    @abstractmethod
-    async def batch_embed_text(self, texts: List[str]) -> List[List[float]]:
-        """
-        Generate embeddings for a list of text strings.
-        """
-        pass
+# NOTE: EmbeddingProvider ABC was removed as unused.
+# The actual embedding implementation (GeminiEmbeddingFunction) inherits from
+# ChromaDB's EmbeddingFunction interface directly. See rag/gemini_embeddings.py.

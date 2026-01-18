@@ -2,6 +2,10 @@
 //
 // This module handles spawning and terminating the Python sidecar process
 // that runs the WebSocket server for audio processing and LLM integration.
+//
+// NOTE: These commands are registered but not yet invoked from the frontend.
+// Current workflow requires manual sidecar start via terminal.
+// TODO: Integrate into App initialization for production builds.
 
 use std::process::{Child, Command};
 use std::sync::Mutex;

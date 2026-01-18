@@ -50,8 +50,6 @@ DEFAULT_PRIORITIES = [
 ]
 
 
-from .engine import RAGEngine
-
 class EnhancedRAGEngine(RAGEngine):
     """
     Enhanced RAG Engine with question-type-aware retrieval.

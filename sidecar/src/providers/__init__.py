@@ -7,7 +7,6 @@ multiple STT, LLM, and Embedding providers with automatic fallback.
 from .base import (
     STTProvider,
     LLMProvider,
-    EmbeddingProvider,
     TranscriptionResult,
 )
 from .config import ProviderConfig, ProviderType
@@ -19,7 +18,6 @@ __all__ = [
     # Base interfaces
     "STTProvider",
     "LLMProvider",
-    "EmbeddingProvider",
     "TranscriptionResult",
     # Config
     "ProviderConfig",
