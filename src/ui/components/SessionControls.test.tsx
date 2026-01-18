@@ -52,6 +52,10 @@ describe('SessionControls', () => {
       apiKey: null,
       preferredSttProvider: 'auto',
       preferredLlmProvider: 'auto',
+      preferredSttModel: 'auto',
+      preferredLlmModel: 'auto',
+      preferredStreamingSttProvider: 'auto',
+      preferredStreamingSttModel: 'auto',
       currentTranscription: null,
       currentAnswer: null,
       transcriptionHistory: [],
@@ -73,7 +77,8 @@ describe('SessionControls', () => {
 
     it('should show connected status when connected', async () => {
       await renderSessionControls();
-      expect(screen.getByText('Connected to sidecar')).toBeInTheDocument();
+      // UI now shows "Connected" in a status card with "Sidecar" label above
+      expect(screen.getByText('Connected')).toBeInTheDocument();
     });
 
     it('should show idle status initially', async () => {
@@ -84,8 +89,9 @@ describe('SessionControls', () => {
     it('should show all control buttons', async () => {
       await renderSessionControls();
       expect(screen.getByRole('button', { name: /start session/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /stop session/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /calibrate voice/i })).toBeInTheDocument();
+      // Button text is now just "Stop" and "Calibrate"
+      expect(screen.getByRole('button', { name: /^stop$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^calibrate$/i })).toBeInTheDocument();
     });
   });
 
@@ -105,7 +111,8 @@ describe('SessionControls', () => {
 
       await renderSessionControls();
 
-      const startButton = await screen.findByRole('button', { name: /configure api key first/i });
+      // Button text is now "Configure Key" when no API key exists
+      const startButton = await screen.findByRole('button', { name: /configure key/i });
       await waitFor(() => expect(startButton).toBeDisabled());
     });
 
@@ -122,7 +129,14 @@ describe('SessionControls', () => {
         type: 'START_SESSION',
         data: {
           apiKeys: expect.any(Object),
-          preferences: { sttProvider: 'auto', llmProvider: 'auto' },
+          preferences: {
+            sttProvider: 'auto',
+            llmProvider: 'auto',
+            sttModel: 'auto',
+            llmModel: 'auto',
+            streamingSttProvider: 'auto',
+            streamingSttModel: 'auto',
+          },
         },
       });
     });
@@ -143,7 +157,8 @@ describe('SessionControls', () => {
       useSessionStore.setState({ status: 'listening' });
       await renderSessionControls();
 
-      const startButton = await screen.findByRole('button', { name: /start session/i });
+      // When session is active, button text changes to "Session Active"
+      const startButton = await screen.findByRole('button', { name: /session active/i });
       expect(startButton).toBeDisabled();
     });
   });
@@ -155,30 +170,31 @@ describe('SessionControls', () => {
 
     it('should enable stop button when session is active', async () => {
       await renderSessionControls();
-      expect(screen.getByRole('button', { name: /stop session/i })).not.toBeDisabled();
+      // Button text is now just "Stop"
+      expect(screen.getByRole('button', { name: /^stop$/i })).not.toBeDisabled();
     });
 
     it('should disable stop button when idle', async () => {
       useSessionStore.setState({ status: 'idle' });
       await renderSessionControls();
-      expect(screen.getByRole('button', { name: /stop session/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^stop$/i })).toBeDisabled();
     });
 
     it('should show confirmation modal when stop clicked', async () => {
       const user = userEvent.setup();
       await renderSessionControls();
 
-      await user.click(screen.getByRole('button', { name: /stop session/i }));
+      await user.click(screen.getByRole('button', { name: /^stop$/i }));
 
       expect(screen.getByText('Stop Session?')).toBeInTheDocument();
-      expect(screen.getByText(/This will stop the current session/i)).toBeInTheDocument();
+      expect(screen.getByText(/This will clear all transcriptions and answers/i)).toBeInTheDocument();
     });
 
     it('should close modal when cancel clicked', async () => {
       const user = userEvent.setup();
       await renderSessionControls();
 
-      await user.click(screen.getByRole('button', { name: /stop session/i }));
+      await user.click(screen.getByRole('button', { name: /^stop$/i }));
       await user.click(screen.getByRole('button', { name: /cancel/i }));
 
       expect(screen.queryByText('Stop Session?')).not.toBeInTheDocument();
@@ -202,8 +218,9 @@ describe('SessionControls', () => {
 
       await renderSessionControls();
 
+      await user.click(screen.getByRole('button', { name: /^stop$/i }));
+      // The modal has a "Stop Session" button to confirm
       await user.click(screen.getByRole('button', { name: /stop session/i }));
-      await user.click(screen.getAllByRole('button', { name: /stop session/i })[1]);
 
       expect(mockSendMessage).toHaveBeenCalledWith({ type: 'STOP_SESSION' });
       expect(useSessionStore.getState().status).toBe('idle');
@@ -215,154 +232,47 @@ describe('SessionControls', () => {
   describe('calibrate voice', () => {
     it('should enable calibrate button when idle and connected', async () => {
       await renderSessionControls();
-      expect(screen.getByRole('button', { name: /calibrate voice/i })).not.toBeDisabled();
+      // Button text is now just "Calibrate"
+      expect(screen.getByRole('button', { name: /^calibrate$/i })).not.toBeDisabled();
     });
 
     it('should disable calibrate button when not idle', async () => {
       useSessionStore.setState({ status: 'listening' });
       await renderSessionControls();
-      expect(screen.getByRole('button', { name: /calibrate voice/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^calibrate$/i })).toBeDisabled();
     });
 
     it('should set status to calibrating on click', async () => {
       const user = userEvent.setup();
       await renderSessionControls();
 
-      await user.click(screen.getByRole('button', { name: /calibrate voice/i }));
+      await user.click(screen.getByRole('button', { name: /^calibrate$/i }));
 
       expect(useSessionStore.getState().status).toBe('calibrating');
     });
   });
 
-  describe('manual question input', () => {
-    beforeEach(() => {
-      useSessionStore.setState({ status: 'listening' });
-    });
-
-    it('should show manual question input when listening', async () => {
-      await renderSessionControls();
-      expect(screen.getByLabelText(/ask a question manually/i)).toBeInTheDocument();
-      expect(screen.getByPlaceholderText(/type a question/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /send question/i })).toBeInTheDocument();
-    });
-
-    it('should hide manual question input when not listening', async () => {
-      useSessionStore.setState({ status: 'idle' });
-      await renderSessionControls();
-      expect(screen.queryByLabelText(/ask a question manually/i)).not.toBeInTheDocument();
-    });
-
-    it('should disable send button when input is empty', async () => {
-      await renderSessionControls();
-      expect(screen.getByRole('button', { name: /send question/i })).toBeDisabled();
-    });
-
-    it('should enable send button when input has text', async () => {
-      const user = userEvent.setup();
-      await renderSessionControls();
-
-      await user.type(screen.getByPlaceholderText(/type a question/i), 'Test question');
-
-      expect(screen.getByRole('button', { name: /send question/i })).not.toBeDisabled();
-    });
-
-    it('should send MANUAL_QUESTION message on click', async () => {
-      const user = userEvent.setup();
-      await renderSessionControls();
-
-      await user.type(screen.getByPlaceholderText(/type a question/i), 'What is React?');
-      await user.click(screen.getByRole('button', { name: /send question/i }));
-
-      expect(mockSendMessage).toHaveBeenCalledWith({
-        type: 'MANUAL_QUESTION',
-        data: { question: 'What is React?' },
-      });
-    });
-
-    it('should clear input after sending', async () => {
-      const user = userEvent.setup();
-      await renderSessionControls();
-
-      const input = screen.getByPlaceholderText(/type a question/i);
-      await user.type(input, 'Test question');
-      await user.click(screen.getByRole('button', { name: /send question/i }));
-
-      expect(input).toHaveValue('');
-    });
-
-    it('should send message on Enter key', async () => {
-      const user = userEvent.setup();
-      await renderSessionControls();
-
-      const input = screen.getByPlaceholderText(/type a question/i);
-      await user.type(input, 'Enter test{Enter}');
-
-      expect(mockSendMessage).toHaveBeenCalledWith({
-        type: 'MANUAL_QUESTION',
-        data: { question: 'Enter test' },
-      });
-    });
-
-    it('should not send on Shift+Enter', async () => {
-      const user = userEvent.setup();
-      await renderSessionControls();
-
-      const input = screen.getByPlaceholderText(/type a question/i);
-      await user.type(input, 'Test{Shift>}{Enter}{/Shift}more text');
-
-      expect(mockSendMessage).not.toHaveBeenCalled();
-    });
-
-    it('should not send whitespace-only input', async () => {
-      const user = userEvent.setup();
-      await renderSessionControls();
-
-      await user.type(screen.getByPlaceholderText(/type a question/i), '   ');
-      await user.click(screen.getByRole('button', { name: /send question/i }));
-
-      expect(mockSendMessage).not.toHaveBeenCalled();
-    });
-
-    it('should clear current answer before sending new question', async () => {
-      const user = userEvent.setup();
-      useSessionStore.setState({
-        status: 'listening',
-        currentAnswer: {
-          question: 'Old Q',
-          answerText: 'Old A',
-          confidence: 'high',
-          timestamp: Date.now(),
-          isComplete: true,
-        },
-      });
-
-      await renderSessionControls();
-
-      await user.type(screen.getByPlaceholderText(/type a question/i), 'New question');
-      await user.click(screen.getByRole('button', { name: /send question/i }));
-
-      expect(useSessionStore.getState().currentAnswer?.question).toBe("New question");
-      expect(useSessionStore.getState().currentAnswer?.answerText).toBe("");
-    });
-  });
+  // Note: Manual question input functionality was moved to AnswerDisplay component.
+  // Those tests are now in AnswerDisplay.test.tsx;
 
   describe('status display', () => {
     it('should show listening status', async () => {
       useSessionStore.setState({ status: 'listening' });
       await renderSessionControls();
-      expect(screen.getByText('Listening...')).toBeInTheDocument();
+      // Status text no longer has ellipsis
+      expect(screen.getByText('Listening')).toBeInTheDocument();
     });
 
     it('should show processing status', async () => {
       useSessionStore.setState({ status: 'processing' });
       await renderSessionControls();
-      expect(screen.getByText('Processing...')).toBeInTheDocument();
+      expect(screen.getByText('Processing')).toBeInTheDocument();
     });
 
     it('should show calibrating status', async () => {
       useSessionStore.setState({ status: 'calibrating' });
       await renderSessionControls();
-      expect(screen.getByText('Calibrating...')).toBeInTheDocument();
+      expect(screen.getByText('Calibrating')).toBeInTheDocument();
     });
   });
 });
