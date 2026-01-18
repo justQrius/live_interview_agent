@@ -13,6 +13,7 @@ from .streaming_base import (
     EndpointingType,
 )
 from .deepgram_streaming import DeepgramStreamingProvider
+from .deepgram_flux import DeepgramFluxProvider
 from .assemblyai_streaming import AssemblyAIStreamingProvider
 from .openai_realtime import OpenAIRealtimeProvider
 from .streaming_manager import StreamingSTTManager, StreamingSTTCallbacks
@@ -31,6 +32,7 @@ __all__ = [
     "EndpointingType",
     # Streaming providers
     "DeepgramStreamingProvider",
+    "DeepgramFluxProvider",
     "AssemblyAIStreamingProvider",
     "OpenAIRealtimeProvider",
     # Streaming manager

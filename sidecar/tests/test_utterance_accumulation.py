@@ -59,10 +59,11 @@ class TestAccumulatorConfigDefaults:
         """Default confidence thresholds should be set correctly."""
         config = AccumulatorConfig()
 
-        assert config.tier1_confidence == 0.90
-        assert config.tier2_confidence == 0.80
-        assert config.tier3_confidence == 0.75
-        assert config.llm_fallback_threshold == 0.70
+        # Lowered thresholds for Phase 7 to allow more statements to finalize
+        assert config.tier1_confidence == 0.80
+        assert config.tier2_confidence == 0.75
+        assert config.tier3_confidence == 0.70
+        assert config.llm_fallback_threshold == 0.65
 
     def test_default_feature_flags(self):
         """Default feature flags should be set correctly."""
@@ -754,7 +755,7 @@ class TestUtteranceAccumulatorSpeakerChange:
         """Speaker change should finalize previous speaker's buffer."""
         # First speaker segment
         await accumulator.add_segment(
-            text="Tell me about your experience",
+            text="So basically",  # Filler phrase - won't complete immediately
             speaker="Interviewer",
             timestamp=1000.0
         )
@@ -768,7 +769,7 @@ class TestUtteranceAccumulatorSpeakerChange:
 
         assert result is not None
         assert result.speaker == "Interviewer"
-        assert result.text == "Tell me about your experience"
+        assert result.text == "So basically"
         assert "speaker_change" in result.tier_used.lower()
 
     @pytest.mark.asyncio

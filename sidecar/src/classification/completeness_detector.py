@@ -325,23 +325,41 @@ class CompletenessDetector:
         # Period with question-like or imperative structure
         if text.rstrip().endswith("."):
             lower = text.lower()
-            # Check if it looks like a command/request
+            word_count = len(text.split())
+            
+            # Check if it looks like a command/request (starts with imperative)
             imperative_starters = [
                 "tell me", "describe", "explain", "walk me through",
                 "give me", "share", "outline", "discuss"
             ]
             if any(lower.startswith(starter) for starter in imperative_starters):
                 return CompletenessResult.complete(
-                    confidence=0.85,
+                    confidence=0.90,
                     tier=DetectionTier.TIER1_PUNCTUATION.value,
                     reason="Imperative statement with period"
                 )
             
-            # Generic period - less confident, might be transcript artifact
-            word_count = len(text.split())
+            # Check if it CONTAINS an imperative verb (e.g., "So I have a question. Describe your...")
+            imperative_verbs = ["describe", "explain", "tell me", "walk me through", "give me", "share", "outline"]
+            if any(verb in lower for verb in imperative_verbs) and word_count >= 5:
+                return CompletenessResult.complete(
+                    confidence=0.88,
+                    tier=DetectionTier.TIER1_PUNCTUATION.value,
+                    reason="Contains imperative verb with period"
+                )
+            
+            # Long substantive statement with period - high confidence
+            if word_count >= 10:
+                return CompletenessResult.complete(
+                    confidence=0.85,
+                    tier=DetectionTier.TIER1_PUNCTUATION.value,
+                    reason="Long statement with period (very substantive)"
+                )
+            
+            # Medium length statement with period
             if word_count >= 5:
                 return CompletenessResult.complete(
-                    confidence=0.75,
+                    confidence=0.80,
                     tier=DetectionTier.TIER1_PUNCTUATION.value,
                     reason="Statement with period (substantive)"
                 )

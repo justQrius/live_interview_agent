@@ -81,10 +81,11 @@ class AccumulatorConfig:
     max_duration_s: float = 30.0
 
     # Completeness detection thresholds
-    tier1_confidence: float = 0.90
-    tier2_confidence: float = 0.80
-    tier3_confidence: float = 0.75
-    llm_fallback_threshold: float = 0.70
+    # Lowered tier1 from 0.90 to 0.80 to allow more statements with periods to finalize
+    tier1_confidence: float = 0.80
+    tier2_confidence: float = 0.75
+    tier3_confidence: float = 0.70
+    llm_fallback_threshold: float = 0.65
 
     # Feature flags
     enabled: bool = True

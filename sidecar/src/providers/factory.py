@@ -51,9 +51,11 @@ class ProviderFactory:
     ]
 
     # Streaming STT provider order (for real-time transcription)
+    # Prefer semantic endpointing providers (Flux, AssemblyAI) over acoustic (Nova-3)
     DEFAULT_STREAMING_STT_ORDER = [
-        StreamingMode.DEEPGRAM,      # Fast, reliable (~150ms)
-        StreamingMode.ASSEMBLYAI,    # Semantic endpointing
+        StreamingMode.DEEPGRAM_FLUX,  # Semantic endpointing, ~100ms (RECOMMENDED)
+        StreamingMode.ASSEMBLYAI,     # Semantic endpointing, ~256ms
+        StreamingMode.DEEPGRAM,       # Acoustic endpointing, ~150ms (fallback)
         StreamingMode.OPENAI_REALTIME,  # Best semantic VAD (expensive)
     ]
 
@@ -367,6 +369,8 @@ class ProviderFactory:
         """Check if API key exists for streaming provider."""
         if streaming_mode == StreamingMode.DEEPGRAM:
             return self.config.has_api_key(ProviderType.DEEPGRAM)
+        elif streaming_mode == StreamingMode.DEEPGRAM_FLUX:
+            return self.config.has_api_key(ProviderType.DEEPGRAM)
         elif streaming_mode == StreamingMode.ASSEMBLYAI:
             return self.config.has_api_key(ProviderType.ASSEMBLYAI)
         elif streaming_mode == StreamingMode.OPENAI_REALTIME:
@@ -392,9 +396,18 @@ class ProviderFactory:
                 if not api_key:
                     return None
                 from .stt.deepgram_streaming import DeepgramStreamingProvider
-                # Use configured model or default
+                # Use configured model or default (Nova-3 for acoustic)
                 model = self.config.streaming_stt_model or DeepgramModels.DEFAULT_STT
                 return DeepgramStreamingProvider(api_key, model=model)
+
+            elif streaming_mode == StreamingMode.DEEPGRAM_FLUX:
+                api_key = self.config.get_api_key(ProviderType.DEEPGRAM)
+                if not api_key:
+                    return None
+                from .stt.deepgram_flux import DeepgramFluxProvider
+                # Flux model with semantic endpointing
+                model = self.config.streaming_stt_model or DeepgramModels.FLUX
+                return DeepgramFluxProvider(api_key, model=model)
 
             elif streaming_mode == StreamingMode.ASSEMBLYAI:
                 api_key = self.config.get_api_key(ProviderType.ASSEMBLYAI)
@@ -429,7 +442,7 @@ class ProviderFactory:
             List of available StreamingMode values
         """
         available = []
-        for mode in [StreamingMode.DEEPGRAM, StreamingMode.ASSEMBLYAI, StreamingMode.OPENAI_REALTIME]:
+        for mode in [StreamingMode.DEEPGRAM_FLUX, StreamingMode.DEEPGRAM, StreamingMode.ASSEMBLYAI, StreamingMode.OPENAI_REALTIME]:
             if self._has_streaming_api_key(mode):
                 available.append(mode)
         return available
