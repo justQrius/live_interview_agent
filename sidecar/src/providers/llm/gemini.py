@@ -86,6 +86,10 @@ class GeminiLLMProvider(LLMProvider):
         self._cached_content_name = cached_content_name
         logger.info(f"Using cached content: {cached_content_name}")
 
+    def has_cached_content(self) -> bool:
+        """Check if cached content is currently active."""
+        return bool(self._cached_content_name)
+
     def clear_cache(self):
         """Clear the cached content reference."""
         self._cached_content_name = None
