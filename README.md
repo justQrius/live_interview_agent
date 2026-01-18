@@ -5,7 +5,7 @@ A cross-platform desktop application that provides real-time AI assistance durin
 ## Key Features
 
 ### Core Capabilities
-- **Multi-Provider Support**: Choose from **Groq** (ultra-fast), **Deepgram**, or **Gemini** for STT, and **OpenAI**, **Anthropic**, or **Gemini** for LLM reasoning.
+- **Multi-Provider Support**: Choose from **Groq** (ultra-fast), **Deepgram** (Nova-3), or **Gemini** for STT, and **OpenAI** (GPT-5), **Anthropic** (Claude 4), or **Gemini** (Gemini 3) for LLM reasoning.
 - **Real-time Audio Capture & Transcription**: High-accuracy speech recognition with speaker diarization.
 - **Context-Aware Assistance**: RAG-powered answers grounded in your resume and job description.
 - **Stealth Mode**: Invisible during screen shares.
@@ -42,20 +42,21 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Real-time Accumulation Indicator**: UI shows buffering state with segment count and preview.
 - **Configurable Thresholds**: All timeouts and limits controllable via environment variables.
 
-### Streaming STT & Semantic Endpointing (Phase 7)
+### Streaming STT & Semantic Endpointing (Phase 7 - 2026 Gen 1)
 - **Real-time Streaming Transcription**: WebSocket-based streaming STT for instant interim results as the interviewer speaks.
 - **Semantic Endpointing**: Providers like AssemblyAI and OpenAI Realtime detect turn completion based on meaning, not just pauses.
 - **Hybrid Mode**: Combines streaming semantic endpointing with timing-based accumulation for best of both worlds.
-- **Three Streaming Providers**:
-  - **Deepgram** (~150ms latency): Acoustic endpointing via `utterance_end_ms`
-  - **AssemblyAI** (~256ms latency): Semantic endpointing via `end_of_turn_confidence`
-  - **OpenAI Realtime** (~300ms latency): GPT-4o semantic VAD
+- **Gen 1 2026 Providers**:
+  - **Deepgram** (~150ms latency): **Nova-3** model with acoustic endpointing via `utterance_end_ms`.
+  - **AssemblyAI** (~256ms latency): **V3 Endpoint** with semantic endpointing via `end_of_turn_confidence`.
+  - **OpenAI Realtime** (~250ms latency): **GPT-Realtime** (GA) semantic VAD.
 - **Automatic Fallback**: Gracefully degrades to batch STT if streaming unavailable.
 - **~30-50% Latency Improvement**: Streaming eliminates VAD buffering delays.
 
 ### User Interface
 - **True Dark Mode**: OLED-friendly deep dark theme (`#080808` background) for reduced eye strain and premium aesthetics.
 - **Settings Overlay**: Clean, non-intrusive settings modal for managing keys and preferences.
+- **High Reasoning Mode**: "Extended Thinking" toggle for complex logic using GPT-5.2 or Claude 4 Opus.
 - **Real-time Status Indicators**: Visual feedback for transcription, processing, and answer generation states.
 - **Coaching Panel**: Integrated panel showing story suggestions, structure hints, and consistency warnings.
 
