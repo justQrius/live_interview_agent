@@ -11,7 +11,7 @@ from typing import List, Dict, AsyncGenerator
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from src.providers.base import STTProvider, LLMProvider, EmbeddingProvider, TranscriptionResult
+from src.providers.base import STTProvider, LLMProvider, TranscriptionResult
 from src.providers.config import ProviderConfig, ProviderType
 from src.providers.factory import ProviderFactory, ProviderError
 
@@ -52,21 +52,8 @@ class MockLLMProvider(LLMProvider):
         return self._available
 
 
-class MockEmbeddingProvider(EmbeddingProvider):
-    """Mock Embedding provider for testing."""
-
-    def __init__(self, name: str, available: bool = True):
-        self.name = name
-        self._available = available
-
-    async def embed_text(self, text: str) -> List[float]:
-        return [0.1, 0.2, 0.3]
-
-    async def batch_embed_text(self, texts: List[str]) -> List[List[float]]:
-        return [[0.1, 0.2, 0.3] for _ in texts]
-
-    def is_available(self) -> bool:
-        return self._available
+# NOTE: MockEmbeddingProvider removed - EmbeddingProvider ABC was deprecated.
+# Actual embedding uses ChromaDB's EmbeddingFunction interface.
 
 
 # =============================================================================

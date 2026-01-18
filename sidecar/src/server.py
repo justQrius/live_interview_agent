@@ -92,7 +92,7 @@ from src.protocol import create_accumulating_message
 from src.context.gemini_cache import GeminiCacheManager
 from src.context.file_uploader import GeminiFileUploader, DocumentType as FileDocumentType
 from src.rag.gemini_embeddings import GeminiEmbeddingFunction
-from src.context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
+# Note: EnhancedContextManager already imported above (line 60)
 
 # Configure logging
 logging.basicConfig(

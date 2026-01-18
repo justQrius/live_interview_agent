@@ -23,34 +23,6 @@ from typing import Any, Dict, List, Optional, Pattern, Tuple, cast
 ClassificationResult = Tuple[bool, float, str]
 
 
-class _AwaitableClassificationResult:
-    def __init__(self, value: ClassificationResult):
-        self._value = value
-
-    def __iter__(self):
-        return iter(self._value)
-
-    def __getitem__(self, index: int):
-        return self._value[index]
-
-    def __len__(self):
-        return len(self._value)
-
-    def __await__(self):
-        async def _wrap():
-            return self._value
-
-        return _wrap().__await__()
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, _AwaitableClassificationResult):
-            return self._value == other._value
-        return self._value == other
-
-    def __repr__(self) -> str:
-        return repr(self._value)
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -210,21 +182,23 @@ class QuestionDetector:
         self,
         text: Optional[str],
         conversation_history: Optional[List[Dict[str, str]]] = None,
-    ) -> Any:
+    ) -> ClassificationResult:
         """
         Determine if text is an actionable question requiring a response.
         
         Uses cascaded classification:
         - Tier 1: Fast rule-based (<2ms) - handles obvious cases with high confidence
         - Tier 2: Context-aware (<10ms) - uses history for ambiguous cases
-        - Tier 3: LLM verification (~150ms) - uses LLM for low-confidence triggers
+        
+        Returns:
+            ClassificationResult tuple: (is_actionable, confidence, classification_type)
         """
         # Tier 1: Rule-based (fast, handles obvious cases)
         result = self._rule_based_classification(text)
 
         # If high confidence, return immediately
         if result[1] >= 0.80:
-            return _AwaitableClassificationResult(result)
+            return result
 
         # Tier 2: Context-aware (use history for ambiguous cases)
         if conversation_history and len(conversation_history) > 0:
@@ -232,14 +206,20 @@ class QuestionDetector:
             if context_result[1] > result[1]:
                 result = context_result
 
-        return _AwaitableClassificationResult(result)
+        return result
 
     async def is_actionable_question_async(
         self,
         text: Optional[str],
         conversation_history: Optional[List[Dict[str, str]]] = None,
     ) -> ClassificationResult:
-        result = tuple(self.is_actionable_question(text, conversation_history))
+        """
+        Async version with Tier 3 LLM fallback for ambiguous cases.
+        
+        Use this when you need the highest accuracy and can afford ~150ms latency
+        for ambiguous cases.
+        """
+        result = self.is_actionable_question(text, conversation_history)
 
         if (
             self.llm_provider

@@ -45,3 +45,7 @@ docs/
 AGENTS.md
 CLAUDE.md
 .sisyphus/
+nul
+Screenshot*.png
+all_imports.txt
+definitions_*.txt

@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from src.providers.base import (
     STTProvider, 
     LLMProvider, 
-    EmbeddingProvider, 
     TranscriptionResult
 )
 
@@ -68,33 +67,6 @@ async def test_llm_provider_concrete_implementation():
     
     assert "".join(chunks) == "hello world"
 
-# --- Embedding Provider Tests ---
-
-def test_embedding_provider_cannot_instantiate_abc():
-    with pytest.raises(TypeError):
-        EmbeddingProvider()
-
-def test_embedding_provider_enforces_interface():
-    class IncompleteEmbed(EmbeddingProvider):
-        async def embed_text(self, text: str) -> List[float]:
-            return [0.1]
-        # Missing batch_embed_text
-        
-    with pytest.raises(TypeError):
-        IncompleteEmbed()
-
-@pytest.mark.asyncio
-async def test_embedding_provider_concrete_implementation():
-    class MockEmbed(EmbeddingProvider):
-        async def embed_text(self, text: str) -> List[float]:
-            return [0.1, 0.2]
-        
-        async def batch_embed_text(self, texts: List[str]) -> List[List[float]]:
-            return [[0.1], [0.2]]
-
-    provider = MockEmbed()
-    vec = await provider.embed_text("test")
-    assert vec == [0.1, 0.2]
-    
-    batch = await provider.batch_embed_text(["a", "b"])
-    assert len(batch) == 2
+# NOTE: EmbeddingProvider ABC was removed as unused.
+# The actual embedding implementation inherits from ChromaDB's EmbeddingFunction.
+# See rag/gemini_embeddings.py for the concrete implementation.
