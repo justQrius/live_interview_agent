@@ -26,9 +26,10 @@ class TestGeminiLLMProviderInit:
 
         provider = GeminiLLMProvider(api_key="test_key")
 
-        mock_client_cls.assert_called_once_with(api_key="test_key")
+        # GeminiClient is called with positional arg
+        mock_client_cls.assert_called_once_with("test_key")
         assert provider._api_key == "test_key"
-        assert provider._available is True
+        assert provider.is_available() is True
         assert provider._client is mock_client
 
     def test_init_requires_api_key(self):

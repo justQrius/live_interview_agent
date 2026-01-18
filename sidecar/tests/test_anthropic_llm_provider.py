@@ -67,14 +67,30 @@ async def test_generate_response_streaming():
 
         assert call_kwargs["model"] == "claude-3-5-sonnet-20240620"
         assert call_kwargs["max_tokens"] == 1024
-        assert call_kwargs["system"] == "SYS"
+        
+        # System now uses cache_control format (list of content blocks)
+        system_content = call_kwargs["system"]
+        assert isinstance(system_content, list)
+        assert len(system_content) == 1
+        assert system_content[0]["type"] == "text"
+        assert system_content[0]["text"] == "SYS"
+        assert system_content[0]["cache_control"] == {"type": "ephemeral"}
 
-        expected_messages = [
-            {"role": "user", "content": "Previous question"},
-            {"role": "assistant", "content": "Previous answer"},
-            {"role": "user", "content": "CTX\n\nQuestion:\nCurrent question"},
-        ]
-        assert call_kwargs["messages"] == expected_messages
+        # Messages now have content as list with cache_control on last user message
+        messages = call_kwargs["messages"]
+        assert len(messages) == 3
+        
+        # History messages remain plain
+        assert messages[0] == {"role": "user", "content": "Previous question"}
+        assert messages[1] == {"role": "assistant", "content": "Previous answer"}
+        
+        # Last user message has cache_control format
+        assert messages[2]["role"] == "user"
+        last_content = messages[2]["content"]
+        assert isinstance(last_content, list)
+        assert last_content[0]["type"] == "text"
+        assert last_content[0]["text"] == "CTX\n\nQuestion:\nCurrent question"
+        assert last_content[0]["cache_control"] == {"type": "ephemeral"}
 
 
 @pytest.mark.asyncio
@@ -108,8 +124,17 @@ async def test_generate_response_empty_history():
 
         call_kwargs = mock_client_instance.messages.stream.call_args.kwargs
 
-        expected_messages = [{"role": "user", "content": "CTX\n\nQuestion:\nQuestion"}]
-        assert call_kwargs["messages"] == expected_messages
+        # Messages now have content as list with cache_control on last user message
+        messages = call_kwargs["messages"]
+        assert len(messages) == 1
+        
+        # User message has cache_control format
+        assert messages[0]["role"] == "user"
+        last_content = messages[0]["content"]
+        assert isinstance(last_content, list)
+        assert last_content[0]["type"] == "text"
+        assert last_content[0]["text"] == "CTX\n\nQuestion:\nQuestion"
+        assert last_content[0]["cache_control"] == {"type": "ephemeral"}
 
 
 @pytest.mark.asyncio
