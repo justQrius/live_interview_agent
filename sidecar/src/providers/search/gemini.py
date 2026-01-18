@@ -25,7 +25,7 @@ class GeminiSearchProvider(SearchProvider):
     Search provider using Google Gemini with web search grounding.
     """
 
-    DEFAULT_MODEL = "gemini-3-flash-preview"  # Centralized in config.py as GeminiModels.DEFAULT_SEARCH
+    DEFAULT_MODEL = GeminiModels.DEFAULT_SEARCH
     
     def __init__(self, api_key: str, model_name: Optional[str] = None):
         """
