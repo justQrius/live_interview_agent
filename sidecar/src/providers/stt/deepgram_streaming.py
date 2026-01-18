@@ -1,19 +1,20 @@
 """
 Deepgram Streaming STT Provider.
 
-Uses Deepgram's WebSocket-based live transcription API with
-Nova-2 model for real-time streaming transcription.
+Uses Deepgram's SDK v5.x WebSocket client for real-time streaming transcription
+with Nova-3 model.
 
 Features:
 - Real-time interim results (~150ms latency)
 - utterance_end_ms for acoustic-based endpointing
 - Smart formatting for numbers, dates, etc.
+- Built-in keep-alive and reconnection
+- Typed event handling
 """
 import asyncio
-import json
 import logging
 import time
-from typing import Optional
+from typing import Optional, List, Any, TYPE_CHECKING
 
 from .streaming_base import (
     StreamingSTTProvider,
@@ -26,18 +27,21 @@ from .streaming_base import (
 
 logger = logging.getLogger(__name__)
 
+# SDK imports with fallback for type checking
+SDK_AVAILABLE = False
 try:
-    import websockets
-    from websockets.client import WebSocketClientProtocol
-    WEBSOCKETS_AVAILABLE = True
-except ImportError:
-    WEBSOCKETS_AVAILABLE = False
-    WebSocketClientProtocol = None
+    from deepgram import AsyncDeepgramClient
+    from deepgram.core.events import EventType
+    SDK_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Failed to import deepgram SDK: {e}")
+    AsyncDeepgramClient = None  # type: ignore
+    EventType = None  # type: ignore
 
 
 class DeepgramStreamingProvider(StreamingSTTProvider):
     """
-    Deepgram streaming STT provider using WebSocket API.
+    Deepgram streaming STT provider using SDK v5.x WebSocket client.
     
     Uses Nova-3 model (Gen 1 Flagship) with utterance_end_ms for detecting
     when speaker has finished an utterance based on acoustic analysis.
@@ -46,20 +50,26 @@ class DeepgramStreamingProvider(StreamingSTTProvider):
     Latency: P50 ~150ms for interim results
     """
     
-    # Deepgram WebSocket endpoint
-    WS_URL = "wss://api.deepgram.com/v1/listen"
-    
-    # Default model
     DEFAULT_MODEL = "nova-3"
     
-    def __init__(self, api_key: str, model: str = "nova-3"):
+    def __init__(
+        self, 
+        api_key: str, 
+        model: str = "nova-3",
+        keyterms: Optional[List[str]] = None,
+    ):
         super().__init__(api_key)
         self.model = model or self.DEFAULT_MODEL
-        if not WEBSOCKETS_AVAILABLE:
+        self.keyterms = keyterms or []
+        
+        if not SDK_AVAILABLE:
             raise ImportError(
-                "websockets is required for Deepgram streaming. "
-                "Install with: pip install websockets"
+                "deepgram-sdk is required for Deepgram streaming. "
+                "Install with: pip install deepgram-sdk"
             )
+        
+        # Create async client for WebSocket connections
+        self._client = AsyncDeepgramClient(api_key=api_key)
     
     @property
     def provider_name(self) -> str:
@@ -67,11 +77,11 @@ class DeepgramStreamingProvider(StreamingSTTProvider):
     
     @property
     def supports_semantic_endpointing(self) -> bool:
-        """Deepgram uses acoustic endpointing, not semantic."""
+        """Deepgram Nova-3 uses acoustic endpointing, not semantic."""
         return False
     
     async def connect(self, config: StreamingConfig) -> "DeepgramStreamingSession":
-        """Establish WebSocket connection to Deepgram."""
+        """Establish WebSocket connection to Deepgram using SDK."""
         session = DeepgramStreamingSession(self, config)
         await session._connect()
         return session
@@ -79,205 +89,147 @@ class DeepgramStreamingProvider(StreamingSTTProvider):
 
 class DeepgramStreamingSession(StreamingSession):
     """
-    Active streaming session with Deepgram.
+    Active streaming session with Deepgram using SDK v5.x WebSocket client.
     
-    Manages WebSocket connection, audio streaming, and result parsing.
+    Manages connection lifecycle, audio streaming, and event handling using
+    the SDK's typed event system.
     """
     
     def __init__(self, provider: DeepgramStreamingProvider, config: StreamingConfig):
         super().__init__(provider, config)
-        self._ws: Optional[WebSocketClientProtocol] = None
-        self._receive_task: Optional[asyncio.Task] = None
+        self._connection: Any = None  # SDK AsyncV1SocketClient
+        self._context_manager: Any = None  # Store context manager for cleanup
         self._transcript_buffer: str = ""
         self._start_time_ms: int = 0
         self._last_audio_time_ms: int = 0
     
     async def _connect(self) -> None:
-        """Establish WebSocket connection."""
-        # Build query parameters
-        params = {
-            "model": self.provider.model,  # Use configured model
-            "language": self.config.language,
-            "punctuate": "true",
-            "smart_format": "true",
-            "encoding": self.config.encoding,
-            "sample_rate": str(self.config.sample_rate),
-            "channels": str(self.config.channels),
+        """Establish WebSocket connection using SDK v5.x."""
+        provider: DeepgramStreamingProvider = self.provider  # type: ignore
+        
+        # Build connection kwargs - all values must be strings per SDK signature
+        connect_kwargs: dict[str, Any] = {
+            "model": provider.model,
         }
+        
+        # Optional parameters
+        if self.config.language:
+            connect_kwargs["language"] = self.config.language
+        
+        connect_kwargs["punctuate"] = "true"
+        connect_kwargs["smart_format"] = "true"
+        
+        if self.config.encoding:
+            connect_kwargs["encoding"] = self.config.encoding
+        if self.config.sample_rate:
+            connect_kwargs["sample_rate"] = str(self.config.sample_rate)
+        if self.config.channels:
+            connect_kwargs["channels"] = str(self.config.channels)
         
         # Enable interim results
         if self.config.emit_interim_results:
-            params["interim_results"] = "true"
+            connect_kwargs["interim_results"] = "true"
         
         # Enable endpointing with configurable timeout
         if self.config.enable_endpointing:
-            # utterance_end_ms triggers after this much silence
             timeout_ms = self.config.extra_options.get(
                 "utterance_end_ms", 
                 self.config.endpointing_timeout_ms
             )
-            params["utterance_end_ms"] = str(timeout_ms)
+            connect_kwargs["utterance_end_ms"] = str(timeout_ms)
         
-        # Additional options from config
+        # Add keyterms for vocabulary boosting (Nova-3 only)
+        if provider.keyterms and "nova-3" in provider.model:
+            # Keyterms are passed as comma-separated or repeated params
+            connect_kwargs["keyterm"] = ",".join(provider.keyterms)
+        
+        # Diarization if requested
         if self.config.extra_options.get("diarize"):
-            params["diarize"] = "true"
-        
-        # Build URL with query string
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        url = f"{DeepgramStreamingProvider.WS_URL}?{query}"
-        
-        # Connect with auth header
-        headers = {
-            "Authorization": f"Token {self.provider.api_key}"
-        }
+            connect_kwargs["diarize"] = "true"
         
         try:
-            self._ws = await websockets.connect(
-                url,
-                additional_headers=headers,
-                ping_interval=20,
-                ping_timeout=10,
-            )
+            # SDK returns an async context manager from connect()
+            self._context_manager = provider._client.listen.v1.connect(**connect_kwargs)
+            self._connection = await self._context_manager.__aenter__()
+            
+            # Register event handlers using SDK's event system
+            self._connection.on(EventType.OPEN, self._on_open)
+            self._connection.on(EventType.MESSAGE, self._on_message)
+            self._connection.on(EventType.CLOSE, self._on_close)
+            self._connection.on(EventType.ERROR, self._on_error)
+            
+            # Start listening for events in background
+            await self._connection.start_listening()
+            
             self._is_connected = True
             self._start_time_ms = int(time.time() * 1000)
             
-            # Start receiving messages
-            self._receive_task = asyncio.create_task(self._receive_loop())
-            
-            logger.info(f"Deepgram streaming connected: {params}")
+            logger.info(f"Deepgram streaming connected via SDK: model={provider.model}")
             
         except Exception as e:
             self._is_connected = False
             self.provider._is_available = False
+            logger.error(f"Failed to connect to Deepgram: {e}")
             raise ConnectionError(f"Failed to connect to Deepgram: {e}")
     
-    async def send_audio(self, audio_data: bytes) -> None:
-        """Send audio chunk to Deepgram."""
-        if not self.is_connected or self._ws is None:
-            raise RuntimeError("Not connected to Deepgram")
-        
-        try:
-            await self._ws.send(audio_data)
-            self._last_audio_time_ms = int(time.time() * 1000)
-        except Exception as e:
-            logger.error(f"Error sending audio to Deepgram: {e}")
-            await self.close()
-            raise
+    def _on_open(self, _: Any) -> None:
+        """Handle connection opened."""
+        logger.debug("Deepgram WebSocket connection opened")
     
-    async def close(self) -> None:
-        """Close the WebSocket connection."""
-        self._is_closed = True
+    def _on_message(self, message: Any) -> None:
+        """Handle incoming message from Deepgram."""
+        # Run async handler in event loop
+        asyncio.create_task(self._handle_message_async(message))
+    
+    def _on_close(self, _: Any) -> None:
+        """Handle connection closed."""
+        logger.info("Deepgram WebSocket connection closed")
         self._is_connected = False
-        
-        # Cancel receive task
-        if self._receive_task and not self._receive_task.done():
-            self._receive_task.cancel()
-            try:
-                await self._receive_task
-            except asyncio.CancelledError:
-                pass
-        
-        # Close WebSocket
-        if self._ws:
-            try:
-                # Send close frame to finalize
-                await self._ws.send(json.dumps({"type": "CloseStream"}))
-                await self._ws.close()
-            except Exception as e:
-                logger.warning(f"Error closing Deepgram connection: {e}")
-            self._ws = None
-        
-        logger.info("Deepgram streaming session closed")
     
-    async def finalize(self) -> Optional[EndOfTurnEvent]:
-        """
-        Signal end of audio and get final result.
-        
-        Sends FinishStream message to Deepgram to flush any pending audio.
-        """
-        if not self.is_connected or self._ws is None:
-            return None
-        
-        try:
-            # Send finalize message
-            await self._ws.send(json.dumps({"type": "FinishStream"}))
-            
-            # Wait briefly for final results
-            await asyncio.sleep(0.5)
-            
-            # Return pending transcript if any
-            if self._transcript_buffer.strip():
-                duration_ms = int(time.time() * 1000) - self._start_time_ms
-                return EndOfTurnEvent(
-                    final_transcript=self._transcript_buffer.strip(),
-                    confidence=0.85,  # Deepgram doesn't give word-level confidence in streaming
-                    endpointing_type=EndpointingType.ACOUSTIC,
-                    duration_ms=duration_ms,
-                    metadata={"source": "finalize"}
-                )
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error finalizing Deepgram stream: {e}")
-            return None
+    def _on_error(self, error: Any) -> None:
+        """Handle connection error."""
+        logger.error(f"Deepgram WebSocket error: {error}")
     
-    async def _receive_loop(self) -> None:
-        """Background task to receive and parse Deepgram messages."""
-        if self._ws is None:
+    async def _handle_message_async(self, message: Any) -> None:
+        """Process incoming message asynchronously."""
+        if self._is_closed:
             return
         
         try:
-            async for message in self._ws:
-                if self._is_closed:
-                    break
+            msg_type = getattr(message, 'type', None)
+            
+            if msg_type == 'Results' or hasattr(message, 'channel'):
+                await self._handle_results(message)
+            elif msg_type == 'UtteranceEnd':
+                await self._handle_utterance_end(message)
+            elif msg_type == 'SpeechStarted':
+                logger.debug("Deepgram: Speech started")
+            elif msg_type == 'Metadata':
+                logger.debug("Deepgram metadata received")
+            elif msg_type == 'Error':
+                error_msg = getattr(message, 'error', {})
+                logger.error(f"Deepgram error: {error_msg}")
+            else:
+                logger.debug(f"Deepgram message: {msg_type}")
                 
-                try:
-                    data = json.loads(message)
-                    await self._handle_message(data)
-                except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON from Deepgram: {message[:100]}")
-                except Exception as e:
-                    logger.error(f"Error handling Deepgram message: {e}")
-                    
-        except websockets.exceptions.ConnectionClosed as e:
-            logger.info(f"Deepgram connection closed: {e.code} {e.reason}")
         except Exception as e:
-            logger.error(f"Deepgram receive error: {e}")
-        finally:
-            self._is_connected = False
+            logger.error(f"Error handling Deepgram message: {e}")
     
-    async def _handle_message(self, data: dict) -> None:
-        """Parse and handle a Deepgram message."""
-        msg_type = data.get("type")
-        
-        if msg_type == "Results":
-            await self._handle_results(data)
-        elif msg_type == "UtteranceEnd":
-            await self._handle_utterance_end(data)
-        elif msg_type == "SpeechStarted":
-            logger.debug("Deepgram: Speech started")
-        elif msg_type == "Metadata":
-            logger.debug(f"Deepgram metadata: {data}")
-        elif msg_type == "Error":
-            error = data.get("error", {})
-            logger.error(f"Deepgram error: {error.get('message', data)}")
-        else:
-            logger.debug(f"Deepgram message: {msg_type}")
-    
-    async def _handle_results(self, data: dict) -> None:
+    async def _handle_results(self, data: Any) -> None:
         """Handle transcription results."""
-        channel = data.get("channel", {})
-        alternatives = channel.get("alternatives", [])
-        
+        channel = getattr(data, 'channel', None)
+        if not channel:
+            return
+            
+        alternatives = getattr(channel, 'alternatives', [])
         if not alternatives:
             return
         
         alt = alternatives[0]
-        transcript = alt.get("transcript", "")
-        confidence = alt.get("confidence", 0.0)
-        is_final = data.get("is_final", False)
-        speech_final = data.get("speech_final", False)
+        transcript = getattr(alt, 'transcript', "") or ""
+        confidence = getattr(alt, 'confidence', 0.0) or 0.0
+        is_final = getattr(data, 'is_final', False)
+        speech_final = getattr(data, 'speech_final', False)
         
         if not transcript:
             return
@@ -301,17 +253,10 @@ class DeepgramStreamingSession(StreamingSession):
             f"({confidence:.2f}) {transcript[:50]}..."
         )
     
-    async def _handle_utterance_end(self, data: dict) -> None:
-        """
-        Handle UtteranceEnd event from Deepgram.
-        
-        This is triggered when Deepgram detects the speaker has
-        finished based on the utterance_end_ms silence threshold.
-        """
+    async def _handle_utterance_end(self, data: Any) -> None:
+        """Handle UtteranceEnd event from Deepgram."""
         duration_ms = int(time.time() * 1000) - self._start_time_ms
-        
-        # Get last word timing if available
-        last_word_end = data.get("last_word_end", 0)
+        last_word_end = getattr(data, 'last_word_end', 0)
         
         if self._transcript_buffer.strip():
             event = EndOfTurnEvent(
@@ -335,3 +280,73 @@ class DeepgramStreamingSession(StreamingSession):
                 f"Deepgram utterance end: {event.final_transcript[:50]}... "
                 f"(duration={duration_ms}ms)"
             )
+    
+    async def send_audio(self, audio_data: bytes) -> None:
+        """Send audio chunk to Deepgram."""
+        if not self.is_connected or self._connection is None:
+            raise RuntimeError("Not connected to Deepgram")
+        
+        try:
+            # SDK's send_media accepts raw bytes
+            await self._connection.send_media(audio_data)
+            self._last_audio_time_ms = int(time.time() * 1000)
+        except Exception as e:
+            logger.error(f"Error sending audio to Deepgram: {e}")
+            await self.close()
+            raise
+    
+    async def close(self) -> None:
+        """Close the WebSocket connection."""
+        self._is_closed = True
+        self._is_connected = False
+        
+        if self._connection and self._context_manager:
+            try:
+                # Send close control message
+                from deepgram.extensions.types.sockets import ListenV1ControlMessage
+                control = ListenV1ControlMessage(type="CloseStream")
+                await self._connection.send_control(control)
+            except Exception as e:
+                logger.debug(f"Error sending close control: {e}")
+            
+            try:
+                # Exit the async context manager properly
+                await self._context_manager.__aexit__(None, None, None)
+            except Exception as e:
+                logger.warning(f"Error closing Deepgram connection: {e}")
+            
+            self._connection = None
+            self._context_manager = None
+        
+        logger.info("Deepgram streaming session closed")
+    
+    async def finalize(self) -> Optional[EndOfTurnEvent]:
+        """Signal end of audio and get final result."""
+        if not self.is_connected or self._connection is None:
+            return None
+        
+        try:
+            # Send finalize control message
+            from deepgram.extensions.types.sockets import ListenV1ControlMessage
+            control = ListenV1ControlMessage(type="FinishStream")
+            await self._connection.send_control(control)
+            
+            # Wait briefly for final results
+            await asyncio.sleep(0.5)
+            
+            # Return pending transcript if any
+            if self._transcript_buffer.strip():
+                duration_ms = int(time.time() * 1000) - self._start_time_ms
+                return EndOfTurnEvent(
+                    final_transcript=self._transcript_buffer.strip(),
+                    confidence=0.85,
+                    endpointing_type=EndpointingType.ACOUSTIC,
+                    duration_ms=duration_ms,
+                    metadata={"source": "finalize"}
+                )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finalizing Deepgram stream: {e}")
+            return None
