@@ -1,11 +1,17 @@
 import unittest
 import os
 import sys
-import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Mock deepgram module before importing the provider
-sys.modules['deepgram'] = MagicMock()
+mock_deepgram = MagicMock()
+mock_deepgram.AsyncDeepgramClient = MagicMock()
+mock_deepgram.core = MagicMock()
+mock_deepgram.core.api_error = MagicMock()
+mock_deepgram.core.api_error.ApiError = Exception
+sys.modules['deepgram'] = mock_deepgram
+sys.modules['deepgram.core'] = mock_deepgram.core
+sys.modules['deepgram.core.api_error'] = mock_deepgram.core.api_error
 
 # Add sidecar/src to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -13,24 +19,25 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 from providers.base import TranscriptionResult
 from providers.stt.deepgram import DeepgramSTTProvider
 
+
 class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
     
     def setUp(self):
         self.api_key = "test_key"
         self.audio_data = b"fake_audio_data"
         
-        # Setup mocks for v3 SDK sync client path
+        # Setup mocks for v5.x SDK async client path
         self.mock_client = MagicMock()
         self.mock_listen = MagicMock()
-        self.mock_prerecorded = MagicMock()
         self.mock_v1 = MagicMock()
+        self.mock_media = MagicMock()
         
-        # Chain the mocks: client.listen.prerecorded.v("1")
+        # Chain the mocks: client.listen.v1.media.transcribe_file
         self.mock_client.listen = self.mock_listen
-        self.mock_listen.prerecorded = self.mock_prerecorded
-        self.mock_prerecorded.v.return_value = self.mock_v1
+        self.mock_listen.v1 = self.mock_v1
+        self.mock_v1.media = self.mock_media
         
-        # Setup transcribe_file response (sync, wrapped with asyncio.to_thread in prod)
+        # Setup transcribe_file response
         self.mock_response = MagicMock()
         self.mock_channel = MagicMock()
         self.mock_alternative = MagicMock()
@@ -39,10 +46,10 @@ class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
         self.mock_channel.alternatives = [self.mock_alternative]
         self.mock_response.results.channels = [self.mock_channel]
         
-        # Make transcribe_file return sync value (production wraps with to_thread)
-        self.mock_v1.transcribe_file = MagicMock(return_value=self.mock_response)
+        # Make transcribe_file an async mock
+        self.mock_media.transcribe_file = AsyncMock(return_value=self.mock_response)
 
-    @patch('providers.stt.deepgram.DeepgramClient')
+    @patch('providers.stt.deepgram.AsyncDeepgramClient')
     async def test_transcribe_success(self, MockClient):
         # Arrange
         MockClient.return_value = self.mock_client
@@ -54,33 +61,62 @@ class TestDeepgramSTTProvider(unittest.IsolatedAsyncioTestCase):
         # Assert
         self.assertIsInstance(result, TranscriptionResult)
         self.assertEqual(result.text, "Hello world")
-        self.assertEqual(result.confidence, 0.98) # Assuming we map confidence
+        self.assertEqual(result.confidence, 0.98)
         
-        # Verify client calls
-        MockClient.assert_called_with(self.api_key)
+        # Verify client initialization with keyword arg
+        MockClient.assert_called_with(api_key=self.api_key)
         
         # Verify transcription call
-        # Check payload
-        call_args = self.mock_v1.transcribe_file.call_args
-        payload = call_args[0][0]
-        self.assertEqual(payload, {'buffer': self.audio_data})
-        
-        # Check options - now passed as dict, not PrerecordedOptions
-        options = call_args[0][1]
-        self.assertEqual(options["model"], "nova-3")
-        self.assertEqual(options["smart_format"], True)
-        self.assertEqual(options["language"], "en")
+        call_kwargs = self.mock_media.transcribe_file.call_args.kwargs
+        self.assertEqual(call_kwargs["request"], self.audio_data)
+        self.assertEqual(call_kwargs["model"], "nova-3")
+        self.assertEqual(call_kwargs["smart_format"], True)
+        self.assertEqual(call_kwargs["language"], "en")
 
-    @patch('providers.stt.deepgram.DeepgramClient')
+    @patch('providers.stt.deepgram.AsyncDeepgramClient')
     async def test_transcribe_empty_audio(self, MockClient):
+        MockClient.return_value = self.mock_client
         provider = DeepgramSTTProvider(self.api_key)
         result = await provider.transcribe(b"")
         self.assertEqual(result.text, "")
 
-    @patch('providers.stt.deepgram.DeepgramClient')
+    @patch('providers.stt.deepgram.AsyncDeepgramClient')
     async def test_init_raises_error_without_api_key(self, MockClient):
         with self.assertRaises(ValueError):
             DeepgramSTTProvider("")
+
+    @patch('providers.stt.deepgram.AsyncDeepgramClient')
+    async def test_custom_model(self, MockClient):
+        """Test that custom model is used."""
+        MockClient.return_value = self.mock_client
+        provider = DeepgramSTTProvider(self.api_key, model="nova-2")
+        self.assertEqual(provider.model, "nova-2")
+
+    @patch('providers.stt.deepgram.AsyncDeepgramClient')
+    async def test_timeout_and_retry_config(self, MockClient):
+        """Test that timeout and retry options are configured."""
+        MockClient.return_value = self.mock_client
+        provider = DeepgramSTTProvider(
+            self.api_key,
+            timeout_seconds=120,
+            max_retries=5
+        )
+        self.assertEqual(provider.timeout_seconds, 120)
+        self.assertEqual(provider.max_retries, 5)
+
+    @patch('providers.stt.deepgram.AsyncDeepgramClient')
+    async def test_keyterms_config(self, MockClient):
+        """Test that keyterms are configured for vocabulary boosting."""
+        MockClient.return_value = self.mock_client
+        keyterms = ["STAR", "behavioral", "technical"]
+        provider = DeepgramSTTProvider(self.api_key, keyterms=keyterms)
+        self.assertEqual(provider.keyterms, keyterms)
+        
+        # Verify keyterms are passed to transcribe
+        await provider.transcribe(self.audio_data)
+        call_kwargs = self.mock_media.transcribe_file.call_args.kwargs
+        self.assertEqual(call_kwargs["keyterm"], keyterms)
+
 
 if __name__ == '__main__':
     unittest.main()
