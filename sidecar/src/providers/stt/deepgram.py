@@ -12,7 +12,9 @@ class DeepgramSTTProvider(STTProvider):
     Deepgram STT Provider using Nova-2 model.
     """
     
-    def __init__(self, api_key: str):
+    DEFAULT_MODEL = "nova-2"
+
+    def __init__(self, api_key: str, model: str = "nova-2"):
         if not api_key:
             raise ValueError("API key is required")
             
@@ -20,6 +22,7 @@ class DeepgramSTTProvider(STTProvider):
             raise ImportError("deepgram-sdk is not installed. Please install it with `pip install deepgram-sdk`.")
             
         self.client = DeepgramClient(api_key)
+        self.model = model or self.DEFAULT_MODEL
 
     async def transcribe(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
         """
@@ -34,7 +37,7 @@ class DeepgramSTTProvider(STTProvider):
             
             # Prepare options
             options = PrerecordedOptions(
-                model="nova-2",
+                model=self.model,
                 smart_format=True,
                 language=language
             )

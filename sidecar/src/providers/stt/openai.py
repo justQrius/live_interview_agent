@@ -23,7 +23,9 @@ class OpenAISTTProvider(STTProvider):
     OpenAI STT Provider using Whisper model.
     """
     
-    def __init__(self, api_key: str):
+    DEFAULT_MODEL = "whisper-1"
+
+    def __init__(self, api_key: str, model: str = "whisper-1"):
         if not api_key:
             raise ValueError("API key is required")
             
@@ -31,6 +33,7 @@ class OpenAISTTProvider(STTProvider):
             raise ImportError("openai package is not installed. Please install it with `pip install openai`.")
             
         self.client = AsyncOpenAI(api_key=api_key)
+        self.model = model or self.DEFAULT_MODEL
 
     async def transcribe(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
         """
@@ -50,7 +53,7 @@ class OpenAISTTProvider(STTProvider):
 
             # Call OpenAI API
             transcript = await self.client.audio.transcriptions.create(
-                model="whisper-1",
+                model=self.model,
                 file=file_obj,
                 language=language,
                 response_format="json"

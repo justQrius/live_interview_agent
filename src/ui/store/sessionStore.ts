@@ -40,7 +40,74 @@ export interface ContextFile {
   extractionResult?: ExtractionResult;
 }
 
-export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic';
+export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic' | 'assemblyai';
+
+// Streaming STT provider options (Phase 7)
+export type StreamingSTTProvider = 'auto' | 'deepgram' | 'assemblyai' | 'openai_realtime' | 'disabled';
+
+// Model options by provider (Jan 2026 - Gen 1 Flagships)
+export const MODEL_OPTIONS = {
+  // LLM Models
+  llm: {
+    gemini: [
+      { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Fastest, Default)' },
+      { id: 'gemini-3-pro', name: 'Gemini 3 Pro (Reasoning)' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+    ],
+    openai: [
+      { id: 'gpt-5-mini', name: 'GPT-5 Mini (Fast, Default)' },
+      { id: 'gpt-5.2', name: 'GPT-5.2 (Flagship)' },
+      { id: 'gpt-5.1', name: 'GPT-5.1 (Reasoning)' },
+      { id: 'gpt-5-nano', name: 'GPT-5 Nano' },
+      { id: 'o3-mini', name: 'o3 Mini (High Reasoning)' },
+      { id: 'gpt-4o', name: 'GPT-4o (Legacy)' },
+    ],
+    anthropic: [
+      { id: 'claude-4-haiku', name: 'Claude 4 Haiku (Fast)' },
+      { id: 'claude-4-sonnet', name: 'Claude 4 Sonnet (Balanced)' },
+      { id: 'claude-4-opus', name: 'Claude 4 Opus (Best)' },
+      { id: 'claude-3.7-sonnet', name: 'Claude 3.7 Sonnet' },
+    ],
+  },
+  // Batch STT Models
+  stt: {
+    groq: [
+      { id: 'whisper-large-v3-turbo', name: 'Whisper V3 Turbo (Fast)' },
+      { id: 'whisper-large-v3', name: 'Whisper V3' },
+    ],
+    deepgram: [
+      { id: 'nova-3', name: 'Nova-3 (Latest)' },
+      { id: 'nova-2', name: 'Nova-2' },
+      { id: 'flux', name: 'Flux (Specialized)' },
+    ],
+    openai: [
+      { id: 'whisper-1', name: 'Whisper-1' },
+    ],
+    gemini: [
+      { id: 'gemini-3-flash', name: 'Gemini 3 Flash (Native Audio)' },
+      { id: 'gemini-3-pro', name: 'Gemini 3 Pro' },
+    ],
+  },
+  // Streaming STT Models
+  streamingStt: {
+    deepgram: [
+      { id: 'nova-3', name: 'Nova-3 (Recommended)' },
+      { id: 'nova-3-general', name: 'Nova-3 General' },
+      { id: 'nova-3-meeting', name: 'Nova-3 Meeting' },
+      { id: 'nova-2', name: 'Nova-2 (Legacy)' },
+    ],
+    assemblyai: [
+      { id: 'best', name: 'Best (Auto-select)' },
+      { id: 'nano', name: 'Nano (Fast)' },
+    ],
+    openai_realtime: [
+      { id: 'gpt-realtime', name: 'GPT Realtime (GA)' },
+      { id: 'gpt-realtime-mini', name: 'GPT Realtime Mini' },
+      { id: 'gpt-4o-realtime-preview', name: 'GPT-4o Realtime (Beta)' },
+    ],
+  },
+} as const;
 
 // Session History Types (Phase 3: STORY-040)
 export interface SessionSummary {
@@ -139,6 +206,13 @@ export interface SessionState {
   // Preferences
   preferredSttProvider: Provider | 'auto';
   preferredLlmProvider: Provider | 'auto';
+  
+  // Model selections (Phase 7)
+  preferredLlmModel: string | 'auto';
+  preferredSttModel: string | 'auto';
+  preferredStreamingSttProvider: StreamingSTTProvider;
+  preferredStreamingSttModel: string | 'auto';
+  extendedThinking: boolean; // Phase 7: 2026 Reasoning Mode
 
   // Current data
   currentTranscription: Transcription | null;
@@ -180,6 +254,11 @@ export interface SessionState {
   setApiKey: (key: string | null) => void;
   setPreferredSttProvider: (provider: Provider | 'auto') => void;
   setPreferredLlmProvider: (provider: Provider | 'auto') => void;
+  setPreferredLlmModel: (model: string | 'auto') => void;
+  setPreferredSttModel: (model: string | 'auto') => void;
+  setPreferredStreamingSttProvider: (provider: StreamingSTTProvider) => void;
+  setPreferredStreamingSttModel: (model: string | 'auto') => void;
+  setExtendedThinking: (enabled: boolean) => void;
   setContextStatus: (status: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'error') => void;
   setCurrentTranscription: (transcription: Transcription | null) => void;
   setCurrentAnswer: (answer: Answer | null) => void;
@@ -236,6 +315,13 @@ export const useSessionStore = create<SessionState>((set) => ({
   // Preferences
   preferredSttProvider: (localStorage.getItem('preferredSttProvider') as Provider | 'auto') || 'auto',
   preferredLlmProvider: (localStorage.getItem('preferredLlmProvider') as Provider | 'auto') || 'auto',
+  
+  // Model selections (Phase 7)
+  preferredLlmModel: (localStorage.getItem('preferredLlmModel') as string) || 'auto',
+  preferredSttModel: (localStorage.getItem('preferredSttModel') as string) || 'auto',
+  preferredStreamingSttProvider: (localStorage.getItem('preferredStreamingSttProvider') as StreamingSTTProvider) || 'auto',
+  preferredStreamingSttModel: (localStorage.getItem('preferredStreamingSttModel') as string) || 'auto',
+  extendedThinking: localStorage.getItem('extendedThinking') === 'true',
 
   currentTranscription: null,
   currentAnswer: null,
@@ -296,6 +382,31 @@ export const useSessionStore = create<SessionState>((set) => ({
   setPreferredLlmProvider: (provider) => {
     localStorage.setItem('preferredLlmProvider', provider);
     set({ preferredLlmProvider: provider });
+  },
+
+  setPreferredLlmModel: (model) => {
+    localStorage.setItem('preferredLlmModel', model);
+    set({ preferredLlmModel: model });
+  },
+
+  setPreferredSttModel: (model) => {
+    localStorage.setItem('preferredSttModel', model);
+    set({ preferredSttModel: model });
+  },
+
+  setPreferredStreamingSttProvider: (provider) => {
+    localStorage.setItem('preferredStreamingSttProvider', provider);
+    set({ preferredStreamingSttProvider: provider });
+  },
+
+  setPreferredStreamingSttModel: (model) => {
+    localStorage.setItem('preferredStreamingSttModel', model);
+    set({ preferredStreamingSttModel: model });
+  },
+
+  setExtendedThinking: (enabled) => {
+    localStorage.setItem('extendedThinking', String(enabled));
+    set({ extendedThinking: enabled });
   },
 
   setContextStatus: (status: SessionState['contextStatus']) => set({ contextStatus: status }),

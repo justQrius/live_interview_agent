@@ -39,26 +39,28 @@ except ImportError:
 
 class OpenAIRealtimeProvider(StreamingSTTProvider):
     """
-    OpenAI Realtime streaming STT provider.
+    OpenAI Realtime streaming STT provider (GA).
     
     Uses the Realtime API with semantic_vad for intelligent
-    end-of-turn detection powered by GPT-4o's language understanding.
+    end-of-turn detection powered by GPT-4o/GPT-Realtime.
     
-    This is the most sophisticated endpointing available:
-    - Understands conversational context
-    - Detects semantic completion (not just silence)
-    - Handles mid-sentence pauses correctly
+    Features:
+    - GA Endpoint (gpt-realtime)
+    - Semantic VAD
     
-    Pricing: ~$0.06/min (higher due to GPT-4o integration)
+    Pricing: ~$0.06/min
     Latency: P50 ~250-500ms
     """
     
     # OpenAI Realtime WebSocket endpoint
     WS_URL = "wss://api.openai.com/v1/realtime"
     
-    def __init__(self, api_key: str, model: str = "gpt-4o-realtime-preview"):
+    # Default GA model
+    DEFAULT_MODEL = "gpt-realtime"
+    
+    def __init__(self, api_key: str, model: str = "gpt-realtime"):
         super().__init__(api_key)
-        self.model = model
+        self.model = model or self.DEFAULT_MODEL
         if not WEBSOCKETS_AVAILABLE:
             raise ImportError(
                 "websockets is required for OpenAI Realtime. "

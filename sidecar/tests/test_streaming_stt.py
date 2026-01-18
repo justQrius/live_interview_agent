@@ -97,7 +97,7 @@ class TestProviderConfigStreaming:
         """StreamingMode should be parsed from dict."""
         data = {
             "apiKeys": {"deepgram": "test_key"},
-            "preferences": {"streamingMode": "deepgram"}
+            "preferences": {"streamingSttProvider": "deepgram"}
         }
         config = ProviderConfig.from_dict(data)
         assert config.streaming_mode == StreamingMode.DEEPGRAM
@@ -106,7 +106,7 @@ class TestProviderConfigStreaming:
         """Disabled streaming mode should be parsed."""
         data = {
             "apiKeys": {},
-            "preferences": {"streamingMode": "disabled"}
+            "preferences": {"streamingSttProvider": "disabled"}
         }
         config = ProviderConfig.from_dict(data)
         assert config.streaming_mode == StreamingMode.DISABLED

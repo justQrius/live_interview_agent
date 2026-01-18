@@ -13,7 +13,9 @@ class GroqSTTProvider(STTProvider):
     Groq STT Provider using Whisper-large-v3.
     """
     
-    def __init__(self, api_key: str):
+    DEFAULT_MODEL = "whisper-large-v3"
+
+    def __init__(self, api_key: str, model: str = "whisper-large-v3"):
         if not api_key:
             raise ValueError("API key is required")
         
@@ -22,6 +24,7 @@ class GroqSTTProvider(STTProvider):
             
         self.client = Groq(api_key=api_key)
         self._api_key = api_key
+        self.model = model or self.DEFAULT_MODEL
 
     async def transcribe(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
         """
@@ -44,7 +47,7 @@ class GroqSTTProvider(STTProvider):
                 
                 return self.client.audio.transcriptions.create(
                     file=(audio_file.name, audio_file),
-                    model="whisper-large-v3",
+                    model=self.model,
                     # language=language, # whisper-large-v3 on groq might support language
                     # Groq API docs say: language is optional.
                     response_format="json"

@@ -39,18 +39,22 @@ class DeepgramStreamingProvider(StreamingSTTProvider):
     """
     Deepgram streaming STT provider using WebSocket API.
     
-    Uses Nova-2 model with utterance_end_ms for detecting
+    Uses Nova-3 model (Gen 1 Flagship) with utterance_end_ms for detecting
     when speaker has finished an utterance based on acoustic analysis.
     
-    Pricing: $0.0059/min (Nova-2 streaming)
+    Pricing: ~$0.0077/min (Nova-3 streaming)
     Latency: P50 ~150ms for interim results
     """
     
     # Deepgram WebSocket endpoint
     WS_URL = "wss://api.deepgram.com/v1/listen"
     
-    def __init__(self, api_key: str):
+    # Default model
+    DEFAULT_MODEL = "nova-3"
+    
+    def __init__(self, api_key: str, model: str = "nova-3"):
         super().__init__(api_key)
+        self.model = model or self.DEFAULT_MODEL
         if not WEBSOCKETS_AVAILABLE:
             raise ImportError(
                 "websockets is required for Deepgram streaming. "
@@ -92,7 +96,7 @@ class DeepgramStreamingSession(StreamingSession):
         """Establish WebSocket connection."""
         # Build query parameters
         params = {
-            "model": "nova-2",
+            "model": self.provider.model,  # Use configured model
             "language": self.config.language,
             "punctuate": "true",
             "smart_format": "true",

@@ -76,6 +76,11 @@ const SessionControls: React.FC = () => {
     const prefs = {
       sttProvider: useSessionStore.getState().preferredSttProvider,
       llmProvider: useSessionStore.getState().preferredLlmProvider,
+      // Model selections (Phase 7)
+      llmModel: useSessionStore.getState().preferredLlmModel,
+      sttModel: useSessionStore.getState().preferredSttModel,
+      streamingSttProvider: useSessionStore.getState().preferredStreamingSttProvider,
+      streamingSttModel: useSessionStore.getState().preferredStreamingSttModel,
     };
 
     sendMessage({ 

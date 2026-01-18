@@ -11,44 +11,99 @@ from typing import Optional
 # =============================================================================
 # MODEL CONSTANTS
 # Centralized model name definitions - update here when models change
+# Last updated: Jan 2026 (Gen 1 Flagships)
 # =============================================================================
 
 class GeminiModels:
     """Gemini model identifiers."""
-    # Primary models
-    FLASH = "gemini-3-flash-preview"  # Fast, cost-effective for most tasks
-    PRO = "gemini-3-pro-preview"      # Higher capability for complex tasks
+    # Gen 1 (Current)
+    PRO_3 = "gemini-3-pro"        # Reasoning / Native Audio
+    FLASH_3 = "gemini-3-flash"    # Fast / Cost-effective
     
-    # Fallback / Stable models
-    PRO_STABLE = "gemini-2.5-pro"
-    FLASH_STABLE = "gemini-1.5-flash"
+    # Gen 2 (Previous)
+    PRO_2_5 = "gemini-2.5-pro"
+    FLASH_2_5 = "gemini-2.5-flash"
     
     # Specialized
     EMBEDDING = "text-embedding-004"
     
     # Default choices by use case
-    DEFAULT_LLM = PRO
-    DEFAULT_STT = FLASH
-    DEFAULT_CACHE = PRO  # SYNC: Must match DEFAULT_LLM for Gemini API compatibility
-    DEFAULT_SEARCH = FLASH
+    DEFAULT_LLM = FLASH_3
+    DEFAULT_STT = FLASH_3  # Native audio processing
+    DEFAULT_CACHE = PRO_3
+    DEFAULT_SEARCH = FLASH_3
 
 
 class OpenAIModels:
     """OpenAI model identifiers."""
+    # Gen 1 (Current)
+    GPT5_2 = "gpt-5.2"        # Flagship
+    GPT5_1 = "gpt-5.1"        # Reasoning
+    GPT5_MINI = "gpt-5-mini"  # Fast
+    GPT5_NANO = "gpt-5-nano"  # Ultra-fast
+    
+    # Gen 2 (Previous)
     GPT4O = "gpt-4o"
-    GPT4O_MINI = "gpt-4o-mini"
+    O3_MINI = "o3-mini"
+    
+    # Whisper for STT
+    WHISPER_1 = "whisper-1"
+    
+    # Realtime for streaming STT
+    REALTIME = "gpt-realtime"  # GA model
+    REALTIME_MINI = "gpt-realtime-mini"
+    REALTIME_PREVIEW = "gpt-4o-realtime-preview" # Legacy Beta
     
     # Default
-    DEFAULT_LLM = GPT4O
+    DEFAULT_LLM = GPT5_MINI
+    DEFAULT_STT = WHISPER_1
 
 
 class AnthropicModels:
     """Anthropic model identifiers."""
-    CLAUDE_35_SONNET = "claude-3-5-sonnet-20240620"
-    CLAUDE_3_OPUS = "claude-3-opus-20240229"
+    # Gen 1 (Current)
+    CLAUDE_4_OPUS = "claude-4-opus"
+    CLAUDE_4_SONNET = "claude-4-sonnet"
+    CLAUDE_4_HAIKU = "claude-4-haiku"
+    
+    # Gen 2 (Previous)
+    CLAUDE_3_7_SONNET = "claude-3.7-sonnet"
     
     # Default
-    DEFAULT_LLM = CLAUDE_35_SONNET
+    DEFAULT_LLM = CLAUDE_4_SONNET
+
+
+class DeepgramModels:
+    """Deepgram model identifiers."""
+    # Nova-3 Series (Latest)
+    NOVA_3 = "nova-3"
+    NOVA_3_GENERAL = "nova-3-general"
+    NOVA_3_MEETING = "nova-3-meeting"
+    
+    # Legacy
+    NOVA_2 = "nova-2"
+    FLUX = "flux"
+    
+    # Default
+    DEFAULT_STT = NOVA_3
+
+
+class GroqModels:
+    """Groq model identifiers for Whisper."""
+    WHISPER_LARGE_V3 = "whisper-large-v3"
+    WHISPER_LARGE_V3_TURBO = "whisper-large-v3-turbo"
+    
+    # Default
+    DEFAULT_STT = WHISPER_LARGE_V3_TURBO
+
+
+class AssemblyAIModels:
+    """AssemblyAI model identifiers."""
+    BEST = "best"
+    NANO = "nano"
+    
+    # Default
+    DEFAULT_STT = BEST
 
 
 # =============================================================================
@@ -96,6 +151,11 @@ class ProviderConfig:
     preferred_stt: Optional[ProviderType] = None
     preferred_llm: Optional[ProviderType] = None
     
+    # Model selections (None means use provider default)
+    llm_model: Optional[str] = None
+    stt_model: Optional[str] = None
+    streaming_stt_model: Optional[str] = None
+    
     # Streaming STT preference
     streaming_mode: StreamingMode = StreamingMode.AUTO
 
@@ -103,9 +163,10 @@ class ProviderConfig:
     fallback_enabled: bool = True
     fallback_timeout: float = 5.0  # seconds before trying next provider
     
-    # Advanced settings (Phase 5)
+    # Advanced settings (Phase 5 & 7)
     thinking_budget: Optional[int] = 1024 # Default token budget for thinking models
     search_enabled: bool = True  # Enable Google Search grounding for Gemini LLM
+    extended_thinking: bool = False # Enable High Reasoning Mode (GPT-5/Claude 4)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProviderConfig":
@@ -121,7 +182,8 @@ class ProviderConfig:
             "preferences": {
                 "sttProvider": "groq",
                 "llmProvider": "openai",
-                "thinkingBudget": 2048  # Optional
+                "thinkingBudget": 2048,  # Optional
+                "extendedThinking": true # Optional
             }
         }
         """
@@ -148,15 +210,31 @@ class ProviderConfig:
 
         # Parse streaming mode preference
         streaming_mode = StreamingMode.AUTO
-        streaming_pref = preferences.get("streamingMode")
+        streaming_pref = preferences.get("streamingSttProvider")
         if streaming_pref:
             try:
                 streaming_mode = StreamingMode(streaming_pref)
             except ValueError:
                 pass  # Invalid mode, use auto
 
+        # Parse model selections (Phase 7)
+        llm_model = preferences.get("llmModel")
+        if llm_model == "auto":
+            llm_model = None
+        
+        stt_model = preferences.get("sttModel")
+        if stt_model == "auto":
+            stt_model = None
+        
+        streaming_stt_model = preferences.get("streamingSttModel")
+        if streaming_stt_model == "auto":
+            streaming_stt_model = None
+
         # Search is enabled by default, can be disabled via preferences
         search_enabled = preferences.get("searchEnabled", True)
+        
+        # Extended thinking toggle
+        extended_thinking = preferences.get("extendedThinking", False)
         
         return cls(
             gemini_api_key=api_keys.get("gemini"),
@@ -167,9 +245,13 @@ class ProviderConfig:
             assemblyai_api_key=api_keys.get("assemblyai"),
             preferred_stt=preferred_stt,
             preferred_llm=preferred_llm,
+            llm_model=llm_model,
+            stt_model=stt_model,
+            streaming_stt_model=streaming_stt_model,
             streaming_mode=streaming_mode,
             thinking_budget=preferences.get("thinkingBudget"),
-            search_enabled=search_enabled
+            search_enabled=search_enabled,
+            extended_thinking=extended_thinking
         )
 
     def has_api_key(self, provider_type: ProviderType) -> bool:

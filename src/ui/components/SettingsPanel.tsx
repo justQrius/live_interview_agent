@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useSessionStore, Provider } from '../store/sessionStore';
+import { useSessionStore, Provider, StreamingSTTProvider, MODEL_OPTIONS } from '../store/sessionStore';
 import { ProviderSettings } from './ProviderSettings';
 
 interface AccordionSectionProps {
@@ -55,6 +55,34 @@ const SettingsPanel: React.FC = () => {
   const setPreferredSttProvider = useSessionStore((state) => state.setPreferredSttProvider);
   const setPreferredLlmProvider = useSessionStore((state) => state.setPreferredLlmProvider);
   const setApiKey = useSessionStore((state) => state.setApiKey);
+  
+  // Model selections (Phase 7)
+  const preferredLlmModel = useSessionStore((state) => state.preferredLlmModel);
+  const preferredSttModel = useSessionStore((state) => state.preferredSttModel);
+  const preferredStreamingSttProvider = useSessionStore((state) => state.preferredStreamingSttProvider);
+  const preferredStreamingSttModel = useSessionStore((state) => state.preferredStreamingSttModel);
+  const setPreferredLlmModel = useSessionStore((state) => state.setPreferredLlmModel);
+  const setPreferredSttModel = useSessionStore((state) => state.setPreferredSttModel);
+  const setPreferredStreamingSttProvider = useSessionStore((state) => state.setPreferredStreamingSttProvider);
+  const setPreferredStreamingSttModel = useSessionStore((state) => state.setPreferredStreamingSttModel);
+  const extendedThinking = useSessionStore((state) => state.extendedThinking);
+  const setExtendedThinking = useSessionStore((state) => state.setExtendedThinking);
+
+  // Get available models based on selected provider
+  const getLlmModels = () => {
+    if (preferredLlmProvider === 'auto' || preferredLlmProvider === 'groq' || preferredLlmProvider === 'deepgram') return [];
+    return MODEL_OPTIONS.llm[preferredLlmProvider as keyof typeof MODEL_OPTIONS.llm] || [];
+  };
+
+  const getSttModels = () => {
+    if (preferredSttProvider === 'auto' || preferredSttProvider === 'anthropic') return [];
+    return MODEL_OPTIONS.stt[preferredSttProvider as keyof typeof MODEL_OPTIONS.stt] || [];
+  };
+
+  const getStreamingSttModels = () => {
+    if (preferredStreamingSttProvider === 'auto' || preferredStreamingSttProvider === 'disabled') return [];
+    return MODEL_OPTIONS.streamingStt[preferredStreamingSttProvider as keyof typeof MODEL_OPTIONS.streamingStt] || [];
+  };
 
   useEffect(() => {
     const syncKey = async () => {
@@ -143,33 +171,161 @@ const SettingsPanel: React.FC = () => {
           isOpen={openSections.preferences}
           onToggle={() => toggleSection('preferences')}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">Speech-to-Text</label>
-              <select
-                value={preferredSttProvider}
-                onChange={(e) => setPreferredSttProvider(e.target.value as Provider | 'auto')}
-                className="w-full px-4 py-2.5 bg-surface-elevated dark:bg-surface border border-border rounded-xl text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-              >
-                <option value="auto">Auto (Default)</option>
-                <option value="gemini">Google Gemini</option>
-                <option value="groq">Groq</option>
-                <option value="deepgram">Deepgram</option>
-                <option value="openai">OpenAI</option>
-              </select>
+          <div className="space-y-6 pt-2">
+            {/* LLM Settings */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Language Model (LLM)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1.5">Provider</label>
+                  <select
+                    value={preferredLlmProvider}
+                    onChange={(e) => {
+                      setPreferredLlmProvider(e.target.value as Provider | 'auto');
+                      setPreferredLlmModel('auto'); // Reset model when provider changes
+                    }}
+                    className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  >
+                    <option value="auto">Auto (Default)</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1.5">Model</label>
+                  <select
+                    value={preferredLlmModel}
+                    onChange={(e) => setPreferredLlmModel(e.target.value)}
+                    disabled={getLlmModels().length === 0}
+                    className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="auto">Auto (Default)</option>
+                    {getLlmModels().map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              {/* Phase 7: Extended Thinking Toggle */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-surface-elevated/50 dark:bg-surface-elevated/20 border border-border/50">
+                <div className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-within:ring-2 focus-within:ring-primary/30 focus-within:ring-offset-2 focus-within:ring-offset-surface">
+                  <input
+                    type="checkbox"
+                    checked={extendedThinking}
+                    onChange={(e) => setExtendedThinking(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className={`h-5 w-9 rounded-full transition-colors ${
+                    extendedThinking ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}></div>
+                  <div className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                    extendedThinking ? 'translate-x-4' : 'translate-x-0'
+                  }`}></div>
+                </div>
+                <div className="flex-1">
+                  <span className="block text-sm font-medium text-text-primary">High Reasoning Mode (Extended Thinking)</span>
+                  <p className="text-xs text-text-muted">
+                    Uses internal step-by-step thinking for complex logic (GPT-5/Claude 4). Increases latency.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">Language Model</label>
-              <select
-                value={preferredLlmProvider}
-                onChange={(e) => setPreferredLlmProvider(e.target.value as Provider | 'auto')}
-                className="w-full px-4 py-2.5 bg-surface-elevated dark:bg-surface border border-border rounded-xl text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-              >
-                <option value="auto">Auto (Default)</option>
-                <option value="gemini">Google Gemini</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="openai">OpenAI</option>
-              </select>
+
+            {/* Batch STT Settings */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+                Speech-to-Text (Batch)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1.5">Provider</label>
+                  <select
+                    value={preferredSttProvider}
+                    onChange={(e) => {
+                      setPreferredSttProvider(e.target.value as Provider | 'auto');
+                      setPreferredSttModel('auto'); // Reset model when provider changes
+                    }}
+                    className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  >
+                    <option value="auto">Auto (Default)</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="groq">Groq</option>
+                    <option value="deepgram">Deepgram</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1.5">Model</label>
+                  <select
+                    value={preferredSttModel}
+                    onChange={(e) => setPreferredSttModel(e.target.value)}
+                    disabled={getSttModels().length === 0}
+                    className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="auto">Auto (Default)</option>
+                    {getSttModels().map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Streaming STT Settings */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Streaming STT (Low Latency)
+                <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">Phase 7</span>
+              </h4>
+              <p className="text-xs text-text-muted -mt-1">
+                Real-time transcription with semantic endpointing for faster response times.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1.5">Provider</label>
+                  <select
+                    value={preferredStreamingSttProvider}
+                    onChange={(e) => {
+                      setPreferredStreamingSttProvider(e.target.value as StreamingSTTProvider);
+                      setPreferredStreamingSttModel('auto'); // Reset model when provider changes
+                    }}
+                    className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  >
+                    <option value="auto">Auto (Best Available)</option>
+                    <option value="deepgram">Deepgram (~150ms)</option>
+                    <option value="assemblyai">AssemblyAI (~256ms, Semantic)</option>
+                    <option value="openai_realtime">OpenAI Realtime (~300ms)</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-text-muted mb-1.5">Model</label>
+                  <select
+                    value={preferredStreamingSttModel}
+                    onChange={(e) => setPreferredStreamingSttModel(e.target.value)}
+                    disabled={getStreamingSttModels().length === 0}
+                    className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="auto">Auto (Default)</option>
+                    {getStreamingSttModels().map((model) => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
         </AccordionSection>
