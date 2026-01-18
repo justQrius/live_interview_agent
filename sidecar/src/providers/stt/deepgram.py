@@ -8,7 +8,7 @@ Uses AsyncDeepgramClient for native async support with:
 - Proper error handling with ApiError
 """
 import logging
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from ..base import STTProvider, TranscriptionResult
 
@@ -19,8 +19,8 @@ try:
     from deepgram.core.api_error import ApiError
 except ImportError as e:
     logger.warning(f"Failed to import deepgram: {e}")
-    AsyncDeepgramClient = None
-    ApiError = Exception  # Fallback for type hints
+    AsyncDeepgramClient = Any  # type: ignore
+    ApiError = Any  # type: ignore
 
 
 class DeepgramSTTProvider(STTProvider):
@@ -149,7 +149,7 @@ class DeepgramSTTProvider(STTProvider):
         except ApiError as e:
             # Structured error from Deepgram API
             logger.error(
-                f"Deepgram API error: status={e.status_code}, "
+                f"Deepgram API error: status={getattr(e, 'status_code', 500)}, "
                 f"message={getattr(e, 'message', str(e))}"
             )
             raise
