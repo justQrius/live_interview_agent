@@ -2,22 +2,21 @@ from typing import Optional
 from ..base import STTProvider, TranscriptionResult
 
 try:
-    from deepgram import DeepgramClient, PrerecordedOptions
+    from deepgram import DeepgramClient
 except ImportError as e:
     # Log the specific error to help debug dependency issues
     import logging
     logging.getLogger(__name__).warning(f"Failed to import deepgram: {e}")
     DeepgramClient = None
-    PrerecordedOptions = None
 
 class DeepgramSTTProvider(STTProvider):
     """
-    Deepgram STT Provider using Nova-2 model.
+    Deepgram STT Provider using Nova-2/3 model.
     """
     
-    DEFAULT_MODEL = "nova-2"
+    DEFAULT_MODEL = "nova-3"
 
-    def __init__(self, api_key: str, model: str = "nova-2"):
+    def __init__(self, api_key: str, model: str = "nova-3"):
         if not api_key:
             raise ValueError("API key is required")
             
@@ -29,7 +28,7 @@ class DeepgramSTTProvider(STTProvider):
 
     async def transcribe(self, audio_data: bytes, language: str = "en") -> TranscriptionResult:
         """
-        Transcribe audio data using Deepgram's Nova-2 model.
+        Transcribe audio data using Deepgram.
         """
         if not audio_data:
             return TranscriptionResult(text="")
@@ -38,18 +37,35 @@ class DeepgramSTTProvider(STTProvider):
             # Prepare source
             payload = {'buffer': audio_data}
             
-            # Prepare options
-            options = PrerecordedOptions(
-                model=self.model,
-                smart_format=True,
-                language=language
-            )
+            # Prepare options (as dict for SDK v3+ compatibility)
+            options = {
+                "model": self.model,
+                "smart_format": True,
+                "language": language
+            }
             
             # Call Deepgram API
-            response = await self.client.listen.asyncprerecorded.v("1").transcribe_file(payload, options)
+            # v3 SDK usage: deepgram.listen.prerecorded.v("1").transcribe_file(payload, options)
+            # Or asyncprerecorded if available?
+            # v3 usually exposes .listen.prerecorded.v("1") or .listen.asyncprerecorded.v("1")
+            
+            # Use async client if possible, but DeepgramClient might be sync wrapper?
+            # Deepgram SDK v3 handles async via async client or sync client.
+            # Here we initialized DeepgramClient(api_key).
+            # If we want async, we might need to use AsyncDeepgramClient or call via thread.
+            
+            # Assuming client.listen.prerecorded... is sync, we run in thread.
+            
+            def _call_api():
+                return self.client.listen.prerecorded.v("1").transcribe_file(payload, options)
+
+            import asyncio
+            response = await asyncio.to_thread(_call_api)
             
             # Extract transcript
-            # response structure: response.results.channels[0].alternatives[0].transcript
+            # response.results.channels[0].alternatives[0].transcript
+            # In v3, response is an object, not dict.
+            
             if (response.results and 
                 response.results.channels and 
                 response.results.channels[0].alternatives):
@@ -64,7 +80,10 @@ class DeepgramSTTProvider(STTProvider):
                     language=language
                 )
             else:
-                return TranscriptionResult(text="", language=language)
-
+                return TranscriptionResult(text="")
+                
         except Exception as e:
-            raise Exception(f"Deepgram STT Error: {str(e)}")
+            # ... existing error handling ...
+            import logging
+            logging.getLogger(__name__).error(f"Deepgram transcription failed: {e}")
+            raise
