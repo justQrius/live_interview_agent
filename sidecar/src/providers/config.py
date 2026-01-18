@@ -24,6 +24,10 @@ class GeminiModels:
     PRO_2_5 = "gemini-2.5-pro"
     FLASH_2_5 = "gemini-2.5-flash"
     
+    # Gen 0 (Legacy / Real-world Fallback)
+    PRO_1_5 = "gemini-1.5-pro"
+    FLASH_1_5 = "gemini-1.5-flash"
+    
     # Specialized
     EMBEDDING = "text-embedding-004"
     

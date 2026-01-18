@@ -145,6 +145,10 @@ class GeminiLLMProvider(LLMProvider):
             models_to_try.append(GeminiModels.PRO_2_5)
         if GeminiModels.FLASH_2_5 != self._model_name:
             models_to_try.append(GeminiModels.FLASH_2_5)
+        
+        # Legacy fallbacks (Safety net for real-world API compatibility)
+        models_to_try.append(GeminiModels.FLASH_1_5)
+        models_to_try.append(GeminiModels.PRO_1_5)
             
         last_error = None
         
