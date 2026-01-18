@@ -537,10 +537,17 @@ class ProviderFactory:
                 from .llm.gemini import GeminiLLMProvider
                 # Use configured model or default
                 model = self.config.llm_model or GeminiModels.DEFAULT_LLM
+                
+                # Determine thinking budget
+                # If extended_thinking is enabled but no budget set, default to 2048
+                thinking_budget = self.config.thinking_budget
+                if self.config.extended_thinking and not thinking_budget:
+                    thinking_budget = 2048
+                
                 return GeminiLLMProvider(
                     api_key, 
                     model_name=model,
-                    thinking_budget=self.config.thinking_budget,
+                    thinking_budget=thinking_budget,
                     search_enabled=self.config.search_enabled
                 )
             elif provider_type == ProviderType.OPENAI:
