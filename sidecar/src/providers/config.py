@@ -34,7 +34,7 @@ class GeminiModels:
     # Default choices by use case
     DEFAULT_LLM = FLASH_3
     DEFAULT_STT = FLASH_3  # Native audio processing
-    DEFAULT_CACHE = PRO_3
+    DEFAULT_CACHE = FLASH_3  # MUST match DEFAULT_LLM for cache compatibility
     DEFAULT_SEARCH = FLASH_3
 
 
@@ -79,17 +79,21 @@ class AnthropicModels:
 
 class DeepgramModels:
     """Deepgram model identifiers."""
-    # Nova-3 Series (Latest)
+    # Nova-3 Series (Latest - Acoustic endpointing)
     NOVA_3 = "nova-3"
     NOVA_3_GENERAL = "nova-3-general"
     NOVA_3_MEETING = "nova-3-meeting"
     
+    # Flux Series (Semantic endpointing for voice agents)
+    FLUX = "flux-general-en"
+    FLUX_GENERAL = "flux-general-en"
+    
     # Legacy
     NOVA_2 = "nova-2"
-    FLUX = "flux"
     
     # Default
     DEFAULT_STT = NOVA_3
+    DEFAULT_STREAMING = FLUX  # Prefer Flux for streaming (semantic endpointing)
 
 
 class GroqModels:
@@ -128,10 +132,11 @@ class ProviderType(Enum):
 class StreamingMode(Enum):
     """Streaming STT mode preference."""
     DISABLED = "disabled"  # Use batch STT only
-    AUTO = "auto"          # Auto-select best available
-    DEEPGRAM = "deepgram"  # Prefer Deepgram streaming
-    ASSEMBLYAI = "assemblyai"  # Prefer AssemblyAI streaming
-    OPENAI_REALTIME = "openai_realtime"  # Prefer OpenAI Realtime
+    AUTO = "auto"          # Auto-select best available (prefers semantic providers)
+    DEEPGRAM = "deepgram"  # Deepgram Nova-3 (acoustic endpointing)
+    DEEPGRAM_FLUX = "deepgram_flux"  # Deepgram Flux (semantic endpointing) - RECOMMENDED
+    ASSEMBLYAI = "assemblyai"  # AssemblyAI V3 (semantic endpointing)
+    OPENAI_REALTIME = "openai_realtime"  # OpenAI Realtime (semantic endpointing)
 
 
 @dataclass

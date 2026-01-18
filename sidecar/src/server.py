@@ -467,6 +467,18 @@ class SidecarServer:
                 if streaming_started:
                     logger.info(f"Streaming STT started: {self.streaming_stt_manager.provider_name} "
                                f"(semantic={self.streaming_stt_manager.supports_semantic_endpointing})")
+                    
+                    # Phase 7: Auto-adjust accumulator based on provider capability
+                    # Semantic providers (AssemblyAI, OpenAI) handle endpointing well → disable accumulator
+                    # Acoustic providers (Deepgram) only detect pauses → keep accumulator for safety
+                    if self.streaming_stt_manager.supports_semantic_endpointing:
+                        if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
+                            self.utterance_accumulator.config.endpointing_mode = "streaming"
+                            logger.info("Auto-switched to streaming endpointing mode (semantic provider detected)")
+                    else:
+                        if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
+                            self.utterance_accumulator.config.endpointing_mode = "hybrid"
+                            logger.info("Using hybrid endpointing mode (acoustic provider detected)")
                 else:
                     logger.info("Streaming STT not available, using batch STT only")
             except Exception as e:
