@@ -1,533 +1,431 @@
 """
-Provider Factory for creating and managing AI providers.
+Provider Factory.
 
-Implements fallback chains and caching for STT, LLM, and Embedding providers.
-Supports both batch and streaming STT providers.
+Creates and manages instances of AI providers (STT, LLM, etc.)
+based on configuration and availability.
+Handles fallback logic and provider lifecycle.
 """
+
 import logging
 from typing import Dict, List, Optional, Any
 
 from .base import STTProvider, LLMProvider, SearchProvider
-from .config import (
-    ProviderConfig, ProviderType, StreamingMode,
-    DeepgramModels, AssemblyAIModels, OpenAIModels,
-    GeminiModels, AnthropicModels, GroqModels,
-)
+from .config import ProviderConfig, ProviderType, GeminiModels, OpenAIModels, AnthropicModels
 from .stt.streaming_base import StreamingSTTProvider
 
 logger = logging.getLogger(__name__)
 
 
 class ProviderError(Exception):
-    """Raised when provider operations fail."""
+    """Exception raised when provider creation or retrieval fails."""
     pass
 
 
 class ProviderFactory:
     """
     Factory for creating and managing AI providers.
-
-    Handles provider creation, fallback chains, and caching.
-    Providers are created lazily on first request and cached for reuse.
+    
+    Implements the Singleton pattern to ensure only one factory instance exists.
+    Manages provider caches to reuse instances (e.g., maintaining WebSocket connections).
     """
-
-    # Default fallback orders (optimized for speed and reliability)
-    DEFAULT_STT_ORDER = [
-        ProviderType.GROQ,      # Fastest (~300ms)
-        ProviderType.DEEPGRAM,  # Very fast (~350ms)
-        ProviderType.OPENAI,    # Good quality (~400ms)
-        ProviderType.GEMINI,    # Always available as fallback
-    ]
-
-    DEFAULT_LLM_ORDER = [
-        ProviderType.OPENAI,    # Best quality
-        ProviderType.ANTHROPIC, # High quality
-        ProviderType.GEMINI,    # Always available as fallback
-    ]
-
-    DEFAULT_SEARCH_ORDER = [
-        ProviderType.GEMINI,    # Integrated LLM+Search
-        ProviderType.DUCKDUCKGO # Free, privacy-focused
-    ]
-
-    # Streaming STT provider order (for real-time transcription)
-    # Prefer semantic endpointing providers (Flux, AssemblyAI) over acoustic (Nova-3)
-    DEFAULT_STREAMING_STT_ORDER = [
-        StreamingMode.DEEPGRAM_FLUX,  # Semantic endpointing, ~100ms (RECOMMENDED)
-        StreamingMode.ASSEMBLYAI,     # Semantic endpointing, ~256ms
-        StreamingMode.DEEPGRAM,       # Acoustic endpointing, ~150ms (fallback)
-        StreamingMode.OPENAI_REALTIME,  # Best semantic VAD (expensive)
-    ]
-
+    
+    _instance = None
+    
     def __init__(self, config: ProviderConfig):
         """
-        Initialize the factory with configuration.
-
+        Initialize the provider factory.
+        
         Args:
-            config: ProviderConfig with API keys and preferences
+            config: Provider configuration
         """
         self.config = config
-
-        # Provider caches
         self._stt_cache: Dict[ProviderType, STTProvider] = {}
         self._llm_cache: Dict[ProviderType, LLMProvider] = {}
-        self._embedding_cache: Dict[ProviderType, Any] = {}  # ChromaDB EmbeddingFunction
+        self._embedding_cache: Dict[str, Any] = {} # Abstract type for now
         self._search_cache: Dict[ProviderType, SearchProvider] = {}
-        self._streaming_stt_cache: Dict[StreamingMode, StreamingSTTProvider] = {}
-
-        # Mock providers (for testing)
-        self._mock_stt_providers: Optional[Dict[ProviderType, STTProvider]] = None
+        self._streaming_stt_cache: Dict[Any, StreamingSTTProvider] = {}
+        
+        # Mocks for testing
         self._mock_llm_providers: Optional[Dict[ProviderType, LLMProvider]] = None
+        self._mock_stt_providers: Optional[Dict[ProviderType, STTProvider]] = None
         self._mock_search_providers: Optional[Dict[ProviderType, SearchProvider]] = None
+        self._mock_streaming_providers: Optional[Dict[Any, StreamingSTTProvider]] = None
+
+    @classmethod
+    def get_instance(cls, config: Optional[ProviderConfig] = None) -> "ProviderFactory":
+        """
+        Get the singleton instance of the factory.
+        
+        Args:
+            config: Optional config to update/initialize with
+            
+        Returns:
+            The ProviderFactory instance
+        """
+        if cls._instance is None:
+            if config is None:
+                # Default config if none provided
+                config = ProviderConfig()
+            cls._instance = cls(config)
+        elif config is not None:
+            # Update config of existing instance
+            cls._instance.config = config
+            # Clear caches if config changes significantly? 
+            # For now, we keep caches to avoid reconnecting overhead
+            # unless explicitly cleared.
+            
+        return cls._instance
+
+    def get_stt_provider(self, preferred: Optional[ProviderType] = None) -> STTProvider:
+        """
+        Get the best available STT provider.
+        
+        Args:
+            preferred: Preferred provider type
+            
+        Returns:
+            An instantiated STTProvider
+            
+        Raises:
+            Exception: If no STT provider is available
+        """
+        # 1. Check mocks first
+        if self._mock_stt_providers is not None:
+            return self._get_mock_stt_provider(preferred)
+
+        # 2. Try preferred
+        if preferred:
+            provider = self._get_or_create_stt_provider(preferred)
+            if provider and provider.is_available():
+                return provider
+                
+        # 3. Try configured preference
+        if self.config.preferred_stt:
+            provider = self._get_or_create_stt_provider(self.config.preferred_stt)
+            if provider and provider.is_available():
+                return provider
+
+        # 4. Fallback chain
+        for provider_type in self.get_stt_fallback_order():
+            provider = self._get_or_create_stt_provider(provider_type)
+            if provider and provider.is_available():
+                return provider
+                
+        raise Exception("No available STT providers found. Please check your API keys.")
+
+    def get_llm_provider(self, preferred: Optional[ProviderType] = None) -> LLMProvider:
+        """
+        Get the best available LLM provider.
+        
+        Args:
+            preferred: Preferred provider type
+            
+        Returns:
+            An instantiated LLMProvider
+            
+        Raises:
+            Exception: If no LLM provider is available
+        """
+        # 1. Check mocks
+        if self._mock_llm_providers is not None:
+            return self._get_mock_llm_provider(preferred)
+
+        # 2. Try preferred
+        if preferred:
+            provider = self._get_or_create_llm_provider(preferred)
+            if provider and provider.is_available():
+                return provider
+
+        # 3. Try configured preference
+        if self.config.preferred_llm:
+            provider = self._get_or_create_llm_provider(self.config.preferred_llm)
+            if provider and provider.is_available():
+                return provider
+
+        # 4. Fallback chain
+        for provider_type in self.get_llm_fallback_order():
+            provider = self._get_or_create_llm_provider(provider_type)
+            if provider and provider.is_available():
+                return provider
+                
+        raise Exception("No available LLM providers found. Please check your API keys.")
+
+    def get_search_provider(self, preferred: Optional[ProviderType] = None) -> SearchProvider:
+        """
+        Get the best available Search provider.
+        
+        Args:
+            preferred: Preferred provider type
+            
+        Returns:
+            An instantiated SearchProvider
+            
+        Raises:
+            Exception: If no Search provider is available
+        """
+        # 1. Check mocks
+        if self._mock_search_providers is not None:
+            return self._get_mock_search_provider(preferred)
+
+        # 2. Try preferred
+        if preferred:
+            provider = self._get_or_create_search_provider(preferred)
+            if provider and provider.is_available():
+                return provider
+                
+        # 3. Fallback chain
+        for provider_type in self.get_search_fallback_order():
+            provider = self._get_or_create_search_provider(provider_type)
+            if provider and provider.is_available():
+                return provider
+                
+        # Note: Search is optional in many cases, but if requested we throw
+        raise Exception("No available Search providers found.")
+
+    def get_streaming_stt_provider(self) -> StreamingSTTProvider:
+        """
+        Get the configured streaming STT provider.
+        
+        Returns:
+            An instantiated StreamingSTTProvider
+            
+        Raises:
+            Exception: If streaming STT is disabled or not configured correctly
+        """
+        # 1. Check mocks
+        if self._mock_streaming_providers:
+            # Just return the first one for now in mocks
+            return next(iter(self._mock_streaming_providers.values()))
+
+        # 2. Check cache based on configured mode
+        mode = self.config.streaming_mode
+        
+        if mode in self._streaming_stt_cache:
+            return self._streaming_stt_cache[mode]
+            
+        # 3. Create new
+        provider = self._create_streaming_stt_provider(mode)
+        if provider:
+            self._streaming_stt_cache[mode] = provider
+            return provider
+            
+        raise Exception(f"Failed to create streaming STT provider for mode: {mode}")
 
     def get_stt_fallback_order(self) -> List[ProviderType]:
-        """
-        Get the STT provider fallback order.
-
-        If a preferred provider is set, it goes first.
-        Otherwise, uses default order.
-
-        Returns:
-            List of ProviderTypes in fallback order
-        """
+        """Get the order of STT providers to try."""
+        order = []
+        
+        # 1. Configured preference
         if self.config.preferred_stt:
-            # Put preferred first, then rest of default order
-            order = [self.config.preferred_stt]
-            order.extend(p for p in self.DEFAULT_STT_ORDER if p != self.config.preferred_stt)
-            return order
-        return self.DEFAULT_STT_ORDER.copy()
+            order.append(self.config.preferred_stt)
+            
+        # 2. High quality/speed providers
+        defaults = [
+            ProviderType.GROQ,      # Fastest
+            ProviderType.DEEPGRAM,  # Very fast & accurate
+            ProviderType.GEMINI,    # Multimodal native
+            ProviderType.OPENAI,    # Reliable fallback
+        ]
+        
+        for p in defaults:
+            if p not in order and self.config.has_api_key(p):
+                order.append(p)
+                
+        return order
 
     def get_llm_fallback_order(self) -> List[ProviderType]:
-        """
-        Get the LLM provider fallback order.
-
-        If a preferred provider is set, it goes first.
-        Otherwise, uses default order.
-
-        Returns:
-            List of ProviderTypes in fallback order
-        """
+        """Get the order of LLM providers to try."""
+        order = []
+        
+        # 1. Configured preference
         if self.config.preferred_llm:
-            order = [self.config.preferred_llm]
-            order.extend(p for p in self.DEFAULT_LLM_ORDER if p != self.config.preferred_llm)
-            return order
-        return self.DEFAULT_LLM_ORDER.copy()
+            order.append(self.config.preferred_llm)
+            
+        # 2. High capability providers
+        defaults = [
+            ProviderType.GEMINI,    # High context, fast
+            ProviderType.OPENAI,    # Standard
+            ProviderType.ANTHROPIC, # High reasoning
+        ]
+        
+        for p in defaults:
+            if p not in order and self.config.has_api_key(p):
+                order.append(p)
+                
+        return order
 
     def get_search_fallback_order(self) -> List[ProviderType]:
-        """
-        Get the Search provider fallback order.
-
-        Returns:
-            List of ProviderTypes in fallback order
-        """
-        return self.DEFAULT_SEARCH_ORDER.copy()
+        """Get the order of Search providers to try."""
+        order = []
+        
+        # 1. Gemini (Integrated & Grounded)
+        if self.config.has_api_key(ProviderType.GEMINI):
+            order.append(ProviderType.GEMINI)
+            
+        # 2. DuckDuckGo (Free, no key needed)
+        order.append(ProviderType.DUCKDUCKGO)
+        
+        return order
 
     def get_available_stt_providers(self) -> List[ProviderType]:
-        """
-        Get list of STT providers that have API keys configured.
-
-        Returns:
-            List of available ProviderTypes for STT
-        """
+        """Get list of available STT providers (have API keys)."""
         stt_providers = [
-            ProviderType.GEMINI,
             ProviderType.GROQ,
             ProviderType.DEEPGRAM,
+            ProviderType.GEMINI,
             ProviderType.OPENAI,
+            ProviderType.ASSEMBLYAI,
         ]
         return [p for p in stt_providers if self.config.has_api_key(p)]
 
     def get_available_llm_providers(self) -> List[ProviderType]:
-        """
-        Get list of LLM providers that have API keys configured.
-
-        Returns:
-            List of available ProviderTypes for LLM
-        """
+        """Get list of available LLM providers (have API keys)."""
         llm_providers = [
             ProviderType.GEMINI,
             ProviderType.OPENAI,
             ProviderType.ANTHROPIC,
         ]
         return [p for p in llm_providers if self.config.has_api_key(p)]
-
+        
     def get_available_search_providers(self) -> List[ProviderType]:
-        """
-        Get list of Search providers that have API keys configured (or are free).
+        """Get list of available Search providers."""
+        providers = []
+        if self.config.has_api_key(ProviderType.GEMINI):
+            providers.append(ProviderType.GEMINI)
+        providers.append(ProviderType.DUCKDUCKGO) # Always available
+        return providers
 
-        Returns:
-            List of available ProviderTypes for Search
-        """
-        search_providers = [
-            ProviderType.GEMINI,
-            ProviderType.DUCKDUCKGO,
-        ]
-        return [p for p in search_providers if self.config.has_api_key(p) or p == ProviderType.DUCKDUCKGO]
-
-    def get_stt_provider(self, preferred: Optional[ProviderType] = None) -> STTProvider:
-        """
-        Get an STT provider, with fallback chain.
-
-        Tries providers in fallback order until one is available.
-
-        Args:
-            preferred: Override preference for this call (optional)
-
-        Returns:
-            Available STT provider
-
-        Raises:
-            ProviderError: If no STT providers are available
-        """
-        # Use mock providers if set (for testing)
-        if self._mock_stt_providers is not None:
-            return self._get_mock_stt_provider(preferred)
-
-        # Determine fallback order
-        if preferred:
-            order = [preferred] + [p for p in self.DEFAULT_STT_ORDER if p != preferred]
-        else:
-            order = self.get_stt_fallback_order()
-
-        # Try providers in order
-        for provider_type in order:
-            # Skip if no API key
-            if not self.config.has_api_key(provider_type):
-                continue
-
-            # Check cache first
-            if provider_type in self._stt_cache:
-                provider = self._stt_cache[provider_type]
-                if provider.is_available():
-                    return provider
-
-            # Create new provider
-            provider = self._create_stt_provider(provider_type)
-            if provider is not None:
-                self._stt_cache[provider_type] = provider
-                if provider.is_available():
-                    logger.info(f"Using STT provider: {provider_type.value}")
-                    return provider
-
-        raise ProviderError(
-            "No STT providers available. Configure at least one API key for: "
-            + ", ".join(p.value for p in self.DEFAULT_STT_ORDER)
-        )
-
-    def get_llm_provider(self, preferred: Optional[ProviderType] = None) -> LLMProvider:
-        """
-        Get an LLM provider, with fallback chain.
-
-        Tries providers in fallback order until one is available.
-
-        Args:
-            preferred: Override preference for this call (optional)
-
-        Returns:
-            Available LLM provider
-
-        Raises:
-            ProviderError: If no LLM providers are available
-        """
-        # Use mock providers if set (for testing)
-        if self._mock_llm_providers is not None:
-            return self._get_mock_llm_provider(preferred)
-
-        # Determine fallback order
-        if preferred:
-            order = [preferred] + [p for p in self.DEFAULT_LLM_ORDER if p != preferred]
-        else:
-            order = self.get_llm_fallback_order()
-
-        # Try providers in order
-        for provider_type in order:
-            # Skip if no API key
-            if not self.config.has_api_key(provider_type):
-                continue
-
-            # Check cache first
-            if provider_type in self._llm_cache:
-                provider = self._llm_cache[provider_type]
-                if provider.is_available():
-                    return provider
-
-            # Create new provider
-            provider = self._create_llm_provider(provider_type)
-            if provider is not None:
-                self._llm_cache[provider_type] = provider
-                if provider.is_available():
-                    logger.info(f"Using LLM provider: {provider_type.value}")
-                    return provider
-
-        raise ProviderError(
-            "No LLM providers available. Configure at least one API key for: "
-            + ", ".join(p.value for p in self.DEFAULT_LLM_ORDER)
-        )
-
-    def get_search_provider(self, preferred: Optional[ProviderType] = None) -> SearchProvider:
-        """
-        Get a Search provider, with fallback chain.
-
-        Args:
-            preferred: Override preference for this call (optional)
-
-        Returns:
-            Available Search provider
-
-        Raises:
-            ProviderError: If no Search providers are available
-        """
-        # Use mock providers if set (for testing)
-        if self._mock_search_providers is not None:
-            # Simple mock retrieval for brevity
-            for p_type, p in self._mock_search_providers.items():
-                if p.is_available():
-                    return p
-
-        # Determine fallback order
-        order = self.get_search_fallback_order()
-        if preferred and preferred in order:
-             # Move preferred to front
-             order.remove(preferred)
-             order.insert(0, preferred)
-
-        # Try providers in order
-        for provider_type in order:
-            # Skip if no API key (DDG returns "free" which is valid string)
-            if not self.config.has_api_key(provider_type) and provider_type != ProviderType.DUCKDUCKGO:
-                continue
-
-            # Check cache first
-            if provider_type in self._search_cache:
-                provider = self._search_cache[provider_type]
-                if provider.is_available():
-                    return provider
-
-            # Create new provider
-            provider = self._create_search_provider(provider_type)
-            if provider is not None:
-                self._search_cache[provider_type] = provider
-                if provider.is_available():
-                    logger.info(f"Using Search provider: {provider_type.value}")
-                    return provider
-
-        raise ProviderError("No Search providers available.")
-
-    def get_streaming_stt_provider(
-        self, 
-        preferred: Optional[StreamingMode] = None
-    ) -> Optional[StreamingSTTProvider]:
-        """
-        Get a streaming STT provider for real-time transcription.
-
-        Streaming providers offer lower latency through WebSocket-based
-        real-time transcription with interim results and semantic endpointing.
-
-        Args:
-            preferred: Override streaming mode preference for this call
-
-        Returns:
-            StreamingSTTProvider or None if streaming disabled/unavailable
-        """
-        # Check if streaming is disabled
-        mode = preferred or self.config.streaming_mode
-        if mode == StreamingMode.DISABLED:
-            return None
-
-        # Determine order to try
-        if mode == StreamingMode.AUTO:
-            order = self.DEFAULT_STREAMING_STT_ORDER
-        else:
-            # Put preferred first, then rest
-            order = [mode] + [m for m in self.DEFAULT_STREAMING_STT_ORDER if m != mode]
-
-        # Try providers in order
-        for streaming_mode in order:
-            # Check if we have API key for this provider
-            if not self._has_streaming_api_key(streaming_mode):
-                continue
-
-            # Check cache first
-            if streaming_mode in self._streaming_stt_cache:
-                provider = self._streaming_stt_cache[streaming_mode]
-                if provider.is_available():
-                    return provider
-
-            # Create new provider
-            provider = self._create_streaming_stt_provider(streaming_mode)
-            if provider is not None:
-                self._streaming_stt_cache[streaming_mode] = provider
-                if provider.is_available():
-                    logger.info(f"Using streaming STT provider: {streaming_mode.value}")
-                    return provider
-
-        # No streaming providers available
-        logger.info("No streaming STT providers available, will use batch STT")
-        return None
-
-    def _has_streaming_api_key(self, streaming_mode: StreamingMode) -> bool:
-        """Check if API key exists for streaming provider."""
-        if streaming_mode == StreamingMode.DEEPGRAM:
-            return self.config.has_api_key(ProviderType.DEEPGRAM)
-        elif streaming_mode == StreamingMode.DEEPGRAM_FLUX:
-            return self.config.has_api_key(ProviderType.DEEPGRAM)
-        elif streaming_mode == StreamingMode.ASSEMBLYAI:
-            return self.config.has_api_key(ProviderType.ASSEMBLYAI)
-        elif streaming_mode == StreamingMode.OPENAI_REALTIME:
-            return self.config.has_api_key(ProviderType.OPENAI)
-        return False
-
-    def _create_streaming_stt_provider(
-        self, 
-        streaming_mode: StreamingMode
-    ) -> Optional[StreamingSTTProvider]:
-        """
-        Create a streaming STT provider instance.
-
-        Args:
-            streaming_mode: Type of streaming provider to create
-
-        Returns:
-            StreamingSTTProvider instance or None if creation fails
-        """
-        try:
-            if streaming_mode == StreamingMode.DEEPGRAM:
-                api_key = self.config.get_api_key(ProviderType.DEEPGRAM)
-                if not api_key:
-                    return None
-                from .stt.deepgram_streaming import DeepgramStreamingProvider
-                # Use configured model or default (Nova-3 for acoustic)
-                model = self.config.streaming_stt_model or DeepgramModels.DEFAULT_STT
-                return DeepgramStreamingProvider(api_key, model=model)
-
-            elif streaming_mode == StreamingMode.DEEPGRAM_FLUX:
-                api_key = self.config.get_api_key(ProviderType.DEEPGRAM)
-                if not api_key:
-                    return None
-                from .stt.deepgram_flux import DeepgramFluxProvider
-                # Flux model with semantic endpointing
-                model = self.config.streaming_stt_model or DeepgramModels.FLUX
-                return DeepgramFluxProvider(api_key, model=model)
-
-            elif streaming_mode == StreamingMode.ASSEMBLYAI:
-                api_key = self.config.get_api_key(ProviderType.ASSEMBLYAI)
-                if not api_key:
-                    return None
-                from .stt.assemblyai_streaming import AssemblyAIStreamingProvider
-                # Use configured model or default
-                model = self.config.streaming_stt_model or AssemblyAIModels.DEFAULT_STT
-                return AssemblyAIStreamingProvider(api_key, model=model)
-
-            elif streaming_mode == StreamingMode.OPENAI_REALTIME:
-                api_key = self.config.get_api_key(ProviderType.OPENAI)
-                if not api_key:
-                    return None
-                from .stt.openai_realtime import OpenAIRealtimeProvider
-                # Use configured model or default
-                model = self.config.streaming_stt_model or OpenAIModels.REALTIME
-                return OpenAIRealtimeProvider(api_key, model=model)
-
-        except ImportError as e:
-            logger.warning(f"Failed to import {streaming_mode.value} streaming provider: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to create {streaming_mode.value} streaming provider: {e}")
-
-        return None
-
-    def get_available_streaming_providers(self) -> List[StreamingMode]:
-        """
-        Get list of streaming STT providers that have API keys configured.
-
-        Returns:
-            List of available StreamingMode values
-        """
-        available = []
-        for mode in [StreamingMode.DEEPGRAM_FLUX, StreamingMode.DEEPGRAM, StreamingMode.ASSEMBLYAI, StreamingMode.OPENAI_REALTIME]:
-            if self._has_streaming_api_key(mode):
-                available.append(mode)
-        return available
-
-    def _get_mock_stt_provider(self, preferred: Optional[ProviderType]) -> STTProvider:
-        """Get mock STT provider for testing."""
-        if self._mock_stt_providers is None:
-            raise ProviderError("Mock STT providers not initialized")
-
-        if preferred and preferred in self._mock_stt_providers:
-            p = self._mock_stt_providers[preferred]
-            if p.is_available():
-                return p
-
-        # Fallback through mocks
-        order = self.get_stt_fallback_order()
-        for provider_type in order:
-            if provider_type in self._mock_stt_providers:
-                p = self._mock_stt_providers[provider_type]
-                if p.is_available():
-                    return p
-
-        raise ProviderError("No STT providers available")
-
-    def _get_mock_llm_provider(self, preferred: Optional[ProviderType]) -> LLMProvider:
-        """Get mock LLM provider for testing."""
-        if self._mock_llm_providers is None:
-            raise ProviderError("Mock LLM providers not initialized")
+    def get_available_streaming_providers(self) -> List[Any]:
+        """Get list of available Streaming STT modes."""
+        from .config import StreamingMode
+        modes = []
+        
+        # Always allow AUTO/DISABLED
+        modes.append(StreamingMode.AUTO)
+        
+        if self.config.has_api_key(ProviderType.DEEPGRAM):
+            modes.append(StreamingMode.DEEPGRAM)
+            modes.append(StreamingMode.DEEPGRAM_FLUX)
             
-        if preferred and preferred in self._mock_llm_providers:
-            p = self._mock_llm_providers[preferred]
-            if p.is_available():
-                return p
+        if self.config.has_api_key(ProviderType.ASSEMBLYAI):
+            modes.append(StreamingMode.ASSEMBLYAI)
+            
+        if self.config.has_api_key(ProviderType.OPENAI):
+            modes.append(StreamingMode.OPENAI_REALTIME)
+            
+        return modes
 
-        # Fallback through mocks
-        order = self.get_llm_fallback_order()
-        for provider_type in order:
-            if provider_type in self._mock_llm_providers:
-                p = self._mock_llm_providers[provider_type]
-                if p.is_available():
-                    return p
+    def _get_or_create_stt_provider(self, provider_type: ProviderType) -> Optional[STTProvider]:
+        """Get from cache or create STT provider."""
+        if provider_type in self._stt_cache:
+            return self._stt_cache[provider_type]
+            
+        provider = self._create_stt_provider(provider_type)
+        if provider:
+            self._stt_cache[provider_type] = provider
+            
+        return provider
 
-        raise ProviderError("No LLM providers available")
+    def _get_or_create_llm_provider(self, provider_type: ProviderType) -> Optional[LLMProvider]:
+        """Get from cache or create LLM provider."""
+        if provider_type in self._llm_cache:
+            return self._llm_cache[provider_type]
+            
+        provider = self._create_llm_provider(provider_type)
+        if provider:
+            self._llm_cache[provider_type] = provider
+            
+        return provider
+
+    def _get_or_create_search_provider(self, provider_type: ProviderType) -> Optional[SearchProvider]:
+        """Get from cache or create Search provider."""
+        if provider_type in self._search_cache:
+            return self._search_cache[provider_type]
+            
+        provider = self._create_search_provider(provider_type)
+        if provider:
+            self._search_cache[provider_type] = provider
+            
+        return provider
 
     def _create_stt_provider(self, provider_type: ProviderType) -> Optional[STTProvider]:
-        """
-        Create an STT provider instance.
-
-        Args:
-            provider_type: Type of provider to create
-
-        Returns:
-            STTProvider instance or None if creation fails
-        """
+        """Create an STT provider instance."""
         api_key = self.config.get_api_key(provider_type)
         if not api_key:
             return None
-
+            
         try:
-            # Lazy imports to avoid loading all provider dependencies
-            if provider_type == ProviderType.GEMINI:
-                from .stt.gemini import GeminiSTTProvider
-                # Use configured model or default
-                model = self.config.stt_model or GeminiModels.DEFAULT_STT
-                return GeminiSTTProvider(api_key, model_name=model)
-            elif provider_type == ProviderType.GROQ:
+            # Lazy imports
+            if provider_type == ProviderType.GROQ:
                 from .stt.groq import GroqSTTProvider
-                # Use configured model or default
-                model = self.config.stt_model or GroqModels.DEFAULT_STT
+                model = self.config.stt_model or "whisper-large-v3-turbo"
                 return GroqSTTProvider(api_key, model=model)
             elif provider_type == ProviderType.DEEPGRAM:
                 from .stt.deepgram import DeepgramSTTProvider
-                # Use configured model or default
-                model = self.config.stt_model or DeepgramModels.DEFAULT_STT
+                model = self.config.stt_model or "nova-3"
                 return DeepgramSTTProvider(api_key, model=model)
+            elif provider_type == ProviderType.GEMINI:
+                from .stt.gemini import GeminiSTTProvider
+                model = self.config.stt_model or GeminiModels.DEFAULT_STT
+                return GeminiSTTProvider(api_key, model_name=model)
             elif provider_type == ProviderType.OPENAI:
                 from .stt.openai import OpenAISTTProvider
-                # Use configured model or default
                 model = self.config.stt_model or OpenAIModels.DEFAULT_STT
                 return OpenAISTTProvider(api_key, model=model)
         except ImportError as e:
             logger.warning(f"Failed to import {provider_type.value} STT provider: {e}")
         except Exception as e:
             logger.warning(f"Failed to create {provider_type.value} STT provider: {e}")
+            
+        return None
 
+    def _create_streaming_stt_provider(self, mode: Any) -> Optional[StreamingSTTProvider]:
+        """Create a Streaming STT provider instance."""
+        from .config import StreamingMode
+        
+        try:
+            if mode == StreamingMode.DEEPGRAM:
+                api_key = self.config.deepgram_api_key
+                if not api_key: return None
+                from .stt.deepgram_streaming import DeepgramStreamingProvider
+                model = self.config.streaming_stt_model or "nova-3"
+                return DeepgramStreamingProvider(api_key, model=model)
+                
+            elif mode == StreamingMode.DEEPGRAM_FLUX:
+                api_key = self.config.deepgram_api_key
+                if not api_key: return None
+                from .stt.deepgram_flux import DeepgramFluxProvider
+                model = self.config.streaming_stt_model or "flux-general-en"
+                return DeepgramFluxProvider(api_key, model=model)
+                
+            elif mode == StreamingMode.ASSEMBLYAI:
+                api_key = self.config.assemblyai_api_key
+                if not api_key: return None
+                from .stt.assemblyai_streaming import AssemblyAIStreamingProvider
+                model = self.config.streaming_stt_model or "best"
+                return AssemblyAIStreamingProvider(api_key, model=model)
+                
+            elif mode == StreamingMode.OPENAI_REALTIME:
+                api_key = self.config.openai_api_key
+                if not api_key: return None
+                from .stt.openai_realtime import OpenAIRealtimeProvider
+                model = self.config.streaming_stt_model or OpenAIModels.REALTIME
+                return OpenAIRealtimeProvider(api_key, model=model)
+                
+            elif mode == StreamingMode.AUTO:
+                # Fallback logic for AUTO
+                if self.config.deepgram_api_key:
+                    return self._create_streaming_stt_provider(StreamingMode.DEEPGRAM_FLUX)
+                if self.config.assemblyai_api_key:
+                    return self._create_streaming_stt_provider(StreamingMode.ASSEMBLYAI)
+                if self.config.openai_api_key:
+                    return self._create_streaming_stt_provider(StreamingMode.OPENAI_REALTIME)
+                    
+        except ImportError as e:
+            logger.warning(f"Failed to import streaming provider for {mode}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to create streaming provider for {mode}: {e}")
+            
         return None
 
     def _create_llm_provider(self, provider_type: ProviderType) -> Optional[LLMProvider]:
@@ -565,9 +463,35 @@ class ProviderFactory:
                 )
             elif provider_type == ProviderType.OPENAI:
                 from .llm.openai import OpenAILLMProvider
+                from .search.duckduckgo import DuckDuckGoSearchProvider
+                
                 # Use configured model or default
                 model = self.config.llm_model or OpenAIModels.DEFAULT_LLM
-                return OpenAILLMProvider(api_key, model=model)
+                
+                # Determine thinking budget
+                thinking_budget = self.config.thinking_budget
+                if self.config.extended_thinking and not thinking_budget:
+                    thinking_budget = 2048
+                    
+                # Setup search provider if enabled
+                search_provider = None
+                if self.config.search_enabled:
+                    # Use DuckDuckGo for OpenAI grounding
+                    # Note: We create a fresh instance here. We could use _get_or_create_search_provider
+                    # but we want to avoid circular dependencies if we injected the LLM back into it.
+                    # Since DuckDuckGo is lightweight, creating a new one is fine.
+                    try:
+                        search_provider = DuckDuckGoSearchProvider()
+                    except ImportError:
+                        logger.warning("DuckDuckGo search not available for OpenAI grounding")
+                
+                return OpenAILLMProvider(
+                    api_key, 
+                    model=model,
+                    thinking_budget=thinking_budget,
+                    search_provider=search_provider,
+                    search_enabled=self.config.search_enabled
+                )
             elif provider_type == ProviderType.ANTHROPIC:
                 from .llm.anthropic import AnthropicLLMProvider
                 # Use configured model or default
@@ -666,3 +590,30 @@ class ProviderFactory:
                 "fallback_order": [p.value for p in self.get_search_fallback_order()],
             }
         }
+
+    # Mock helpers for testing
+    def set_mock_llm_provider(self, provider_type: ProviderType, provider: LLMProvider):
+        if self._mock_llm_providers is None: self._mock_llm_providers = {}
+        self._mock_llm_providers[provider_type] = provider
+
+    def set_mock_stt_provider(self, provider_type: ProviderType, provider: STTProvider):
+        if self._mock_stt_providers is None: self._mock_stt_providers = {}
+        self._mock_stt_providers[provider_type] = provider
+        
+    def _get_mock_llm_provider(self, preferred: Optional[ProviderType]) -> LLMProvider:
+        if self._mock_llm_providers is None: raise Exception("No mocks set")
+        if preferred and preferred in self._mock_llm_providers:
+            return self._mock_llm_providers[preferred]
+        return next(iter(self._mock_llm_providers.values()))
+        
+    def _get_mock_stt_provider(self, preferred: Optional[ProviderType]) -> STTProvider:
+        if self._mock_stt_providers is None: raise Exception("No mocks set")
+        if preferred and preferred in self._mock_stt_providers:
+            return self._mock_stt_providers[preferred]
+        return next(iter(self._mock_stt_providers.values()))
+
+    def _get_mock_search_provider(self, preferred: Optional[ProviderType]) -> SearchProvider:
+        if self._mock_search_providers is None: raise Exception("No mocks set")
+        if preferred and preferred in self._mock_search_providers:
+            return self._mock_search_providers[preferred]
+        return next(iter(self._mock_search_providers.values()))
