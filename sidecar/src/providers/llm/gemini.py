@@ -36,7 +36,7 @@ class GeminiLLMProvider(LLMProvider):
     - System Instructions
     """
 
-    DEFAULT_MODEL = "gemini-3-pro-preview"  # Centralized in config.py as GeminiModels.DEFAULT_LLM
+    DEFAULT_MODEL = GeminiModels.DEFAULT_LLM
     
     def __init__(
         self, 
@@ -58,45 +58,42 @@ class GeminiLLMProvider(LLMProvider):
         
         if not api_key:
             raise ValueError("API key is required")
-
+            
         self._api_key = api_key
         self._model_name = model_name or self.DEFAULT_MODEL
-        self._available = False
-        self._client: Optional[GeminiClient] = None
-        self._cached_content_name: Optional[str] = None
-        self._thinking_budget: int = thinking_budget or 1024
-        self._search_enabled: bool = search_enabled 
+        self._thinking_budget = thinking_budget
+        self._search_enabled = search_enabled
+        self._cached_content_name = None
+        self._client = None
+        self._candidate_profile = None  # Store profile for injection
+        
+        self._initialize_client()
 
+    def _initialize_client(self):
+        """Initialize the unified Gemini client."""
         try:
-            self._client = GeminiClient(api_key=api_key)
-            self._available = True
+            self._client = GeminiClient(self._api_key)
+            logger.info(f"Initialized Gemini Client with model {self._model_name}")
         except Exception as e:
             raise GeminiLLMProviderError(f"Failed to initialize Gemini client: {e}")
 
-    def is_available(self) -> bool:
-        """Check availability."""
-        return self._available
-    
-    def set_cached_content(self, cache_name: str) -> None:
-        """Set the cached content resource name to use for requests."""
-        self._cached_content_name = cache_name
-        logger.info(f"Gemini provider switched to cached context: {cache_name}")
+    def set_candidate_profile(self, profile: str):
+        """Set candidate profile context."""
+        self._candidate_profile = profile
 
-    def _build_prompt(
-        self,
-        prompt: str,
-        context: str,
-        history: List[Dict]
-    ) -> tuple[str, str]:
+    def set_cached_content(self, cached_content_name: str):
+        """Set the cached content resource name."""
+        self._cached_content_name = cached_content_name
+        logger.info(f"Using cached content: {cached_content_name}")
+
+    def clear_cache(self):
+        """Clear the cached content reference."""
+        self._cached_content_name = None
+
+    def _build_prompt(self, prompt: str, context: str, history: List[Dict]) -> tuple[str, str]:
         """
-        Build prompt and system instruction.
-        
-        Cache-First Architecture:
-        - When file-based cache is available, skip RAG context (cache has full docs)
-        - When no cache, include RAG context for grounding
-        
-        Returns:
-            Tuple of (full_prompt_content, system_instruction)
+        Build the prompt including system instructions and context.
+        Returns (full_user_content, system_instruction).
         """
         system_content, question_type = build_system_prompt(
             prompt,
@@ -142,12 +139,12 @@ class GeminiLLMProvider(LLMProvider):
         models_to_try = [self._model_name]
         
         # Add fallbacks if not already the default
-        if GeminiModels.FLASH != self._model_name:
-            models_to_try.append(GeminiModels.FLASH)
-        if GeminiModels.PRO_STABLE != self._model_name:
-            models_to_try.append(GeminiModels.PRO_STABLE)
-        if GeminiModels.FLASH_STABLE != self._model_name:
-            models_to_try.append(GeminiModels.FLASH_STABLE)
+        if GeminiModels.FLASH_3 != self._model_name:
+            models_to_try.append(GeminiModels.FLASH_3)
+        if GeminiModels.PRO_2_5 != self._model_name:
+            models_to_try.append(GeminiModels.PRO_2_5)
+        if GeminiModels.FLASH_2_5 != self._model_name:
+            models_to_try.append(GeminiModels.FLASH_2_5)
             
         last_error = None
         
