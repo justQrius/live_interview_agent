@@ -50,8 +50,8 @@ export const MODEL_OPTIONS = {
   // LLM Models
   llm: {
     gemini: [
-      { id: 'gemini-3.0-flash', name: 'Gemini 3.0 Flash (Fastest, Default)' },
-      { id: 'gemini-3.0-pro', name: 'Gemini 3.0 Pro (Reasoning)' },
+      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview (Fastest, Default)' },
+      { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview (Reasoning)' },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
     ],
@@ -85,8 +85,8 @@ export const MODEL_OPTIONS = {
       { id: 'whisper-1', name: 'Whisper-1' },
     ],
     gemini: [
-      { id: 'gemini-3.0-flash', name: 'Gemini 3.0 Flash (Native Audio)' },
-      { id: 'gemini-3.0-pro', name: 'Gemini 3.0 Pro' },
+      { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview (Native Audio)' },
+      { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
     ],
   },
   // Streaming STT Models

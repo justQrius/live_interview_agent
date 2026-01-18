@@ -17,8 +17,8 @@ from typing import Optional
 class GeminiModels:
     """Gemini model identifiers."""
     # Gen 1 (Current)
-    PRO_3 = "gemini-3.0-pro"        # Reasoning / Native Audio
-    FLASH_3 = "gemini-3.0-flash"    # Fast / Cost-effective
+    PRO_3 = "gemini-3-pro-preview"    # Reasoning / Native Audio
+    FLASH_3 = "gemini-3-flash-preview" # Fast / Cost-effective
     
     # Gen 2 (Previous)
     PRO_2_5 = "gemini-2.5-pro"
