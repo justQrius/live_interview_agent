@@ -3,7 +3,10 @@ from ..base import STTProvider, TranscriptionResult
 
 try:
     from deepgram import DeepgramClient, PrerecordedOptions
-except ImportError:
+except ImportError as e:
+    # Log the specific error to help debug dependency issues
+    import logging
+    logging.getLogger(__name__).warning(f"Failed to import deepgram: {e}")
     DeepgramClient = None
     PrerecordedOptions = None
 
