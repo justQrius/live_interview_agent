@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import List
 from .store import VectorStore
 from .retrieval import RetrievalResult, confidence_from_distance
@@ -18,6 +19,19 @@ class RAGEngine:
             vector_store: The VectorStore instance to use for retrieval.
         """
         self.vector_store = vector_store
+
+    async def retrieve_async(self, query: str, limit: int = 5) -> List[RetrievalResult]:
+        """
+        Async wrapper for retrieval to prevent blocking the event loop.
+        
+        Args:
+            query: The question or query string.
+            limit: Maximum number of results to return.
+            
+        Returns:
+            List of RetrievalResult objects.
+        """
+        return await asyncio.to_thread(self.retrieve, query, limit)
 
     def retrieve(self, query: str, limit: int = 5) -> List[RetrievalResult]:
         """

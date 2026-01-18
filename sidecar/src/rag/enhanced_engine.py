@@ -109,6 +109,27 @@ class EnhancedRAGEngine(RAGEngine):
             limit=limit
         )
     
+    async def retrieve_for_question_async(
+        self,
+        question: str,
+        question_type: str,
+        sub_questions: Optional[List[str]] = None,
+        limit: int = 5
+    ) -> List[RetrievalResult]:
+        """
+        Async version of retrieve_for_question to prevent blocking.
+        
+        Offloads the heavy synchronous vector DB operations to a thread.
+        """
+        import asyncio
+        return await asyncio.to_thread(
+            self.retrieve_for_question,
+            question,
+            question_type,
+            sub_questions,
+            limit
+        )
+
     def retrieve_for_question(
         self,
         question: str,

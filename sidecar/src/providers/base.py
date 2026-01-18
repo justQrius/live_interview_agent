@@ -150,6 +150,15 @@ class LLMProvider(ABC):
         """Check if a candidate profile is set."""
         return self._candidate_profile is not None and len(self._candidate_profile) > 0
 
+    def has_cached_content(self) -> bool:
+        """
+        Check if the provider has active cached content (full context).
+        
+        If True, RAG retrieval may be skipped as the model has
+        access to the full document set.
+        """
+        return False
+
     def is_available(self) -> bool:
         """
         Check if the provider is available and ready to use.

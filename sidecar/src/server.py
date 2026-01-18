@@ -1072,9 +1072,25 @@ class SidecarServer:
         context_chunks = []
         rag_confidence = ConfidenceLevel.LOW
 
-        if self.rag_engine:
+        # Phase 5: Cache-First Architecture
+        # If Gemini Cache is active, we SKIP RAG entirely because the LLM
+        # already has the full document context in its memory window.
+        has_cache = False
+        if self.llm and hasattr(self.llm, 'has_cached_content') and self.llm.has_cached_content():
+            has_cache = True
+            logger.info("Using Gemini Context Cache - Skipping RAG retrieval")
+        
+        # Only perform RAG if no cache is active
+        if self.rag_engine and not has_cache:
             try:
-                retrieval_results = self.rag_engine.retrieve(question, limit=5)
+                # Use async retrieval to prevent blocking the WebSocket loop (Phase 5 fix)
+                # Fallback to sync method if async not available (backward compat)
+                if hasattr(self.rag_engine, 'retrieve_async'):
+                    retrieval_results = await self.rag_engine.retrieve_async(question, limit=5)
+                else:
+                    logger.warning("RAG engine missing retrieve_async, using blocking call")
+                    retrieval_results = self.rag_engine.retrieve(question, limit=5)
+                    
                 logger.info(f"Retrieved {len(retrieval_results)} chunks for question")
                 context_chunks = [r.text for r in retrieval_results]
 
