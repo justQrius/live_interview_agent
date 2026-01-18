@@ -6,7 +6,7 @@ Provides privacy-focused web search without API keys.
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Any
 
 try:
     from duckduckgo_search import DDGS
@@ -25,16 +25,27 @@ class DuckDuckGoSearchProvider(SearchProvider):
     - Free (no API key required)
     - Privacy-focused
     - Fast results
+    - Optional LLM synthesis for grounded answers
     """
     
-    def __init__(self):
-        """Initialize DuckDuckGo search provider."""
+    def __init__(self, llm_provider: Optional[Any] = None):
+        """
+        Initialize DuckDuckGo search provider.
+        
+        Args:
+            llm_provider: Optional LLM provider to synthesize search results.
+        """
         if DDGS is None:
             raise ImportError(
                 "duckduckgo-search package is not installed. "
                 "Please install it with: pip install duckduckgo-search"
             )
         self._ddgs = DDGS()
+        self.llm_provider = llm_provider
+
+    def set_llm_provider(self, provider: Any) -> None:
+        """Set the LLM provider for synthesis."""
+        self.llm_provider = provider
 
     async def search(self, query: str, limit: int = 5) -> List[GroundingSource]:
         """
@@ -48,12 +59,15 @@ class DuckDuckGoSearchProvider(SearchProvider):
             def _run_search():
                 results = []
                 # ddgs.text returns an iterator/generator
-                for r in self._ddgs.text(query, max_results=limit):
-                    results.append(GroundingSource(
-                        title=r.get("title", ""),
-                        url=r.get("href", ""),
-                        snippet=r.get("body", "")
-                    ))
+                try:
+                    for r in self._ddgs.text(query, max_results=limit):
+                        results.append(GroundingSource(
+                            title=r.get("title", ""),
+                            url=r.get("href", ""),
+                            snippet=r.get("body", "")
+                        ))
+                except Exception as e:
+                    logger.error(f"DDGS internal error: {e}")
                 return results
 
             return await asyncio.to_thread(_run_search)
@@ -66,14 +80,32 @@ class DuckDuckGoSearchProvider(SearchProvider):
         """
         Perform research on a topic.
         
-        Since DuckDuckGo is just a search engine (not an LLM), 
-        this returns a structured response with the search results 
-        but without a synthesized summary.
+        If an LLM provider is available, it synthesizes the search results
+        into a coherent summary. Otherwise, it returns a list of snippets.
         """
         sources = await self.search(topic, limit=10)
         
-        # Create a simple aggregation of snippets as the "text"
-        # This ensures the UI displays something useful even without LLM synthesis
+        if not sources:
+            return GroundedResponse(
+                text=f"I couldn't find any information about '{topic}' using DuckDuckGo.",
+                search_queries=[topic],
+                sources=[]
+            )
+
+        # If we have an LLM, synthesize the answer
+        if self.llm_provider:
+            try:
+                summary = await self._synthesize_results(topic, sources)
+                return GroundedResponse(
+                    text=summary,
+                    search_queries=[topic],
+                    sources=sources
+                )
+            except Exception as e:
+                logger.error(f"LLM synthesis failed: {e}. Falling back to raw snippets.")
+                # Fall through to snippet aggregation
+        
+        # Fallback: Create a simple aggregation of snippets
         summary_lines = [f"### Research Results for '{topic}'\n"]
         for i, source in enumerate(sources, 1):
             summary_lines.append(f"**{i}. {source.title}**")
@@ -87,3 +119,30 @@ class DuckDuckGoSearchProvider(SearchProvider):
             search_queries=[topic],
             sources=sources
         )
+
+    async def _synthesize_results(self, topic: str, sources: List[GroundingSource]) -> str:
+        """Synthesize search results into a concise summary using the LLM."""
+        
+        # Format sources for the prompt
+        source_text = "\n\n".join(
+            [f"Source {i+1}:\nTitle: {s.title}\nURL: {s.url}\nContent: {s.snippet}" 
+             for i, s in enumerate(sources)]
+        )
+        
+        prompt = f"""
+You are a research assistant. Based ONLY on the following search results, provide a concise, factual summary about "{topic}".
+Do not invent information. If the results are insufficient, state that clearly.
+Cite sources using [Source X] format where appropriate.
+
+SEARCH RESULTS:
+{source_text}
+
+SUMMARY:
+"""
+        
+        # We need to collect the streaming response
+        full_response = []
+        async for chunk in self.llm_provider.generate_response(prompt, "", []):
+            full_response.append(chunk)
+            
+        return "".join(full_response)
