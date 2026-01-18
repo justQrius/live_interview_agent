@@ -95,60 +95,76 @@ class GeminiSearchProvider(SearchProvider):
         if not self._client:
             raise GeminiSearchProviderError("Client not initialized")
             
-        try:
-            types = self._types
+        # Try models in order: configured -> fallback (1.5 Flash)
+        models_to_try = [self._model_name]
+        if GeminiModels.FLASH_1_5 != self._model_name:
+            models_to_try.append(GeminiModels.FLASH_1_5)
             
-            config = types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.3,  # Lower temp for factual research
-                top_p=0.9,
-            )
-            
-            # Helper to run in thread
-            def _generate():
-                return self._client.models.generate_content(
-                    model=self._model_name,
-                    contents=topic,
-                    config=config,
+        last_error = None
+        
+        for model in models_to_try:
+            try:
+                types = self._types
+                
+                config = types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                    temperature=0.3,  # Lower temp for factual research
+                    top_p=0.9,
                 )
-            
-            response = await asyncio.wait_for(
-                asyncio.to_thread(_generate),
-                timeout=REQUEST_TIMEOUT_SECONDS
-            )
-            
-            text = response.text or ""
-            search_queries: List[str] = []
-            sources: List[GroundingSource] = []
-            
-            # Extract grounding metadata
-            if hasattr(response, 'candidates') and response.candidates:
-                candidate = response.candidates[0]
-                if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
-                    metadata = candidate.grounding_metadata
-                    
-                    # Get search queries
-                    if hasattr(metadata, 'web_search_queries'):
-                        search_queries = list(metadata.web_search_queries or [])
-                    
-                    # Get grounding chunks (sources)
-                    if hasattr(metadata, 'grounding_chunks'):
-                        for chunk in (metadata.grounding_chunks or []):
-                            if hasattr(chunk, 'web') and chunk.web:
-                                sources.append(GroundingSource(
-                                    title=getattr(chunk.web, 'title', 'Unknown'),
-                                    url=getattr(chunk.web, 'uri', ''),
-                                    snippet=None # Gemini doesn't always provide snippet in chunks
-                                ))
-            
-            return GroundedResponse(
-                text=text,
-                search_queries=search_queries,
-                sources=sources
-            )
-            
-        except asyncio.TimeoutError:
-            raise GeminiSearchProviderError(f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s")
-        except Exception as e:
-            logger.error(f"Gemini Search error: {e}")
-            raise GeminiSearchProviderError(f"Generation failed: {e}")
+                
+                # Helper to run in thread
+                def _generate():
+                    return self._client.models.generate_content(
+                        model=model,
+                        contents=topic,
+                        config=config,
+                    )
+                
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(_generate),
+                    timeout=REQUEST_TIMEOUT_SECONDS
+                )
+                
+                text = response.text or ""
+                search_queries: List[str] = []
+                sources: List[GroundingSource] = []
+                
+                # Extract grounding metadata
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                        metadata = candidate.grounding_metadata
+                        
+                        # Get search queries
+                        if hasattr(metadata, 'web_search_queries'):
+                            search_queries = list(metadata.web_search_queries or [])
+                        
+                        # Get grounding chunks (sources)
+                        if hasattr(metadata, 'grounding_chunks'):
+                            for chunk in (metadata.grounding_chunks or []):
+                                if hasattr(chunk, 'web') and chunk.web:
+                                    sources.append(GroundingSource(
+                                        title=getattr(chunk.web, 'title', 'Unknown'),
+                                        url=getattr(chunk.web, 'uri', ''),
+                                        snippet=None # Gemini doesn't always provide snippet in chunks
+                                    ))
+                
+                return GroundedResponse(
+                    text=text,
+                    search_queries=search_queries,
+                    sources=sources
+                )
+                
+            except asyncio.TimeoutError:
+                last_error = GeminiSearchProviderError(f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s")
+                logger.warning(f"Search timed out on model {model}")
+                continue
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Gemini Search error on model {model}: {e}")
+                # Continue to next model
+                continue
+                
+        # If we get here, all models failed
+        logger.error(f"All search models failed. Last error: {last_error}")
+        raise GeminiSearchProviderError(f"Generation failed after retries: {last_error}")
