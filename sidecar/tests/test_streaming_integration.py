@@ -276,12 +276,18 @@ class TestAccumulatorHybridMode:
         accumulator = UtteranceAccumulator(accumulator_config_hybrid)
         
         # First, add a segment to the buffer (simulating partial speech)
+        # Use is_final=False to prevent completeness detection from finalizing it
         await accumulator.add_segment(
             text="Tell me about a time",
             speaker="Interviewer",
             timestamp=1000.0,
-            is_final=True,
+            is_final=False,  # Interim - don't trigger completeness check
         )
+        
+        # Verify the buffer has content
+        buffer = accumulator.get_buffer("Interviewer")
+        assert buffer is not None
+        assert "Tell me about a time" in buffer.text
         
         # Then receive a streaming end-of-turn with the rest
         result = await accumulator.on_streaming_end_of_turn(

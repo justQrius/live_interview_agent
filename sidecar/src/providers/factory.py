@@ -111,7 +111,7 @@ class ProviderFactory:
             if provider and provider.is_available():
                 return provider
                 
-        raise Exception("No available STT providers found. Please check your API keys.")
+        raise ProviderError("No STT providers available. Please check your API keys.")
 
     def get_llm_provider(self, preferred: Optional[ProviderType] = None) -> LLMProvider:
         """
@@ -148,7 +148,7 @@ class ProviderFactory:
             if provider and provider.is_available():
                 return provider
                 
-        raise Exception("No available LLM providers found. Please check your API keys.")
+        raise ProviderError("No LLM providers available. Please check your API keys.")
 
     def get_search_provider(self, preferred: Optional[ProviderType] = None) -> SearchProvider:
         """
