@@ -39,6 +39,7 @@
   "dependencies": {
     "@ricky0123/vad-react": "^0.0.36",
     "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/plugin-log": "^2.8.0",
     "onnxruntime-web": "^1.23.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",

@@ -7,6 +7,7 @@ import {
   Contradiction,
   ExtractionResult
 } from '../store/sessionStore';
+import { wsLogger } from '../utils/logger';
 
 // WebSocket message types (as per architecture)
 export type MessageType =
@@ -97,12 +98,15 @@ const scheduleReconnect = () => {
 const handleIncomingMessage = (message: WebSocketMessage) => {
   const store = useSessionStore.getState();
 
+  // Log all incoming messages for debugging
+  wsLogger.debug(`Received: ${message.type}`);
+
   // Notify custom handlers first (for component-level handling)
   for (const handler of customMessageHandlers) {
     try {
       handler(message);
     } catch (e) {
-      console.error('Custom message handler error:', e);
+      wsLogger.error('Custom message handler error', e);
     }
   }
 
@@ -114,6 +118,8 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         timestamp: number;
         confidence: number;
       };
+
+      wsLogger.info(`Transcription [${data.speaker}]: ${data.text.substring(0, 50)}...`);
 
       // Clear accumulating state since we got a final transcription
       store.clearAccumulating();
@@ -354,10 +360,12 @@ const connectSharedWebSocket = () => {
   clearReconnectTimeout();
 
   try {
+    wsLogger.info(`Connecting to ${WS_URL}...`);
     const ws = new WebSocket(WS_URL);
     sharedWs = ws;
 
     ws.onopen = () => {
+      wsLogger.info('Connected to sidecar server');
       sharedIsConnected = true;
       notifyConnectionListeners();
     };
@@ -367,15 +375,16 @@ const connectSharedWebSocket = () => {
         const message: WebSocketMessage = JSON.parse(event.data);
         handleIncomingMessage(message);
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
+        wsLogger.error('Failed to parse WebSocket message', error);
       }
     };
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      wsLogger.error('WebSocket error', error);
     };
 
     ws.onclose = () => {
+      wsLogger.warn('WebSocket connection closed');
       sharedIsConnected = false;
       sharedWs = null;
       notifyConnectionListeners();
@@ -385,7 +394,7 @@ const connectSharedWebSocket = () => {
       }
     };
   } catch (error) {
-    console.error('Failed to create WebSocket connection:', error);
+    wsLogger.error('Failed to create WebSocket connection', error);
     if (subscriberCount > 0) {
       scheduleReconnect();
     }
