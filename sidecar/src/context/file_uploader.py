@@ -139,21 +139,46 @@ class GeminiFileUploader:
                 data = json.load(f)
                 
             loaded_count = 0
-            for name, file_data in data.get("files", {}).items():
-                # Verify file exists on disk
-                file_path = self.storage_path / name
-                if file_path.exists():
-                    uploaded_file = UploadedFile.from_dict(file_data)
-                    self._uploaded_files[name] = uploaded_file
-                    
-                    # Add to type index
-                    doc_type = uploaded_file.document_type
-                    if doc_type not in self._files_by_type:
-                        self._files_by_type[doc_type] = []
-                    self._files_by_type[doc_type].append(uploaded_file)
-                    loaded_count += 1
-                else:
-                    logger.warning(f"File {name} in manifest but not found on disk")
+            files_data = data.get("files", [])
+            
+            # Handle both list format (new) and dict format (legacy)
+            if isinstance(files_data, list):
+                # New format: list of file objects
+                for file_data in files_data:
+                    name = file_data.get("filename")
+                    if not name:
+                        continue
+                    # Verify file exists on disk
+                    file_path = self.storage_path / name
+                    if file_path.exists():
+                        uploaded_file = UploadedFile.from_dict(file_data)
+                        self._uploaded_files[name] = uploaded_file
+                        
+                        # Add to type index
+                        doc_type = uploaded_file.document_type
+                        if doc_type not in self._files_by_type:
+                            self._files_by_type[doc_type] = []
+                        self._files_by_type[doc_type].append(uploaded_file)
+                        loaded_count += 1
+                    else:
+                        logger.warning(f"File {name} in manifest but not found on disk")
+            elif isinstance(files_data, dict):
+                # Legacy format: dict with filename as key
+                for name, file_data in files_data.items():
+                    # Verify file exists on disk
+                    file_path = self.storage_path / name
+                    if file_path.exists():
+                        uploaded_file = UploadedFile.from_dict(file_data)
+                        self._uploaded_files[name] = uploaded_file
+                        
+                        # Add to type index
+                        doc_type = uploaded_file.document_type
+                        if doc_type not in self._files_by_type:
+                            self._files_by_type[doc_type] = []
+                        self._files_by_type[doc_type].append(uploaded_file)
+                        loaded_count += 1
+                    else:
+                        logger.warning(f"File {name} in manifest but not found on disk")
             
             if loaded_count > 0:
                 logger.info(f"Loaded {loaded_count} files from persistence storage")
@@ -296,16 +321,33 @@ class GeminiFileUploader:
         """
         return [f for f in self._uploaded_files.values() if f.gemini_file]
 
-    def get_document_manifest(self) -> Dict[str, Any]:
-        """Get manifest of documents for cache metadata."""
-        return {
-            name: {
-                "type": f.document_type.value,
-                "size": f.size_bytes,
-                "uri": f.gemini_file.uri if f.gemini_file else None
-            }
-            for name, f in self._uploaded_files.items()
-        }
+    def get_document_manifest(self) -> str:
+        """Get formatted manifest of documents for cache metadata.
+        
+        Returns:
+            A formatted string describing all uploaded documents, suitable for
+            inclusion in the system prompt.
+        """
+        if not self._uploaded_files:
+            return ""
+        
+        lines = ["## Document Manifest", ""]
+        
+        # Group by type
+        by_type: Dict[DocumentType, List[UploadedFile]] = {}
+        for f in self._uploaded_files.values():
+            if f.document_type not in by_type:
+                by_type[f.document_type] = []
+            by_type[f.document_type].append(f)
+        
+        for doc_type, files in by_type.items():
+            lines.append(f"### {doc_type.value.replace('_', ' ').title()}")
+            for f in files:
+                size_kb = f.size_bytes / 1024
+                lines.append(f"- {f.filename} ({size_kb:.1f} KB)")
+            lines.append("")
+        
+        return "\n".join(lines)
         
     def has_files(self) -> bool:
         """Check if any files have been uploaded."""
