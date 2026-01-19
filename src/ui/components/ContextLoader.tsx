@@ -36,13 +36,14 @@ const ContextLoader: React.FC = () => {
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isInferring, setIsInferring] = useState(false);
 
-  // Load RAG state on mount
+  // Load RAG state on mount (only when connection state changes)
   useEffect(() => {
     if (isConnected) {
       setRagLoading(true);
       sendMessage({ type: 'LOAD_RAG_STATE', data: {} });
     }
-  }, [isConnected, sendMessage, setRagLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected]);
 
   // Handle messages from backend
   useEffect(() => {
