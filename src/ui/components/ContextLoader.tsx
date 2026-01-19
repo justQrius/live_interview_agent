@@ -37,10 +37,23 @@ const ContextLoader: React.FC = () => {
   const [isInferring, setIsInferring] = useState(false);
 
   // Load RAG state on mount (only when connection state changes)
+  // Use a ref to track if we've already loaded RAG state this session
+  const hasLoadedRagState = useRef(false);
+  
   useEffect(() => {
-    if (isConnected) {
-      setRagLoading(true);
-      sendMessage({ type: 'LOAD_RAG_STATE', data: {} });
+    if (isConnected && !hasLoadedRagState.current) {
+      // Small delay to ensure WebSocket is truly ready after connection
+      // This avoids race condition where isConnected is true but WebSocket not yet OPEN
+      const timer = setTimeout(() => {
+        setRagLoading(true);
+        sendMessage({ type: 'LOAD_RAG_STATE', data: {} });
+        hasLoadedRagState.current = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    // Reset when disconnected so we reload on reconnect
+    if (!isConnected) {
+      hasLoadedRagState.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
