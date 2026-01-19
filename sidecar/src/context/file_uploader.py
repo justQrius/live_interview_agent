@@ -288,9 +288,13 @@ class GeminiFileUploader:
             mime_type
         )
             
-    def get_uploaded_files(self) -> List[Any]:
-        """Get list of Gemini file objects for cache creation."""
-        return [f.gemini_file for f in self._uploaded_files.values() if f.gemini_file]
+    def get_uploaded_files(self) -> List["UploadedFile"]:
+        """Get list of UploadedFile wrapper objects for cache creation.
+        
+        Returns:
+            List of UploadedFile objects (each has .gemini_file, .filename, etc.)
+        """
+        return [f for f in self._uploaded_files.values() if f.gemini_file]
 
     def get_document_manifest(self) -> Dict[str, Any]:
         """Get manifest of documents for cache metadata."""

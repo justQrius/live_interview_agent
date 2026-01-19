@@ -106,12 +106,20 @@ class TestAnthropicThinking:
 
 class TestProviderFactoryUpgrades:
     def test_get_search_provider_default(self):
-        """Should default to Gemini then DDG."""
-        config = ProviderConfig() # No keys
+        """Should default to DDG when no Gemini key, Gemini+DDG when key present."""
+        # Without Gemini key, only DDG is in fallback order
+        config = ProviderConfig()  # No keys
         factory = ProviderFactory(config)
         
         order = factory.get_search_fallback_order()
-        assert order == [ProviderType.GEMINI, ProviderType.DUCKDUCKGO]
+        assert order == [ProviderType.DUCKDUCKGO]
+        
+        # With Gemini key, Gemini comes first then DDG
+        config_with_key = ProviderConfig(gemini_api_key="gemini-key")
+        factory_with_key = ProviderFactory(config_with_key)
+        
+        order_with_key = factory_with_key.get_search_fallback_order()
+        assert order_with_key == [ProviderType.GEMINI, ProviderType.DUCKDUCKGO]
         
     @patch("src.providers.search.duckduckgo.DuckDuckGoSearchProvider")
     def test_get_search_provider_ddg_fallback(self, mock_ddg_cls):

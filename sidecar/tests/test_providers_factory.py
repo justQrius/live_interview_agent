@@ -265,42 +265,62 @@ class TestProviderFactory:
         assert ProviderType.GEMINI not in available
 
     def test_factory_stt_fallback_order_default(self):
-        """Test default STT fallback order: Groq -> Deepgram -> OpenAI -> Gemini."""
+        """Test default STT fallback order only includes providers with API keys."""
+        # Without any API keys, fallback order should be empty
         config = ProviderConfig()
         factory = ProviderFactory(config)
 
         order = factory.get_stt_fallback_order()
-
-        assert order == [
-            ProviderType.GROQ,
-            ProviderType.DEEPGRAM,
-            ProviderType.OPENAI,
-            ProviderType.GEMINI
-        ]
+        assert order == []
+        
+        # With API keys, fallback order contains those providers
+        config_with_keys = ProviderConfig(
+            groq_api_key="groq-key",
+            deepgram_api_key="deepgram-key"
+        )
+        factory_with_keys = ProviderFactory(config_with_keys)
+        
+        order_with_keys = factory_with_keys.get_stt_fallback_order()
+        assert ProviderType.GROQ in order_with_keys
+        assert ProviderType.DEEPGRAM in order_with_keys
+        assert ProviderType.OPENAI not in order_with_keys  # No key provided
 
     def test_factory_stt_fallback_order_with_preference(self):
-        """Test STT fallback order with preferred provider first."""
-        config = ProviderConfig(preferred_stt=ProviderType.GEMINI)
+        """Test STT fallback order with preferred provider first (only if key available)."""
+        # Preference without key - preference is still added but needs key to work
+        config = ProviderConfig(
+            preferred_stt=ProviderType.GEMINI,
+            gemini_api_key="gemini-key"
+        )
         factory = ProviderFactory(config)
 
         order = factory.get_stt_fallback_order()
 
-        # Gemini should be first, others follow default order
+        # Gemini should be first since we have the key and it's preferred
         assert order[0] == ProviderType.GEMINI
-        assert ProviderType.GROQ in order
+        # No other providers without keys
+        assert len(order) == 1
 
     def test_factory_llm_fallback_order_default(self):
-        """Test default LLM fallback order: OpenAI -> Anthropic -> Gemini."""
+        """Test default LLM fallback order only includes providers with API keys."""
+        # Without any API keys, fallback order should be empty
         config = ProviderConfig()
         factory = ProviderFactory(config)
 
         order = factory.get_llm_fallback_order()
-
-        assert order == [
-            ProviderType.OPENAI,
-            ProviderType.ANTHROPIC,
-            ProviderType.GEMINI
-        ]
+        assert order == []
+        
+        # With API keys, fallback order contains those providers in priority order
+        config_with_keys = ProviderConfig(
+            openai_api_key="openai-key",
+            anthropic_api_key="anthropic-key"
+        )
+        factory_with_keys = ProviderFactory(config_with_keys)
+        
+        order_with_keys = factory_with_keys.get_llm_fallback_order()
+        assert ProviderType.OPENAI in order_with_keys
+        assert ProviderType.ANTHROPIC in order_with_keys
+        assert ProviderType.GEMINI not in order_with_keys  # No key provided
 
     def test_factory_llm_fallback_order_with_preference(self):
         """Test LLM fallback order with preferred provider first."""
