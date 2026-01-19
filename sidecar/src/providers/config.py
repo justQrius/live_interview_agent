@@ -32,9 +32,9 @@ class GeminiModels:
     EMBEDDING = "text-embedding-004"
     
     # Default choices by use case
-    DEFAULT_LLM = FLASH_3
+    DEFAULT_LLM = PRO_3
     DEFAULT_STT = FLASH_3  # Native audio processing
-    DEFAULT_CACHE = FLASH_3  # MUST match DEFAULT_LLM for cache compatibility
+    DEFAULT_CACHE = PRO_3  # MUST match DEFAULT_LLM for cache compatibility
     DEFAULT_SEARCH = FLASH_3
 
 
