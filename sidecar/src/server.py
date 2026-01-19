@@ -94,6 +94,14 @@ from src.context.file_uploader import GeminiFileUploader, DocumentType as FileDo
 from src.rag.gemini_embeddings import GeminiEmbeddingFunction
 # Note: EnhancedContextManager already imported above (line 60)
 
+# Phase 8: RAG Persistence
+from src.storage.rag_manifest import RagManifest
+from src.protocol import (
+    create_rag_state_message,
+    create_cache_refresh_complete_message,
+    create_data_cleared_message,
+)
+
 # Configure logging with file output for debugging
 import logging.handlers
 from pathlib import Path
@@ -220,6 +228,9 @@ class SidecarServer:
         # Phase 7: Streaming STT Manager for low-latency semantic endpointing
         self.streaming_stt_manager: Optional[StreamingSTTManager] = None
         self.streaming_stt_enabled = True  # Feature flag for rollout
+        
+        # Phase 8: RAG Persistence
+        self.rag_manifest = RagManifest()
 
     def _create_background_task(self, coro) -> asyncio.Task:
         """Create and track a background task."""
@@ -348,6 +359,10 @@ class SidecarServer:
             MessageType.CANCEL_ENHANCEMENT: self._handle_cancel_enhancement,
             # Phase 5: Document Type Inference
             MessageType.INFER_DOCUMENT_TYPES: self._handle_infer_document_types,
+            # Phase 8: RAG Persistence
+            MessageType.LOAD_RAG_STATE: self._handle_load_rag_state,
+            MessageType.REFRESH_CACHE: self._handle_refresh_cache,
+            MessageType.CLEAR_ALL_DATA: self._handle_clear_all_data,
         }
 
         handler = handlers.get(message.type)
@@ -748,6 +763,39 @@ class SidecarServer:
                     # Track for extraction (after all uploads complete)
                     files_for_extraction.append((filename, content, memory_doc_type))
                     
+                    # ============================================================
+                    # PHASE 8: Write to RAG Manifest for persistence
+                    # Store document info so we can restore state on restart
+                    # ============================================================
+                    try:
+                        # Decode content for preview (first 200 chars)
+                        preview = ""
+                        try:
+                            decoded = base64.b64decode(content)
+                            # Try to get text preview
+                            ext = os.path.splitext(filename)[1].lower()
+                            if ext in ['.txt', '.md', '.html', '.json']:
+                                preview = decoded.decode('utf-8', errors='ignore')[:200]
+                            elif ext == '.docx':
+                                import io
+                                import docx
+                                doc = docx.Document(io.BytesIO(decoded))
+                                preview = '\n'.join([p.text for p in doc.paragraphs[:3]])[:200]
+                        except Exception:
+                            pass
+                        
+                        self.rag_manifest.add_document(
+                            filename=filename,
+                            document_type=doc_type_str,
+                            file_size_bytes=len(content) if content else 0,
+                            chunk_count=len(new_chunks),
+                            content_b64=content,  # Store for cache refresh
+                            preview=preview,
+                        )
+                        logger.info(f"Added {filename} to RAG manifest")
+                    except Exception as e:
+                        logger.warning(f"Failed to add {filename} to manifest: {e}")
+                    
                     processed_count += 1
                 except Exception as e:
                     logger.error(f"Failed to process {filename}: {e}")
@@ -1000,6 +1048,8 @@ class SidecarServer:
                     getattr(self.llm, 'set_cached_content')(cache_name)
                     logger.info(f"LLM using file-based cache: {cache_name}")
                     logger.info(f"Document manifest:\n{document_manifest[:500]}...")
+                    # Phase 8: Update manifest with cache timestamp
+                    self.rag_manifest.update_cache_timestamp()
                 else:
                     logger.warning("Cache creation returned empty cache_name")
             except Exception as e:
@@ -2783,6 +2833,270 @@ Provide a concise, punchy version that hits the key points quickly."""
                 code="ERR_LLM_GENERATION"
             )
             await self.broadcast(error_msg)
+
+    # ===================
+    # Phase 8: RAG Persistence Handlers
+    # ===================
+    
+    async def _handle_load_rag_state(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle LOAD_RAG_STATE message.
+        
+        Returns the current state of persistent RAG data, enabling the frontend
+        to display existing documents without re-uploading on app restart.
+        """
+        try:
+            state_summary = self.rag_manifest.get_state_summary()
+            
+            # Prepare document info for frontend
+            documents = []
+            for doc in state_summary.get("documents", []):
+                documents.append({
+                    "filename": doc.get("filename", ""),
+                    "documentType": doc.get("document_type", "custom"),
+                    "uploadTimestamp": doc.get("upload_timestamp", ""),
+                    "fileSizeBytes": doc.get("file_size_bytes", 0),
+                    "chunkCount": doc.get("chunk_count", 0),
+                    "preview": doc.get("preview", ""),
+                })
+            
+            response_msg = create_rag_state_message(
+                has_documents=state_summary.get("has_documents", False),
+                document_count=state_summary.get("document_count", 0),
+                documents=documents,
+                cache_expired=state_summary.get("cache_expired", True),
+                last_cache_timestamp=state_summary.get("last_cache_timestamp"),
+            )
+            await websocket.send(response_msg.to_json())
+            
+            logger.info(f"RAG state loaded: {state_summary.get('document_count', 0)} documents, "
+                       f"cache_expired={state_summary.get('cache_expired', True)}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load RAG state: {e}")
+            error_msg = create_error_message(
+                f"Failed to load RAG state: {e}",
+                code="ERR_RAG_STATE"
+            )
+            await websocket.send(error_msg.to_json())
+    
+    async def _handle_refresh_cache(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle REFRESH_CACHE message.
+        
+        Re-creates Gemini cache from existing documents without requiring
+        the user to re-upload files. Uses stored base64 content from manifest.
+        """
+        try:
+            data = message.data or {}
+            
+            # Get API keys from message if provided (for provider initialization)
+            if "apiKeys" in data and not self.gemini_cache_manager:
+                config = ProviderConfig.from_dict(data)
+                if config.gemini_api_key:
+                    self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
+                    self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
+                    logger.info("Initialized Gemini managers for cache refresh")
+            
+            if not self.gemini_cache_manager or not self.gemini_file_uploader:
+                raise RuntimeError("Gemini managers not initialized. Provide API key.")
+            
+            # Get documents with stored content
+            docs_for_cache = self.rag_manifest.get_documents_for_cache()
+            
+            if not docs_for_cache:
+                raise RuntimeError("No documents with stored content available for cache refresh. "
+                                  "Please re-upload documents.")
+            
+            logger.info(f"Refreshing cache with {len(docs_for_cache)} documents...")
+            
+            # Re-upload files to Gemini
+            file_doc_type_map = {
+                "resume": FileDocumentType.RESUME,
+                "job_description": FileDocumentType.JOB_DESCRIPTION,
+                "company_info": FileDocumentType.COMPANY_INFO,
+                "interviewer_info": FileDocumentType.INTERVIEWER_INFO,
+                "sample_qa": FileDocumentType.SAMPLE_QA,
+                "industry_research": FileDocumentType.INDUSTRY_RESEARCH,
+                "custom": FileDocumentType.CUSTOM,
+            }
+            
+            # Clear existing uploads before refreshing
+            self.gemini_file_uploader.clear()
+            
+            # Upload all documents in parallel
+            upload_coros = []
+            for doc in docs_for_cache:
+                if doc.get("content_b64"):
+                    file_doc_type = file_doc_type_map.get(
+                        doc.get("document_type", "custom"), 
+                        FileDocumentType.CUSTOM
+                    )
+                    upload_coros.append(
+                        self.gemini_file_uploader.upload_from_base64_async(
+                            content_b64=doc["content_b64"],
+                            filename=doc["filename"],
+                            document_type=file_doc_type
+                        )
+                    )
+            
+            if upload_coros:
+                await asyncio.gather(*upload_coros, return_exceptions=True)
+                logger.info(f"Re-uploaded {len(upload_coros)} files to Gemini")
+            
+            # Create new cache
+            if self.gemini_file_uploader.has_files():
+                uploaded_files = self.gemini_file_uploader.get_uploaded_files()
+                document_manifest = self.gemini_file_uploader.get_document_manifest()
+                
+                # Get profile for cache if available
+                profile_text = None
+                if self.memory_store:
+                    profile = self.memory_store.get_profile()
+                    if profile:
+                        profile_text = profile.get_prompt_injection()
+                
+                cache_name = await self.gemini_cache_manager.create_cache_from_files_async(
+                    uploaded_files=uploaded_files,
+                    document_manifest=document_manifest,
+                    ttl_seconds=7200,  # 2 hours
+                    model=GeminiModels.DEFAULT_LLM,
+                    profile_text=profile_text,
+                )
+                
+                # Update manifest with new cache timestamp
+                self.rag_manifest.update_cache_timestamp()
+                
+                # Attach cache to LLM if available
+                if cache_name and self.llm and hasattr(self.llm, 'set_cached_content'):
+                    getattr(self.llm, 'set_cached_content')(cache_name)
+                    logger.info(f"Attached refreshed cache to LLM: {cache_name}")
+                
+                response_msg = create_cache_refresh_complete_message(
+                    success=True,
+                    cache_name=cache_name
+                )
+                await websocket.send(response_msg.to_json())
+                
+                logger.info(f"Cache refresh complete: {cache_name}")
+            else:
+                raise RuntimeError("No files uploaded to Gemini after refresh attempt")
+                
+        except Exception as e:
+            logger.error(f"Cache refresh failed: {e}")
+            response_msg = create_cache_refresh_complete_message(
+                success=False,
+                error=str(e)
+            )
+            await websocket.send(response_msg.to_json())
+    
+    async def _handle_clear_all_data(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle CLEAR_ALL_DATA message.
+        
+        Wipes all persistent data:
+        - ChromaDB collection (RAG embeddings)
+        - MemoryStore (profile, stories, facts)
+        - RAG manifest
+        - Gemini file uploads (if active)
+        - Gemini cache (if active)
+        """
+        try:
+            cleared_items = {
+                "chroma_collection": False,
+                "memory_store": False,
+                "rag_manifest": False,
+                "gemini_files": False,
+                "gemini_cache": False,
+            }
+            
+            # Clear ChromaDB collection
+            if self.vector_store:
+                try:
+                    self.vector_store.clear()
+                    cleared_items["chroma_collection"] = True
+                    logger.info("Cleared ChromaDB collection")
+                except Exception as e:
+                    logger.warning(f"Failed to clear ChromaDB: {e}")
+            
+            # Clear Memory Store
+            if self.memory_store:
+                try:
+                    self.memory_store.clear_all()
+                    cleared_items["memory_store"] = True
+                    logger.info("Cleared Memory Store")
+                except Exception as e:
+                    logger.warning(f"Failed to clear Memory Store: {e}")
+            
+            # Clear RAG Manifest
+            try:
+                self.rag_manifest.clear()
+                cleared_items["rag_manifest"] = True
+                logger.info("Cleared RAG Manifest")
+            except Exception as e:
+                logger.warning(f"Failed to clear RAG Manifest: {e}")
+            
+            # Clear Gemini File Uploader
+            if self.gemini_file_uploader:
+                try:
+                    self.gemini_file_uploader.clear()
+                    cleared_items["gemini_files"] = True
+                    logger.info("Cleared Gemini file uploads")
+                except Exception as e:
+                    logger.warning(f"Failed to clear Gemini files: {e}")
+            
+            # Clear Gemini Cache
+            if self.gemini_cache_manager:
+                try:
+                    self.gemini_cache_manager.delete_current_cache()
+                    cleared_items["gemini_cache"] = True
+                    logger.info("Cleared Gemini cache")
+                except Exception as e:
+                    logger.warning(f"Failed to clear Gemini cache: {e}")
+            
+            # Clear Context Manager
+            if self.context_manager:
+                try:
+                    self.context_manager.clear_context()
+                    logger.info("Cleared Context Manager")
+                except Exception as e:
+                    logger.warning(f"Failed to clear Context Manager: {e}")
+            
+            # Clear LLM candidate profile
+            if self.llm and hasattr(self.llm, 'clear_candidate_profile'):
+                try:
+                    self.llm.clear_candidate_profile()
+                    logger.info("Cleared LLM candidate profile")
+                except Exception as e:
+                    logger.warning(f"Failed to clear LLM profile: {e}")
+            
+            response_msg = create_data_cleared_message(
+                success=True,
+                cleared_items=cleared_items
+            )
+            await websocket.send(response_msg.to_json())
+            
+            logger.info(f"All data cleared: {cleared_items}")
+            
+        except Exception as e:
+            logger.error(f"Failed to clear all data: {e}")
+            response_msg = create_data_cleared_message(
+                success=False,
+                error=str(e)
+            )
+            await websocket.send(response_msg.to_json())
 
     def _retrieve_context(self, question: str) -> tuple[list[str], ConfidenceLevel]:
         """

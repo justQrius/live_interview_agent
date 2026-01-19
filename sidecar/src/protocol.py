@@ -24,6 +24,11 @@ class MessageType(str, Enum):
     ENHANCE_ANSWER = "ENHANCE_ANSWER"  # Phase 5: Request answer enhancement
     CANCEL_ENHANCEMENT = "CANCEL_ENHANCEMENT"  # Phase 5: Cancel ongoing enhancement
     INFER_DOCUMENT_TYPES = "INFER_DOCUMENT_TYPES"  # Phase 5: Request LLM-based type inference
+    
+    # Phase 8: RAG Persistence
+    LOAD_RAG_STATE = "LOAD_RAG_STATE"  # Phase 8: Check existing RAG state on startup
+    REFRESH_CACHE = "REFRESH_CACHE"  # Phase 8: Refresh Gemini cache from existing docs
+    CLEAR_ALL_DATA = "CLEAR_ALL_DATA"  # Phase 8: Clear all persistent data
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
@@ -61,6 +66,11 @@ class MessageType(str, Enum):
     
     # Phase 6: Utterance Accumulation
     ACCUMULATING = "ACCUMULATING"  # Phase 6: Buffering interviewer speech
+    
+    # Phase 8: RAG Persistence - Server -> Client
+    RAG_STATE = "RAG_STATE"  # Phase 8: Response with existing RAG state
+    CACHE_REFRESH_COMPLETE = "CACHE_REFRESH_COMPLETE"  # Phase 8: Cache refresh done
+    DATA_CLEARED = "DATA_CLEARED"  # Phase 8: All data cleared confirmation
 
 
 class SessionStatus(str, Enum):
@@ -481,5 +491,82 @@ def create_accumulating_message(
             "bufferPreview": buffer_preview,
             "segmentCount": segment_count,
             "durationSeconds": duration_s
+        }
+    )
+
+
+# RAG Persistence Helper Functions (Phase 8)
+
+def create_rag_state_message(
+    has_documents: bool,
+    document_count: int,
+    documents: list[dict],
+    cache_expired: bool,
+    last_cache_timestamp: str | None = None
+) -> Message:
+    """
+    Create a RAG_STATE response message.
+    
+    Args:
+        has_documents: Whether any documents are in RAG storage
+        document_count: Number of documents
+        documents: List of document info dicts
+        cache_expired: Whether Gemini cache needs refresh
+        last_cache_timestamp: ISO timestamp of last cache creation
+    """
+    return Message(
+        type=MessageType.RAG_STATE,
+        data={
+            "hasDocuments": has_documents,
+            "documentCount": document_count,
+            "documents": documents,
+            "cacheExpired": cache_expired,
+            "lastCacheTimestamp": last_cache_timestamp
+        }
+    )
+
+
+def create_cache_refresh_complete_message(
+    success: bool,
+    cache_name: str | None = None,
+    error: str | None = None
+) -> Message:
+    """
+    Create a CACHE_REFRESH_COMPLETE message.
+    
+    Args:
+        success: Whether cache refresh succeeded
+        cache_name: New cache name if successful
+        error: Error message if failed
+    """
+    return Message(
+        type=MessageType.CACHE_REFRESH_COMPLETE,
+        data={
+            "success": success,
+            "cacheName": cache_name,
+            "error": error
+        }
+    )
+
+
+def create_data_cleared_message(
+    success: bool,
+    cleared_items: dict | None = None,
+    error: str | None = None
+) -> Message:
+    """
+    Create a DATA_CLEARED message.
+    
+    Args:
+        success: Whether clearing succeeded
+        cleared_items: Dict with counts of cleared items
+        error: Error message if failed
+    """
+    return Message(
+        type=MessageType.DATA_CLEARED,
+        data={
+            "success": success,
+            "clearedItems": cleared_items or {},
+            "error": error
         }
     )

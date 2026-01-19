@@ -184,6 +184,26 @@ export interface AccumulatingState {
   durationSeconds: number;
 }
 
+// RAG Persistence State (Phase 8)
+export interface RagStateDocument {
+  filename: string;
+  documentType: string;
+  uploadTimestamp: string;
+  chunkCount: number;
+  preview: string;
+}
+
+export interface RagState {
+  hasDocuments: boolean;
+  documentCount: number;
+  documents: RagStateDocument[];
+  cacheExpired: boolean;
+  lastCacheTimestamp: string | null;
+  isLoading: boolean;
+  isRefreshing: boolean;
+  isClearing: boolean;
+}
+
 export interface SessionState {
   // Session status
   status: 'idle' | 'calibrating' | 'listening' | 'processing';
@@ -191,7 +211,7 @@ export interface SessionState {
   voiceProfileActive: boolean;
 
   // Context loading status (for status indicator)
-  contextStatus: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'error';
+  contextStatus: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'cache_expired' | 'error';
 
   /**
    * API key for Gemini API.
@@ -247,6 +267,9 @@ export interface SessionState {
   // Accumulating State (Phase 6)
   accumulating: AccumulatingState;
 
+  // RAG Persistence State (Phase 8)
+  ragState: RagState;
+
   // Actions
   setStatus: (status: SessionState['status']) => void;
   setScreenInvisibility: (enabled: boolean) => void;
@@ -259,7 +282,7 @@ export interface SessionState {
   setPreferredStreamingSttProvider: (provider: StreamingSTTProvider) => void;
   setPreferredStreamingSttModel: (model: string | 'auto') => void;
   setExtendedThinking: (enabled: boolean) => void;
-  setContextStatus: (status: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'error') => void;
+  setContextStatus: (status: SessionState['contextStatus']) => void;
   setCurrentTranscription: (transcription: Transcription | null) => void;
   setCurrentAnswer: (answer: Answer | null) => void;
   setLastError: (error: string | null) => void;
@@ -302,6 +325,13 @@ export interface SessionState {
   // Accumulating Actions (Phase 6)
   setAccumulating: (state: AccumulatingState) => void;
   clearAccumulating: () => void;
+
+  // RAG Persistence Actions (Phase 8)
+  setRagState: (state: Partial<RagState>) => void;
+  setRagLoading: (loading: boolean) => void;
+  setRagRefreshing: (refreshing: boolean) => void;
+  setRagClearing: (clearing: boolean) => void;
+  clearRagState: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -363,6 +393,18 @@ export const useSessionStore = create<SessionState>((set) => ({
     bufferPreview: null,
     segmentCount: 0,
     durationSeconds: 0,
+  },
+
+  // RAG Persistence initial state (Phase 8)
+  ragState: {
+    hasDocuments: false,
+    documentCount: 0,
+    documents: [],
+    cacheExpired: false,
+    lastCacheTimestamp: null,
+    isLoading: false,
+    isRefreshing: false,
+    isClearing: false,
   },
 
   // Actions
@@ -660,6 +702,41 @@ export const useSessionStore = create<SessionState>((set) => ({
         bufferPreview: null,
         segmentCount: 0,
         durationSeconds: 0,
+      },
+    }),
+
+  // RAG Persistence Actions (Phase 8)
+  setRagState: (ragStateUpdate) =>
+    set((state) => ({
+      ragState: { ...state.ragState, ...ragStateUpdate },
+    })),
+
+  setRagLoading: (loading) =>
+    set((state) => ({
+      ragState: { ...state.ragState, isLoading: loading },
+    })),
+
+  setRagRefreshing: (refreshing) =>
+    set((state) => ({
+      ragState: { ...state.ragState, isRefreshing: refreshing },
+    })),
+
+  setRagClearing: (clearing) =>
+    set((state) => ({
+      ragState: { ...state.ragState, isClearing: clearing },
+    })),
+
+  clearRagState: () =>
+    set({
+      ragState: {
+        hasDocuments: false,
+        documentCount: 0,
+        documents: [],
+        cacheExpired: false,
+        lastCacheTimestamp: null,
+        isLoading: false,
+        isRefreshing: false,
+        isClearing: false,
       },
     }),
 }));

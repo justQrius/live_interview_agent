@@ -1,18 +1,22 @@
 """
-Gemini File Uploader.
+Gemini File Uploader with Persistence.
 
 Handles uploading files to Google Gemini API for use in context caching and prompting.
-Tracks uploaded files with document type metadata for intelligent cache creation.
+Persists uploaded files to disk to allow cache reconstruction after app restart.
 """
 
 import asyncio
 import base64
 import logging
 import os
+import shutil
+import json
 import tempfile
-from dataclasses import dataclass, field
+import time
+from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from enum import Enum
+from pathlib import Path
 
 from google.genai import types
 
@@ -38,30 +42,134 @@ import docx
 @dataclass
 class UploadedFile:
     """Represents a file uploaded to Gemini."""
-    gemini_file: Any  # types.File
     filename: str
     document_type: DocumentType
     mime_type: str
     size_bytes: int
+    gemini_file: Optional[Any] = None  # types.File, None if loaded from disk but not yet uploaded
+    timestamp: float = field(default_factory=time.time)
     
     @property
     def name(self) -> str:
         """Get the Gemini resource name."""
         return self.gemini_file.name if self.gemini_file else ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "filename": self.filename,
+            "document_type": self.document_type.value,
+            "mime_type": self.mime_type,
+            "size_bytes": self.size_bytes,
+            "timestamp": self.timestamp
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "UploadedFile":
+        """Create from dictionary."""
+        return cls(
+            filename=data["filename"],
+            document_type=DocumentType(data["document_type"]),
+            mime_type=data["mime_type"],
+            size_bytes=data["size_bytes"],
+            timestamp=data.get("timestamp", time.time()),
+            gemini_file=None
+        )
 
 
 class GeminiFileUploader:
     """
-    Handles file uploads to Gemini with tracking and document type awareness.
+    Handles file uploads to Gemini with persistence and document type awareness.
     
-    Maintains a registry of uploaded files for cache creation and context management.
+    Maintains a local copy of files in ~/.live_interview_agent/documents/
+    to allow restoring context after app restart.
     """
     
-    def __init__(self, api_key: str):
+    DEFAULT_STORAGE_DIR = ".live_interview_agent/documents"
+    MANIFEST_FILE = "manifest.json"
+    
+    def __init__(self, api_key: str, storage_dir: Optional[str] = None):
         self.client = GeminiClient(api_key=api_key)
         self._uploaded_files: Dict[str, UploadedFile] = {}  # filename -> UploadedFile
         self._files_by_type: Dict[DocumentType, List[UploadedFile]] = {}
         
+        # Setup storage directory
+        if storage_dir:
+            self.storage_path = Path(storage_dir)
+        else:
+            self.storage_path = Path.home() / self.DEFAULT_STORAGE_DIR
+            
+        self._init_storage()
+        self._load_state()
+        
+    def _init_storage(self) -> None:
+        """Initialize storage directory."""
+        try:
+            self.storage_path.mkdir(parents=True, exist_ok=True)
+            manifest_path = self.storage_path / self.MANIFEST_FILE
+            if not manifest_path.exists():
+                with open(manifest_path, 'w') as f:
+                    json.dump({"files": {}}, f)
+        except Exception as e:
+            logger.error(f"Failed to initialize storage at {self.storage_path}: {e}")
+
+    def _save_state(self) -> None:
+        """Save manifest to disk."""
+        try:
+            manifest_path = self.storage_path / self.MANIFEST_FILE
+            data = {
+                "files": {
+                    name: f.to_dict() 
+                    for name, f in self._uploaded_files.items()
+                }
+            }
+            with open(manifest_path, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to save manifest: {e}")
+
+    def _load_state(self) -> None:
+        """Load state from disk."""
+        try:
+            manifest_path = self.storage_path / self.MANIFEST_FILE
+            if not manifest_path.exists():
+                return
+                
+            with open(manifest_path, 'r') as f:
+                data = json.load(f)
+                
+            loaded_count = 0
+            for name, file_data in data.get("files", {}).items():
+                # Verify file exists on disk
+                file_path = self.storage_path / name
+                if file_path.exists():
+                    uploaded_file = UploadedFile.from_dict(file_data)
+                    self._uploaded_files[name] = uploaded_file
+                    
+                    # Add to type index
+                    doc_type = uploaded_file.document_type
+                    if doc_type not in self._files_by_type:
+                        self._files_by_type[doc_type] = []
+                    self._files_by_type[doc_type].append(uploaded_file)
+                    loaded_count += 1
+                else:
+                    logger.warning(f"File {name} in manifest but not found on disk")
+            
+            if loaded_count > 0:
+                logger.info(f"Loaded {loaded_count} files from persistence storage")
+                
+        except Exception as e:
+            logger.error(f"Failed to load state: {e}")
+
+    def _save_file_to_disk(self, filename: str, content: bytes) -> None:
+        """Save file content to storage directory."""
+        try:
+            file_path = self.storage_path / filename
+            with open(file_path, 'wb') as f:
+                f.write(content)
+        except Exception as e:
+            logger.error(f"Failed to save file {filename} to disk: {e}")
+
     def upload_from_base64(
         self, 
         content_b64: str, 
@@ -70,7 +178,7 @@ class GeminiFileUploader:
         mime_type: Optional[str] = None
     ) -> UploadedFile:
         """
-        Upload a base64 encoded file to Gemini.
+        Upload a base64 encoded file to Gemini and persist locally.
         
         Args:
             content_b64: Base64 encoded content
@@ -114,33 +222,46 @@ class GeminiFileUploader:
             
             size_bytes = len(upload_content)
             
-            # Create temp file with correct extension
+            # PERSISTENCE: Save to local disk first
+            self._save_file_to_disk(filename, upload_content)
+            
+            # Create temporary file for upload
             with tempfile.NamedTemporaryFile(delete=False, suffix=upload_ext) as tmp:
                 tmp.write(upload_content)
                 tmp_path = tmp.name
                 
             try:
                 # Upload to Gemini
-                logger.info(f"Uploading {filename} ({document_type.value}) to Gemini as {upload_mime_type}...")
-                gemini_file = self.client.upload_file(tmp_path, mime_type=upload_mime_type)
-                logger.info(f"Successfully uploaded {filename} as {gemini_file.name}")
+                logger.info(f"Uploading {filename} to Gemini ({size_bytes} bytes)...")
+                gemini_file = self.client.files.upload(
+                    file=tmp_path,
+                    config=types.UploadFileConfig(
+                        display_name=filename,
+                        mime_type=upload_mime_type
+                    )
+                )
+                logger.info(f"Uploaded {filename} as {gemini_file.name}")
                 
-                # Create tracked file record
-                uploaded = UploadedFile(
-                    gemini_file=gemini_file,
+                # Create UploadedFile record
+                uploaded_file = UploadedFile(
                     filename=filename,
                     document_type=document_type,
-                    mime_type=upload_mime_type,  # Store the actual uploaded type
-                    size_bytes=size_bytes
+                    mime_type=upload_mime_type,
+                    size_bytes=size_bytes,
+                    gemini_file=gemini_file
                 )
                 
-                # Track the file
-                self._uploaded_files[filename] = uploaded
+                # Update registry
+                self._uploaded_files[filename] = uploaded_file
+                
                 if document_type not in self._files_by_type:
                     self._files_by_type[document_type] = []
-                self._files_by_type[document_type].append(uploaded)
+                self._files_by_type[document_type].append(uploaded_file)
                 
-                return uploaded
+                # Update manifest
+                self._update_manifest()
+                
+                return uploaded_file
                 
             finally:
                 # Cleanup temp file
@@ -148,114 +269,101 @@ class GeminiFileUploader:
                     os.unlink(tmp_path)
                     
         except Exception as e:
-            logger.error(f"Failed to upload file {filename}: {e}")
+            logger.error(f"Failed to upload {filename}: {e}")
             raise
 
     async def upload_from_base64_async(
-        self,
-        content_b64: str,
-        filename: str,
+        self, 
+        content_b64: str, 
+        filename: str, 
         document_type: DocumentType = DocumentType.CUSTOM,
         mime_type: Optional[str] = None
     ) -> UploadedFile:
-        """Async version of upload_from_base64."""
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self.upload_from_base64(content_b64, filename, document_type, mime_type)
+        """Async wrapper for upload_from_base64."""
+        return await asyncio.to_thread(
+            self.upload_from_base64,
+            content_b64,
+            filename,
+            document_type,
+            mime_type
         )
+            
+    def get_uploaded_files(self) -> List[Any]:
+        """Get list of Gemini file objects for cache creation."""
+        return [f.gemini_file for f in self._uploaded_files.values() if f.gemini_file]
 
-    def _detect_mime_type(self, ext: str) -> str:
-        """Detect MIME type from file extension."""
-        mime_map = {
-            '.pdf': 'application/pdf',
-            '.txt': 'text/plain',
-            '.md': 'text/markdown',
-            '.doc': 'application/msword',
-            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.html': 'text/html',
-            '.json': 'application/json',
+    def get_document_manifest(self) -> Dict[str, Any]:
+        """Get manifest of documents for cache metadata."""
+        return {
+            name: {
+                "type": f.document_type.value,
+                "size": f.size_bytes,
+                "uri": f.gemini_file.uri if f.gemini_file else None
+            }
+            for name, f in self._uploaded_files.items()
         }
-        return mime_map.get(ext, 'text/plain')
-
-    def get_uploaded_files(self) -> List[UploadedFile]:
-        """Get all uploaded files."""
-        return list(self._uploaded_files.values())
-
-    def get_files_by_type(self, doc_type: DocumentType) -> List[UploadedFile]:
-        """Get uploaded files of a specific type."""
-        return self._files_by_type.get(doc_type, [])
-
-    def get_gemini_files(self) -> List[Any]:
-        """Get all Gemini file objects for cache creation."""
-        return [f.gemini_file for f in self._uploaded_files.values()]
-
-    def get_file(self, filename: str) -> Optional[UploadedFile]:
-        """Get an uploaded file by filename."""
-        return self._uploaded_files.get(filename)
-
+        
     def has_files(self) -> bool:
         """Check if any files have been uploaded."""
         return len(self._uploaded_files) > 0
 
-    def get_document_manifest(self) -> str:
-        """
-        Generate a document manifest for cache system instruction.
-        
-        This helps the model understand what documents are available
-        and how to attribute information correctly.
-        """
-        if not self._uploaded_files:
-            return ""
-        
-        lines = ["The following documents have been uploaded for context:"]
-        
-        # Group by type for clarity
-        type_labels = {
-            DocumentType.RESUME: "CANDIDATE'S RESUME (Use for questions about the candidate's experience, skills, background)",
-            DocumentType.JOB_DESCRIPTION: "JOB DESCRIPTION (Use for role requirements and expectations)",
-            DocumentType.COMPANY_INFO: "COMPANY INFORMATION (Use for company culture, values, news)",
-            DocumentType.INTERVIEWER_INFO: "INTERVIEWER BACKGROUND (Use ONLY for understanding interviewer context, NOT as candidate info)",
-            DocumentType.SAMPLE_QA: "SAMPLE Q&A (Use for reference answers and frameworks)",
-            DocumentType.INDUSTRY_RESEARCH: "INDUSTRY RESEARCH (Use for market trends and context)",
-            DocumentType.CUSTOM: "ADDITIONAL CONTEXT",
-        }
-        
-        for doc_type, files in self._files_by_type.items():
-            if files:
-                label = type_labels.get(doc_type, doc_type.value)
-                lines.append(f"\n## {label}")
-                for f in files:
-                    lines.append(f"  - {f.filename}")
-        
-        lines.append("\n\nIMPORTANT INSTRUCTIONS FOR CONTEXT USAGE:")
-        lines.append("1. **YOUR IDENTITY**: You are the candidate described in the 'CANDIDATE'S RESUME' above.")
-        lines.append("   - When answering 'Tell me about yourself' or 'What is your experience', use ONLY the Resume.")
-        lines.append("   - Do NOT attribute qualities/experience from the 'INTERVIEWER BACKGROUND' or 'JOB DESCRIPTION' to yourself.")
-        lines.append("2. **THE INTERVIEWER**: Information in 'INTERVIEWER BACKGROUND' refers to the person ASKING the questions.")
-        lines.append("   - Use this to build rapport or ask smart questions, but NEVER claim their experience as your own.")
-        lines.append("3. **THE COMPANY**: Use 'COMPANY INFORMATION' to show research and enthusiasm.")
-        
-        return "\n".join(lines)
-
     def clear(self) -> None:
-        """Clear all tracked files (does not delete from Gemini)."""
+        """Clear all uploaded files (local and remote)."""
+        # Delete from Gemini
+        for f in self._uploaded_files.values():
+            if f.gemini_file:
+                try:
+                    self.client.files.delete(name=f.gemini_file.name)
+                except Exception as e:
+                    logger.warning(f"Failed to delete file {f.gemini_file.name}: {e}")
+        
+        # Clear local registry
         self._uploaded_files.clear()
         self._files_by_type.clear()
-        logger.info("Cleared uploaded files registry")
-
-    def get_stats(self) -> Dict[str, Any]:
-        """Get statistics about uploaded files."""
-        total_size = sum(f.size_bytes for f in self._uploaded_files.values())
-        return {
-            "total_files": len(self._uploaded_files),
-            "total_size_bytes": total_size,
-            "total_size_mb": round(total_size / (1024 * 1024), 2),
-            "by_type": {
-                doc_type.value: len(files) 
-                for doc_type, files in self._files_by_type.items()
+        
+        # Clear local storage
+        try:
+            if self.storage_path.exists():
+                shutil.rmtree(self.storage_path)
+                self._init_storage()
+        except Exception as e:
+            logger.error(f"Failed to clear storage directory: {e}")
+            
+    def _update_manifest(self) -> None:
+        """Update manifest file on disk."""
+        try:
+            manifest_path = self.storage_path / self.MANIFEST_FILE
+            
+            data = {
+                "updated_at": time.time(),
+                "files": [f.to_dict() for f in self._uploaded_files.values()]
             }
+            
+            with open(manifest_path, 'w') as f:
+                json.dump(data, f, indent=2)
+                
+        except Exception as e:
+            logger.error(f"Failed to update manifest: {e}")
+
+    def _detect_mime_type(self, ext: str) -> str:
+        """Detect mime type from extension."""
+        mime_types = {
+            '.txt': 'text/plain',
+            '.md': 'text/markdown',
+            '.pdf': 'application/pdf',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.doc': 'application/msword',
+            '.csv': 'text/csv',
+            '.json': 'application/json',
+            '.xml': 'text/xml',
+            '.html': 'text/html',
+            '.py': 'text/x-python',
+            '.js': 'text/javascript',
+            '.ts': 'text/typescript',
+            '.java': 'text/x-java-source',
+            '.c': 'text/x-c',
+            '.cpp': 'text/x-c++',
+            '.h': 'text/x-c',
+            '.hpp': 'text/x-c++'
         }
+        return mime_types.get(ext.lower(), 'text/plain')
