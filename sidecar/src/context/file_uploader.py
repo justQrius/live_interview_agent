@@ -233,7 +233,7 @@ class GeminiFileUploader:
             try:
                 # Upload to Gemini
                 logger.info(f"Uploading {filename} to Gemini ({size_bytes} bytes)...")
-                gemini_file = self.client.files.upload(
+                gemini_file = self.client.client.files.upload(
                     file=tmp_path,
                     config=types.UploadFileConfig(
                         display_name=filename,
@@ -313,7 +313,7 @@ class GeminiFileUploader:
         for f in self._uploaded_files.values():
             if f.gemini_file:
                 try:
-                    self.client.files.delete(name=f.gemini_file.name)
+                    self.client.client.files.delete(name=f.gemini_file.name)
                 except Exception as e:
                     logger.warning(f"Failed to delete file {f.gemini_file.name}: {e}")
         
