@@ -37,23 +37,49 @@ const ContextLoader: React.FC = () => {
   const [isInferring, setIsInferring] = useState(false);
 
   // Load RAG state on mount (only when connection state changes)
-  // Use a ref to track if we've already loaded RAG state this session
+  // Use a ref to track if we've already successfully loaded RAG state this session
   const hasLoadedRagState = useRef(false);
+  const loadAttemptCount = useRef(0);
   
   useEffect(() => {
     if (isConnected && !hasLoadedRagState.current) {
-      // Small delay to ensure WebSocket is truly ready after connection
-      // This avoids race condition where isConnected is true but WebSocket not yet OPEN
-      const timer = setTimeout(() => {
+      // Reset attempt count on new connection
+      loadAttemptCount.current = 0;
+      
+      // Retry mechanism: try sending the message, retry if it fails
+      const attemptLoad = () => {
+        loadAttemptCount.current += 1;
+        
+        // Only log once to avoid spam
+        if (loadAttemptCount.current === 1) {
+          console.log('[ContextLoader] Attempting to load RAG state...');
+        }
+        
         setRagLoading(true);
-        sendMessage({ type: 'LOAD_RAG_STATE', data: {} });
-        hasLoadedRagState.current = true;
-      }, 100);
+        const sent = sendMessage({ type: 'LOAD_RAG_STATE', data: {} });
+        
+        if (sent) {
+          hasLoadedRagState.current = true;
+          console.log('[ContextLoader] LOAD_RAG_STATE message sent successfully');
+        } else {
+          // Retry up to 10 times with 300ms delay (total 3 seconds)
+          if (loadAttemptCount.current < 10 && isConnected) {
+            setTimeout(attemptLoad, 300);
+          } else {
+            console.warn('[ContextLoader] Failed to send LOAD_RAG_STATE after 10 attempts');
+            setRagLoading(false);
+          }
+        }
+      };
+      
+      // Initial delay of 500ms to ensure WebSocket is truly ready
+      const timer = setTimeout(attemptLoad, 500);
       return () => clearTimeout(timer);
     }
     // Reset when disconnected so we reload on reconnect
     if (!isConnected) {
       hasLoadedRagState.current = false;
+      loadAttemptCount.current = 0;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConnected]);
