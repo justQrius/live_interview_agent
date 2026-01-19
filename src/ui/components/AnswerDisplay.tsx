@@ -266,7 +266,7 @@ const AnswerDisplay: React.FC = () => {
 
   const handleSendManualQuestion = () => {
     const trimmedQuestion = manualQuestion.trim();
-    if (!trimmedQuestion || !isConnected || status !== 'listening') {
+    if (!trimmedQuestion || !isConnected || (status !== 'listening' && status !== 'listening_paused')) {
       return;
     }
 

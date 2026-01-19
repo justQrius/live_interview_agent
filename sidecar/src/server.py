@@ -1290,8 +1290,14 @@ class SidecarServer:
             )
              await websocket.send(error_msg.to_json())
 
-        self.session_state.status = SessionStatus.LISTENING
-        status_msg = create_status_message(SessionStatus.LISTENING)
+        # Restore status based on listening_paused state
+        if self.session_state.listening_paused:
+            self.session_state.status = SessionStatus.LISTENING_PAUSED
+            status_msg = create_status_message(SessionStatus.LISTENING_PAUSED)
+        else:
+            self.session_state.status = SessionStatus.LISTENING
+            status_msg = create_status_message(SessionStatus.LISTENING)
+            
         await websocket.send(status_msg.to_json())
 
     # Session History Handlers (Phase 3: STORY-039)
