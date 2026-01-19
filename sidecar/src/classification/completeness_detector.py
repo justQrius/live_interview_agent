@@ -111,7 +111,12 @@ class CompletenessDetector:
             (re.compile(r"\b(and|but|or|so|because|since|although|if|when|while|that|which|where|who|what|how|why|with|about|for|to|from|by|in|at|on)\s*$", re.IGNORECASE), "trailing_conjunction"),
             
             # Open clauses without predicate
-            (re.compile(r"\b(when you were at|if you had|what about|tell me about|how about|regarding)\s*$", re.IGNORECASE), "open_clause"),
+            # Note: "tell me about" is NOT here because "tell me about yourself" IS complete
+            (re.compile(r"\b(when you were at|if you had|what about|how about|regarding)\s*$", re.IGNORECASE), "open_clause"),
+            
+            # "tell me about" is only incomplete if followed by nothing after "about"
+            # e.g., "tell me about" (incomplete) vs "tell me about yourself" (complete)
+            (re.compile(r"\btell\s+me\s+about\s*$", re.IGNORECASE), "open_clause"),
             
             # Self-correction signals at end
             (re.compile(r"\b(I mean|sorry|let me rephrase|actually|wait|no wait)\s*$", re.IGNORECASE), "self_correction"),
@@ -159,7 +164,9 @@ class CompletenessDetector:
             # WH-word + auxiliary + subject pattern
             (re.compile(r"^(what|how|why)\s+(is|are|was|were|do|did|would|have|has|can|could|should)\s+", re.IGNORECASE), 0.70),
             
-            # Imperative patterns
+            # Imperative patterns - "tell me about yourself" type patterns
+            # These are COMPLETE even without trailing punctuation
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?tell\s+me\s+about\s+(yourself|your|a\s+time)\b", re.IGNORECASE), 0.90),
             (re.compile(r"^(tell me about|describe|explain|walk me through)\s+.{10,}", re.IGNORECASE), 0.75),
             
             # Can you / Could you with substantial content

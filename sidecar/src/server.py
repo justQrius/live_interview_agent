@@ -633,9 +633,14 @@ class SidecarServer:
                     self.stt = self.provider_factory.get_stt_provider()
                 
                 # Init Gemini managers
-                if config.gemini_api_key and not self.gemini_cache_manager:
-                    self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
-                    self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
+                # FIX: Always initialize if not already present, regardless of cache manager state
+                if config.gemini_api_key:
+                    if not self.gemini_cache_manager:
+                        self.gemini_cache_manager = GeminiCacheManager(config.gemini_api_key)
+                        logger.info("Created Gemini Cache Manager for upload")
+                    if not self.gemini_file_uploader:
+                        self.gemini_file_uploader = GeminiFileUploader(config.gemini_api_key)
+                        logger.info("Created Gemini File Uploader for upload")
                 
                 logger.info("Providers initialized from upload message")
             except Exception as e:
@@ -810,12 +815,18 @@ class SidecarServer:
                 
                 # Phase 5 Cache-First: Create Gemini Cache from uploaded files
                 # This provides FULL document context with proper attribution
+                logger.info(f"Cache check: manager={bool(self.gemini_cache_manager)}, uploader={bool(self.gemini_file_uploader)}, llm={bool(self.llm)}")
+                if self.gemini_file_uploader:
+                    logger.info(f"Uploader has_files: {self.gemini_file_uploader.has_files()}")
                 if self.gemini_cache_manager and self.gemini_file_uploader and self.llm:
                     # Run cache creation in background to avoid blocking UI response
                     self._create_background_task(self._create_gemini_cache_background())
+                    logger.info("Triggered Gemini cache creation in background")
                 elif self.gemini_cache_manager and self.gemini_file_uploader and not self.llm:
                     # Log why cache creation is deferred - will be created on START_SESSION
                     logger.info("Gemini cache creation deferred - LLM not yet initialized (will create on START_SESSION)")
+                else:
+                    logger.warning(f"Cannot create cache: manager={bool(self.gemini_cache_manager)}, uploader={bool(self.gemini_file_uploader)}, llm={bool(self.llm)}")
         
         except Exception as e:
             logger.error(f"Context upload fatal error: {e}")
@@ -961,11 +972,17 @@ class SidecarServer:
 
     async def _create_gemini_cache_background(self) -> None:
         """Background task to create Gemini cache."""
+        logger.info("Starting _create_gemini_cache_background task...")
+        
         if not (self.gemini_cache_manager and self.gemini_file_uploader and self.llm):
+            logger.warning(f"Cache background: missing components - manager={bool(self.gemini_cache_manager)}, uploader={bool(self.gemini_file_uploader)}, llm={bool(self.llm)}")
             return
 
         if not hasattr(self.llm, 'set_cached_content'):
+            logger.warning("Cache background: LLM does not support caching (no set_cached_content method)")
             return
+        
+        logger.info(f"Cache background: has_files={self.gemini_file_uploader.has_files()}, files_count={len(self.gemini_file_uploader.get_uploaded_files()) if self.gemini_file_uploader.has_files() else 0}")
 
         if self.gemini_file_uploader.has_files():
             try:
@@ -983,6 +1000,8 @@ class SidecarServer:
                     getattr(self.llm, 'set_cached_content')(cache_name)
                     logger.info(f"LLM using file-based cache: {cache_name}")
                     logger.info(f"Document manifest:\n{document_manifest[:500]}...")
+                else:
+                    logger.warning("Cache creation returned empty cache_name")
             except Exception as e:
                 logger.error(f"Failed to create file-based cache: {e}")
                 # Fallback to chunk-based cache
@@ -998,6 +1017,19 @@ class SidecarServer:
                         logger.info(f"LLM using fallback chunk cache: {cache_name}")
                 except Exception as fallback_err:
                     logger.error(f"Fallback cache also failed: {fallback_err}")
+        else:
+            logger.warning("No files uploaded to Gemini - cannot create file-based cache. Trying chunk-based cache...")
+            try:
+                cache_name = await self.gemini_cache_manager.create_cache_from_context_async(
+                    self.context_manager,
+                    ttl_seconds=7200,
+                    model=GeminiModels.DEFAULT_LLM,
+                )
+                if cache_name:
+                    getattr(self.llm, 'set_cached_content')(cache_name)
+                    logger.info(f"LLM using chunk-based cache: {cache_name}")
+            except Exception as e:
+                logger.error(f"Chunk-based cache creation failed: {e}")
 
     async def _handle_calibrate_voice(
         self,

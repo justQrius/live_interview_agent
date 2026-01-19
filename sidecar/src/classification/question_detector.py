@@ -74,13 +74,14 @@ class QuestionDetector:
             (re.compile(r"^where\s+(do|did|would|have|has|can|could)\b", re.IGNORECASE), 0.85),
             (re.compile(r"^who\s+(do|did|would|have|has|can|could|is|was|are|were)\b", re.IGNORECASE), 0.85),
             
-            # Behavioral question starters
-            (re.compile(r"^tell\s+me\s+about\b", re.IGNORECASE), 0.95),
-            (re.compile(r"^describe\s+(a\s+|your\s+|an\s+|the\s+)?", re.IGNORECASE), 0.90),
-            (re.compile(r"^explain\s+(how|what|why|your|the|a|an)\b", re.IGNORECASE), 0.90),
-            (re.compile(r"^walk\s+me\s+through\b", re.IGNORECASE), 0.95),
-            (re.compile(r"^give\s+me\s+an?\s+example\b", re.IGNORECASE), 0.95),
-            (re.compile(r"^share\s+(an?\s+|your\s+)?experience\b", re.IGNORECASE), 0.90),
+            # Behavioral question starters - allow common prefixes like "so", "okay", "and"
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?tell\s+me\s+about\b", re.IGNORECASE), 0.95),
+            (re.compile(r"\btell\s+me\s+about\s+(yourself|a\s+time|your)\b", re.IGNORECASE), 0.95),  # Mid-sentence variant
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?describe\s+(a\s+|your\s+|an\s+|the\s+)?", re.IGNORECASE), 0.90),
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?explain\s+(how|what|why|your|the|a|an)\b", re.IGNORECASE), 0.90),
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?walk\s+me\s+through\b", re.IGNORECASE), 0.95),
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?give\s+me\s+an?\s+example\b", re.IGNORECASE), 0.95),
+            (re.compile(r"^(?:(?:so|okay|ok|and|now|alright|well)[,\s]+)?share\s+(an?\s+|your\s+)?experience\b", re.IGNORECASE), 0.90),
             
             # Can you / Could you patterns
             (re.compile(r"^can\s+you\s+(tell|describe|explain|walk|share|give)\b", re.IGNORECASE), 0.90),

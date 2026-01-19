@@ -106,6 +106,7 @@ class DeepgramStreamingSession(StreamingSession):
         self._start_time_ms: int = 0
         self._last_audio_time_ms: int = 0
         self._keepalive_task: Optional[asyncio.Task] = None
+        self._needs_reconnection: bool = False  # Flag for session recovery
     
     async def _connect(self) -> None:
         """Establish WebSocket connection using SDK v5.x."""
@@ -309,7 +310,12 @@ class DeepgramStreamingSession(StreamingSession):
         Deepgram closes connections that receive no data for ~10-15 seconds.
         Since Browser VAD filters silence before sending to server, we need
         to send explicit KeepAlive messages during quiet periods.
+        
+        Enhanced with retry logic - transient failures won't kill the session.
         """
+        MAX_CONSECUTIVE_FAILURES = 3
+        consecutive_failures = 0
+        
         try:
             from deepgram.extensions.types.sockets import ListenV1ControlMessage  # type: ignore
             
@@ -323,9 +329,23 @@ class DeepgramStreamingSession(StreamingSession):
                     control = ListenV1ControlMessage(type="KeepAlive")
                     await self._connection.send_control(control)
                     logger.debug("Deepgram keepalive sent")
+                    consecutive_failures = 0  # Reset on success
                 except Exception as e:
-                    logger.warning(f"Deepgram keepalive failed: {e}")
-                    break
+                    consecutive_failures += 1
+                    logger.warning(
+                        f"Deepgram keepalive failed ({consecutive_failures}/{MAX_CONSECUTIVE_FAILURES}): {e}"
+                    )
+                    
+                    if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                        logger.error(
+                            f"Deepgram keepalive failed {MAX_CONSECUTIVE_FAILURES} times, marking session for reconnection"
+                        )
+                        # Mark as needing reconnection instead of just breaking
+                        self._needs_reconnection = True
+                        break
+                    
+                    # Wait a bit longer before next retry
+                    await asyncio.sleep(1.0)
                     
         except asyncio.CancelledError:
             logger.debug("Deepgram keepalive task cancelled")
