@@ -518,11 +518,13 @@ export const useWebSocket = () => {
     };
   }, []);
 
-  const sendMessage = (message: WebSocketMessage) => {
+  const sendMessage = (message: WebSocketMessage): boolean => {
     if (sharedWs && sharedWs.readyState === WebSocket.OPEN) {
       sharedWs.send(JSON.stringify(message));
+      return true;
     } else {
       console.error('WebSocket is not connected');
+      return false;
     }
   };
 
