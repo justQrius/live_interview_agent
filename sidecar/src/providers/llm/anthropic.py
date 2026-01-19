@@ -7,6 +7,8 @@ for generating high-quality interview answers.
 
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, cast
 
+import logging
+
 try:
     from anthropic import AsyncAnthropic
 except ImportError:
@@ -19,6 +21,8 @@ else:
 
 from ..base import LLMProvider
 from .prompts import build_system_prompt, format_context_for_prompt
+
+logger = logging.getLogger(__name__)
 
 
 def _to_anthropic_messages(
@@ -145,9 +149,17 @@ class AnthropicLLMProvider(LLMProvider):
         async with self.client.messages.stream(
             model=self.model,
             max_tokens=self.DEFAULT_MAX_TOKENS,
-            system=system_message,
+            system=cast(Any, system_message),  # Type hint for cache_control support
             messages=cast(Any, messages),
             extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
         ) as stream:
+            # Log cache usage from response headers (if available)
+            cache_creation_tokens = getattr(stream, '_response', None)
+            if cache_creation_tokens and hasattr(cache_creation_tokens, 'headers'):
+                cache_read = cache_creation_tokens.headers.get('x-cache-creation-input-tokens')
+                cache_hit = cache_creation_tokens.headers.get('x-cache-read-input-tokens') 
+                if cache_read or cache_hit:
+                    logger.debug(f"Anthropic cache stats - created: {cache_read}, read: {cache_hit}")
+            
             async for text in stream.text_stream:
                 yield text
