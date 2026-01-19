@@ -57,19 +57,35 @@ class StreamingSTTManager:
         await manager.stop_session()
     """
     
+    # Reconnection settings
+    MAX_RECONNECT_ATTEMPTS = 3
+    RECONNECT_DELAY_S = 2.0
+    WATCHDOG_INTERVAL_S = 5.0
+    
     def __init__(self, factory: Optional["ProviderFactory"] = None):
         self.factory = factory
         self._session: Optional[StreamingSession] = None
         self._provider: Optional[StreamingSTTProvider] = None
         self._callbacks = StreamingSTTCallbacks()
         self._receive_task: Optional[asyncio.Task] = None
+        self._watchdog_task: Optional[asyncio.Task] = None
         self._current_speaker: Speaker = Speaker.INTERVIEWER
         self._is_active = False
+        self._reconnect_attempts = 0
+        self._stored_config: Optional[StreamingConfig] = None
     
     @property
     def is_active(self) -> bool:
         """Check if a streaming session is active."""
         return self._is_active and self._session is not None and self._session.is_connected
+    
+    @property
+    def needs_reconnection(self) -> bool:
+        """Check if session needs reconnection (e.g., after keepalive failures)."""
+        if not self._session:
+            return False
+        # Check if session has the _needs_reconnection flag (Deepgram specific)
+        return getattr(self._session, '_needs_reconnection', False)
     
     @property
     def provider_name(self) -> Optional[str]:
@@ -129,9 +145,14 @@ class StreamingSTTManager:
             # Connect to streaming provider
             self._session = await self._provider.connect(config)
             self._is_active = True
+            self._stored_config = config  # Store for reconnection
+            self._reconnect_attempts = 0  # Reset on successful connection
             
             # Start receiving results
             self._receive_task = asyncio.create_task(self._receive_loop())
+            
+            # Start watchdog for reconnection detection
+            self._watchdog_task = asyncio.create_task(self._watchdog_loop())
             
             logger.info(f"Streaming STT session started: {self._provider.provider_name}")
             return True
@@ -160,6 +181,14 @@ class StreamingSTTManager:
         final_transcript = None
         
         try:
+            # Cancel watchdog task
+            if self._watchdog_task and not self._watchdog_task.done():
+                self._watchdog_task.cancel()
+                try:
+                    await self._watchdog_task
+                except asyncio.CancelledError:
+                    pass
+            
             # Cancel receive task
             if self._receive_task and not self._receive_task.done():
                 self._receive_task.cancel()
@@ -192,9 +221,101 @@ class StreamingSTTManager:
             self._is_active = False
             self._session = None
             self._receive_task = None
+            self._watchdog_task = None
             logger.info("Streaming STT session stopped")
         
         return final_transcript
+    
+    async def reconnect(self) -> bool:
+        """
+        Attempt to reconnect a failed streaming session.
+        
+        Returns:
+            True if reconnection successful, False otherwise
+        """
+        if self._reconnect_attempts >= self.MAX_RECONNECT_ATTEMPTS:
+            logger.error(f"Max reconnection attempts ({self.MAX_RECONNECT_ATTEMPTS}) reached")
+            return False
+        
+        self._reconnect_attempts += 1
+        logger.info(f"Attempting streaming STT reconnection ({self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})")
+        
+        # Clean up old session without triggering callbacks
+        try:
+            if self._receive_task and not self._receive_task.done():
+                self._receive_task.cancel()
+                try:
+                    await self._receive_task
+                except asyncio.CancelledError:
+                    pass
+            
+            if self._session:
+                await self._session.close()
+        except Exception as e:
+            logger.debug(f"Cleanup during reconnect: {e}")
+        
+        self._session = None
+        self._receive_task = None
+        self._is_active = False
+        
+        # Wait before reconnecting
+        await asyncio.sleep(self.RECONNECT_DELAY_S)
+        
+        # Reconnect using stored config (don't overwrite callbacks)
+        if not self._provider or not self._stored_config:
+            logger.error("Cannot reconnect: missing provider or config")
+            return False
+        
+        try:
+            self._session = await self._provider.connect(self._stored_config)
+            self._is_active = True
+            
+            # Restart receive loop
+            self._receive_task = asyncio.create_task(self._receive_loop())
+            
+            logger.info(f"Streaming STT reconnected successfully (attempt {self._reconnect_attempts})")
+            self._reconnect_attempts = 0  # Reset on success
+            return True
+            
+        except Exception as e:
+            logger.error(f"Reconnection failed: {e}")
+            return False
+    
+    async def _watchdog_loop(self) -> None:
+        """
+        Background task to monitor session health and trigger reconnection.
+        
+        Checks for:
+        1. Session disconnection without explicit stop
+        2. Session marked for reconnection (e.g., keepalive failures)
+        """
+        try:
+            while self._is_active:
+                await asyncio.sleep(self.WATCHDOG_INTERVAL_S)
+                
+                if not self._is_active:
+                    break
+                
+                # Check if session needs reconnection
+                if self.needs_reconnection:
+                    logger.warning("Watchdog detected session needs reconnection")
+                    success = await self.reconnect()
+                    if not success:
+                        logger.error("Watchdog reconnection failed, stopping watchdog")
+                        break
+                
+                # Check if session unexpectedly disconnected
+                elif self._session and not self._session.is_connected:
+                    logger.warning("Watchdog detected unexpected disconnection")
+                    success = await self.reconnect()
+                    if not success:
+                        logger.error("Watchdog reconnection failed, stopping watchdog")
+                        break
+                        
+        except asyncio.CancelledError:
+            logger.debug("Streaming watchdog cancelled")
+        except Exception as e:
+            logger.error(f"Watchdog error: {e}")
     
     async def send_audio(
         self, 

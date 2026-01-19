@@ -720,7 +720,7 @@ class TestContextAwareClassification:
     # =========================================================================
 
     def test_topic_transition_with_new_question(self, detector: QuestionDetector):
-        """Topic transition followed by new question - the transition prefix dominates."""
+        """Topic transition followed by new question - the question wins because it's actionable."""
         history = [
             {"speaker": "Interviewer", "text": "Tell me about your experience"},
             {"speaker": "Candidate", "text": "I've worked in fintech for 3 years..."},
@@ -729,11 +729,11 @@ class TestContextAwareClassification:
         
         is_question, confidence, classification = detector.is_actionable_question(text, history)
         
-        # "Moving on" at the start triggers statement pattern (transition)
-        # This is correct behavior - the interviewer is transitioning topics
-        # The question will come in the next utterance or needs Tier 2 parsing
-        assert is_question is False
-        assert classification == "statement"
+        # "tell me about your..." is an actionable question even after a transition phrase
+        # The interviewer is asking the candidate to share information
+        # This is the CORRECT behavior for interview coaching
+        assert is_question is True
+        assert classification == "interview_question"
 
     def test_next_question_transition(self, detector: QuestionDetector):
         """'Next question' pattern should be detected appropriately."""

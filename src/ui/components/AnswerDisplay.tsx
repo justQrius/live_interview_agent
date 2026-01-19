@@ -46,13 +46,16 @@ const THINKING_PATTERNS = [
 ];
 
 // Try to separate thinking from answer
-function separateThinkingFromAnswer(text: string): { thinking: string | null; answer: string } {
+function separateThinkingFromAnswer(text: string): { thinking: string | null; answer: string; isStreaming?: boolean } {
   if (!text) return { thinking: null, answer: '' };
 
   // Priority 1: Check for explicit <thinking> tags (most reliable)
-  const thinkingTagMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
-  if (thinkingTagMatch) {
-    const thinkingContent = thinkingTagMatch[1].trim();
+  // Handle both complete tags and streaming (open tag only)
+  
+  // Case 1a: Complete thinking block (has both opening and closing tags)
+  const completeThinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
+  if (completeThinkingMatch) {
+    const thinkingContent = completeThinkingMatch[1].trim();
     const answerContent = text.replace(/<thinking>[\s\S]*?<\/thinking>\s*/, '').trim();
     
     if (thinkingContent.length > 10 && answerContent.length > 10) {
@@ -61,6 +64,18 @@ function separateThinkingFromAnswer(text: string): { thinking: string | null; an
         answer: answerContent
       };
     }
+  }
+  
+  // Case 1b: Streaming - only opening tag present (no closing tag yet)
+  // This handles the case where LLM is still outputting thinking content
+  const streamingThinkingMatch = text.match(/<thinking>([\s\S]*)$/);
+  if (streamingThinkingMatch && !text.includes('</thinking>')) {
+    const thinkingContent = streamingThinkingMatch[1].trim();
+    return {
+      thinking: thinkingContent,
+      answer: '', // No answer yet, still thinking
+      isStreaming: true
+    };
   }
 
   // Priority 2: Check for markdown blockquote thinking (legacy format)
@@ -148,7 +163,7 @@ function separateThinkingFromAnswer(text: string): { thinking: string | null; an
 // Component to render the separated thinking/answer
 function AnswerContent({ text }: { text: string; isComplete?: boolean }) {
   const [showThinking, setShowThinking] = useState(false);
-  const { thinking, answer } = useMemo(() => separateThinkingFromAnswer(text), [text]);
+  const { thinking, answer, isStreaming } = useMemo(() => separateThinkingFromAnswer(text), [text]);
   
   if (!thinking) {
     // No thinking detected, render normally
@@ -171,41 +186,53 @@ function AnswerContent({ text }: { text: string; isComplete?: boolean }) {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
-            AI Reasoning Trace
-            <span className="text-amber-500 dark:text-amber-500">({showThinking ? 'hide' : 'show'})</span>
+            {isStreaming ? 'AI Thinking...' : 'AI Reasoning Trace'}
+            {isStreaming && (
+              <span className="inline-block w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+            )}
+            {!isStreaming && (
+              <span className="text-amber-500 dark:text-amber-500">({showThinking ? 'hide' : 'show'})</span>
+            )}
           </span>
-          <svg 
-            className={`w-4 h-4 text-amber-500 transition-transform ${showThinking ? 'rotate-180' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          {!isStreaming && (
+            <svg 
+              className={`w-4 h-4 text-amber-500 transition-transform ${showThinking ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
         </button>
-        {showThinking && (
+        {(showThinking || isStreaming) && (
           <div className="px-3 pb-3 text-sm text-amber-900/70 dark:text-amber-300/70 whitespace-pre-wrap italic">
             {thinking}
+            {isStreaming && <span className="inline-block animate-pulse">▊</span>}
           </div>
         )}
       </div>
       
-      {/* Answer separator */}
-      <div className="flex items-center gap-2 py-1">
-        <div className="flex-1 h-px bg-green-300 dark:bg-green-700" />
-        <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide flex items-center gap-1">
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-          Your Answer
-        </span>
-        <div className="flex-1 h-px bg-green-300 dark:bg-green-700" />
-      </div>
-      
-      {/* Actual answer */}
-      <p className="text-text-primary whitespace-pre-wrap leading-relaxed tracking-wide">
-        {answer}
-      </p>
+      {/* Answer separator - only show if there's an answer */}
+      {answer && !isStreaming && (
+        <>
+          <div className="flex items-center gap-2 py-1">
+            <div className="flex-1 h-px bg-green-300 dark:bg-green-700" />
+            <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              Your Answer
+            </span>
+            <div className="flex-1 h-px bg-green-300 dark:bg-green-700" />
+          </div>
+          
+          {/* Actual answer */}
+          <p className="text-text-primary whitespace-pre-wrap leading-relaxed tracking-wide">
+            {answer}
+          </p>
+        </>
+      )}
     </div>
   );
 }
