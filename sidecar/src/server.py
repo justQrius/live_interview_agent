@@ -49,6 +49,7 @@ from src.protocol import (
     create_enhanced_answer_chunk_message,
     create_enhanced_answer_complete_message,
     create_document_type_suggestions_message,
+    create_document_deleted_message,
 )
 from src.audio.diarization import SpeakerRecognizer
 from src.audio.capture import AudioCapture, AudioCaptureError
@@ -365,6 +366,7 @@ class SidecarServer:
             MessageType.LOAD_RAG_STATE: self._handle_load_rag_state,
             MessageType.REFRESH_CACHE: self._handle_refresh_cache,
             MessageType.CLEAR_ALL_DATA: self._handle_clear_all_data,
+            MessageType.DELETE_DOCUMENT: self._handle_delete_document,
             # Listening Control
             MessageType.PAUSE_LISTENING: self._handle_pause_listening,
             MessageType.RESUME_LISTENING: self._handle_resume_listening,
@@ -3009,6 +3011,74 @@ Provide a concise, punchy version that hits the key points quickly."""
             )
             await websocket.send(response_msg.to_json())
     
+    async def _handle_delete_document(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle DELETE_DOCUMENT message.
+        
+        Removes a specific document from all storage layers:
+        - RAG Manifest
+        - Vector Store
+        - Context Manager
+        - Gemini File Uploader
+        - Memory Store
+        - Rebuilds Gemini Cache if needed
+        """
+        data = message.data or {}
+        filename = data.get("filename")
+        
+        if not filename:
+            await websocket.send(create_document_deleted_message(
+                filename="",
+                success=False,
+                error="Filename is required"
+            ).to_json())
+            return
+            
+        logger.info(f"Deleting document: {filename}")
+        
+        try:
+            # 1. Remove from RAG Manifest (Persistent Registry)
+            self.rag_manifest.remove_document(filename)
+            
+            # 2. Remove from Vector Store (ChromaDB)
+            if self.vector_store:
+                self.vector_store.delete_document(filename)
+                
+            # 3. Remove from Context Manager (In-Memory Chunks)
+            self.context_manager.remove_document(filename)
+            
+            # 4. Remove from Gemini File Uploader (Cloud & Local)
+            if self.gemini_file_uploader:
+                self.gemini_file_uploader.delete_file(filename)
+                
+            # 5. Remove from Memory Store (SQLite Facts/Stories)
+            if self.memory_store:
+                self.memory_store.delete_document_by_filename(filename)
+
+            # 6. Rebuild Gemini Cache (Background)
+            if self.gemini_cache_manager and self.gemini_file_uploader and self.llm:
+                # Trigger background rebuild
+                self._create_background_task(self._create_gemini_cache_background())
+                
+            await websocket.send(create_document_deleted_message(
+                filename=filename,
+                success=True
+            ).to_json())
+            
+            logger.info(f"Document deleted successfully: {filename}")
+            
+        except Exception as e:
+            logger.error(f"Failed to delete document {filename}: {e}")
+            await websocket.send(create_document_deleted_message(
+                filename=filename,
+                success=False,
+                error=str(e)
+            ).to_json())
+
     async def _handle_clear_all_data(
         self,
         websocket: ServerConnection,

@@ -17,11 +17,10 @@ interface StagedFile {
 
 const ContextLoader: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { sendMessage, isConnected, addMessageHandler, removeMessageHandler } = useWebSocket();
+  const { sendMessage, isConnected, addMessageHandler, removeMessageHandler, deleteDocument } = useWebSocket();
   const loadedContextFiles = useSessionStore((state) => state.loadedContextFiles);
   const addContextFile = useSessionStore((state) => state.addContextFile);
   const updateContextFile = useSessionStore((state) => state.updateContextFile);
-  const removeContextFile = useSessionStore((state) => state.removeContextFile);
   const setContextStatus = useSessionStore((state) => state.setContextStatus);
   const contextStatus = useSessionStore((state) => state.contextStatus);
   const ragState = useSessionStore((state) => state.ragState);
@@ -31,6 +30,7 @@ const ContextLoader: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
   
   // Staging state for hybrid classification
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
@@ -118,6 +118,13 @@ const ContextLoader: React.FC = () => {
       } else if (message.type === 'PREPARATION_READY') {
         // RAG processing is complete
         setContextStatus('rag_ready');
+      } else if (message.type === 'DOCUMENT_DELETED') {
+        const data = message.data as { filename: string; success: boolean };
+        setDeletingFiles(prev => {
+          const next = new Set(prev);
+          next.delete(data.filename);
+          return next;
+        });
       }
     };
 
@@ -350,6 +357,19 @@ const ContextLoader: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Delete single document
+  const handleDeleteDocument = (filename: string) => {
+    if (!isConnected) return;
+    
+    setDeletingFiles(prev => {
+      const next = new Set(prev);
+      next.add(filename);
+      return next;
+    });
+    
+    deleteDocument(filename);
+  };
+
   // Refresh Gemini cache for existing documents
   const handleRefreshCache = async () => {
     if (!isConnected) return;
@@ -469,18 +489,31 @@ const ContextLoader: React.FC = () => {
               {ragState.documentCount} docs restored from previous session
             </span>
           </div>
-          <ul className="mt-2 space-y-1">
-            {ragState.documents.slice(0, 3).map((doc, idx) => (
-              <li key={idx} className="text-[10px] text-green-700 dark:text-green-400 truncate pl-6">
-                • {doc.filename} ({doc.documentType})
-              </li>
-            ))}
-            {ragState.documentCount > 3 && (
-              <li className="text-[10px] text-green-600 dark:text-green-500 pl-6">
-                +{ragState.documentCount - 3} more...
-              </li>
-            )}
-          </ul>
+          <div className="max-h-48 overflow-y-auto pr-1 scrollbar-thin mt-2">
+            <ul className="space-y-1">
+              {ragState.documents.map((doc, idx) => (
+                <li key={idx} className="flex items-center justify-between text-[10px] text-green-700 dark:text-green-400 pl-6 group">
+                  <span className="truncate flex-1 pr-2">
+                    • {doc.filename} ({doc.documentType})
+                  </span>
+                  <button
+                    onClick={() => handleDeleteDocument(doc.filename)}
+                    disabled={deletingFiles.has(doc.filename) || ragState.isClearing}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-green-600 hover:text-red-500 rounded"
+                    title="Delete document"
+                  >
+                    {deletingFiles.has(doc.filename) ? (
+                      <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 
@@ -655,13 +688,18 @@ const ContextLoader: React.FC = () => {
                       )}
                       
                       <button 
-                        onClick={() => removeContextFile(file.id)}
+                        onClick={() => handleDeleteDocument(file.name)}
+                        disabled={deletingFiles.has(file.name)}
                         className="text-text-muted hover:text-destructive transition-colors"
                         title="Remove file"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        {deletingFiles.has(file.name) ? (
+                          <div className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>

@@ -68,6 +68,10 @@ class MessageType(str, Enum):
     ENHANCED_ANSWER_COMPLETE = "ENHANCED_ANSWER_COMPLETE"  # Phase 5: Enhancement done
     DOCUMENT_TYPE_SUGGESTIONS = "DOCUMENT_TYPE_SUGGESTIONS"  # Phase 5: LLM-inferred document types
     
+    # Document Management
+    DELETE_DOCUMENT = "DELETE_DOCUMENT"
+    DOCUMENT_DELETED = "DOCUMENT_DELETED"
+    
     # Phase 6: Utterance Accumulation
     ACCUMULATING = "ACCUMULATING"  # Phase 6: Buffering interviewer speech
     
@@ -288,6 +292,30 @@ def create_status_message(state: SessionStatus) -> Message:
 
 
 # Session History Helper Functions
+
+def create_document_deleted_message(filename: str, success: bool, error: Optional[str] = None) -> Message:
+    """Create a document deleted confirmation message."""
+    return Message(
+        type=MessageType.DOCUMENT_DELETED,
+        data={
+            "filename": filename,
+            "success": success,
+            "error": error
+        }
+    )
+
+
+def create_document_deleted_message(filename: str, success: bool, error: Optional[str] = None) -> Message:
+    """Create a document deleted confirmation message."""
+    return Message(
+        type=MessageType.DOCUMENT_DELETED,
+        data={
+            "filename": filename,
+            "success": success,
+            "error": error
+        }
+    )
+
 
 def create_session_list_message(
     sessions: list[dict],

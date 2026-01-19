@@ -269,6 +269,24 @@ class VectorStore:
             logger.error(f"Failed to query with embedding: {e}")
             return {}
 
+    def delete_document(self, filename: str) -> bool:
+        """
+        Delete a document and its chunks from the vector store.
+        
+        Args:
+            filename: The filename of the document to delete.
+            
+        Returns:
+            True if deletion was successful.
+        """
+        logger.info(f"Deleting document from vector store: {filename}")
+        try:
+            self.collection.delete(where={"source": filename})
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete document {filename} from ChromaDB: {e}")
+            return False
+
     def clear(self) -> None:
         """Clear the vector store (delete collection and recreate)."""
         logger.info("Clearing vector store")

@@ -344,6 +344,25 @@ class MemoryStore:
             conn.commit()
             return cursor.rowcount > 0
 
+    def delete_document_by_filename(self, filename: str) -> bool:
+        """Delete a document by filename."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            # Find ID
+            cursor.execute("SELECT id FROM documents WHERE filename = ?", (filename,))
+            row = cursor.fetchone()
+            if not row:
+                return False
+            
+            document_id = row["id"]
+            
+            # Delete facts
+            cursor.execute("DELETE FROM facts WHERE document_id = ?", (document_id,))
+            # Delete document
+            cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+            conn.commit()
+            return True
+
     # ===================
     # Facts Operations
     # ===================
@@ -908,6 +927,10 @@ class AsyncMemoryStore:
     async def delete_document(self, document_id: str) -> bool:
         """Delete a document and its associated facts (async)."""
         return await asyncio.to_thread(self._store.delete_document, document_id)
+
+    async def delete_document_by_filename(self, filename: str) -> bool:
+        """Delete a document by filename (async)."""
+        return await asyncio.to_thread(self._store.delete_document_by_filename, filename)
     
     # ===================
     # Facts Operations

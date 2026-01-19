@@ -353,6 +353,51 @@ class GeminiFileUploader:
         """Check if any files have been uploaded."""
         return len(self._uploaded_files) > 0
 
+    def delete_file(self, filename: str) -> bool:
+        """
+        Delete a file from Gemini and local storage.
+        
+        Args:
+            filename: Name of the file to delete
+            
+        Returns:
+            True if file was found and deleted
+        """
+        if filename not in self._uploaded_files:
+            return False
+            
+        uploaded_file = self._uploaded_files[filename]
+        
+        # Delete from Gemini
+        if uploaded_file.gemini_file:
+            try:
+                self.client.client.files.delete(name=uploaded_file.gemini_file.name)
+                logger.info(f"Deleted file from Gemini: {filename}")
+            except Exception as e:
+                logger.warning(f"Failed to delete file {filename} from Gemini: {e}")
+                
+        # Remove local file
+        try:
+            file_path = self.storage_path / filename
+            if file_path.exists():
+                file_path.unlink()
+                logger.info(f"Deleted local file: {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to delete local file {filename}: {e}")
+            
+        # Update registry
+        doc_type = uploaded_file.document_type
+        if doc_type in self._files_by_type:
+            self._files_by_type[doc_type] = [
+                f for f in self._files_by_type[doc_type] 
+                if f.filename != filename
+            ]
+            
+        del self._uploaded_files[filename]
+        self._update_manifest()
+        
+        return True
+
     def clear(self) -> None:
         """Clear all uploaded files (local and remote)."""
         # Delete from Gemini
