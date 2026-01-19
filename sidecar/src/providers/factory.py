@@ -413,13 +413,33 @@ class ProviderFactory:
                 return OpenAIRealtimeProvider(api_key, model=model)
                 
             elif mode == StreamingMode.AUTO:
-                # Fallback logic for AUTO
-                if self.config.deepgram_api_key:
+                # AUTO mode: Prefer streaming provider that matches preferred_stt,
+                # then fall back to any available streaming provider.
+                # This ensures users who select "OpenAI STT" don't get Deepgram streaming.
+                preferred = self.config.preferred_stt
+                
+                # Map preferred_stt to matching streaming mode
+                if preferred == ProviderType.DEEPGRAM and self.config.deepgram_api_key:
                     return self._create_streaming_stt_provider(StreamingMode.DEEPGRAM_FLUX)
-                if self.config.assemblyai_api_key:
+                if preferred == ProviderType.ASSEMBLYAI and self.config.assemblyai_api_key:
                     return self._create_streaming_stt_provider(StreamingMode.ASSEMBLYAI)
-                if self.config.openai_api_key:
+                if preferred == ProviderType.OPENAI and self.config.openai_api_key:
                     return self._create_streaming_stt_provider(StreamingMode.OPENAI_REALTIME)
+                
+                # For providers without streaming support (Gemini, Groq), 
+                # or if preferred is None (auto), fall back to default order
+                if preferred in (None, ProviderType.GEMINI, ProviderType.GROQ):
+                    # No streaming for Gemini/Groq batch STT, check if any streaming available
+                    if self.config.deepgram_api_key:
+                        return self._create_streaming_stt_provider(StreamingMode.DEEPGRAM_FLUX)
+                    if self.config.assemblyai_api_key:
+                        return self._create_streaming_stt_provider(StreamingMode.ASSEMBLYAI)
+                    if self.config.openai_api_key:
+                        return self._create_streaming_stt_provider(StreamingMode.OPENAI_REALTIME)
+                
+                # If preferred provider doesn't have streaming, don't use any
+                # (e.g., user explicitly selected Gemini STT)
+                logger.info(f"No streaming STT available for preferred provider: {preferred}")
                     
         except ImportError as e:
             logger.warning(f"Failed to import streaming provider for {mode}: {e}")
