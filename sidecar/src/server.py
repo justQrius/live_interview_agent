@@ -94,12 +94,33 @@ from src.context.file_uploader import GeminiFileUploader, DocumentType as FileDo
 from src.rag.gemini_embeddings import GeminiEmbeddingFunction
 # Note: EnhancedContextManager already imported above (line 60)
 
-# Configure logging
+# Configure logging with file output for debugging
+import logging.handlers
+from pathlib import Path
+
+# Create logs directory in sidecar folder
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "sidecar.log"
+
+# Configure root logger with both console and file handlers
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        # Console handler (existing behavior)
+        logging.StreamHandler(),
+        # Rotating file handler: 5MB per file, keep last 5 files
+        logging.handlers.RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=5 * 1024 * 1024,  # 5 MB
+            backupCount=5,
+            encoding="utf-8"
+        )
+    ]
 )
 logger = logging.getLogger(__name__)
+logger.info(f"Logging to file: {LOG_FILE}")
 
 
 @dataclass
