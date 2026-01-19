@@ -169,6 +169,16 @@ class DeepgramStreamingSession(StreamingSession):
             self._is_connected = True
             self._start_time_ms = int(time.time() * 1000)
             
+            # Send immediate keepalive to prevent timeout before audio starts
+            # Deepgram closes connections after ~10-15 seconds without data
+            try:
+                from deepgram.extensions.types.sockets import ListenV1ControlMessage  # type: ignore
+                control = ListenV1ControlMessage(type="KeepAlive")
+                await self._connection.send_control(control)
+                logger.debug("Deepgram immediate keepalive sent after connection")
+            except Exception as e:
+                logger.warning(f"Failed to send immediate keepalive: {e}")
+            
             # Start keepalive task to prevent timeout during silence
             self._keepalive_task = asyncio.create_task(self._keepalive_loop())
             

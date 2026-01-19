@@ -361,6 +361,7 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         cacheExpired: boolean;
         lastCacheTimestamp: string | null;
       };
+      wsLogger.info(`RAG_STATE received: hasDocuments=${data.hasDocuments}, count=${data.documentCount}, cacheExpired=${data.cacheExpired}`);
       store.setRagState({
         hasDocuments: data.hasDocuments,
         documentCount: data.documentCount,
@@ -372,8 +373,10 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       // Update contextStatus based on RAG state
       if (data.hasDocuments) {
         if (data.cacheExpired) {
+          wsLogger.info('Setting contextStatus to cache_expired');
           store.setContextStatus('cache_expired');
         } else {
+          wsLogger.info('Setting contextStatus to rag_ready');
           store.setContextStatus('rag_ready');
         }
       }
