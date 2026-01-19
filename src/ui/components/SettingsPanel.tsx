@@ -43,8 +43,8 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, icon, isOpen
 const SettingsPanel: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    providers: true,
-    preferences: true,
+    providers: false,
+    preferences: false,
     privacy: false,
   });
 

@@ -696,6 +696,57 @@ class EnhancedContextManager:
         """Alias for get_all_enhanced_chunks for backward compatibility."""
         return self.get_all_enhanced_chunks()
     
+    def remove_document(self, filename: str) -> bool:
+        """
+        Remove a document and its chunks from memory.
+        
+        Args:
+            filename: The filename to remove.
+            
+        Returns:
+            True if the document was found and removed.
+        """
+        # Check if file was processed
+        if filename not in self.processed_files:
+            logger.warning(f"Attempted to remove unknown document: {filename}")
+            return False
+            
+        # Get content hash to clean up hash map
+        file_info = self.processed_files[filename]
+        content_hash = file_info.get("content_hash")
+        
+        # Remove from documents_by_type
+        for doc_type in self.documents_by_type:
+            self.documents_by_type[doc_type] = [
+                c for c in self.documents_by_type[doc_type] 
+                if c.metadata.get("source") != filename
+            ]
+            
+        # Remove from _enhanced_chunks
+        original_count = len(self._enhanced_chunks)
+        self._enhanced_chunks = [
+            c for c in self._enhanced_chunks 
+            if c.metadata.get("source") != filename
+        ]
+        removed_count = original_count - len(self._enhanced_chunks)
+        
+        # Rebuild parent map
+        self._parent_map = {
+            c.id: c for c in self._enhanced_chunks 
+            if c.level == "parent"
+        }
+        
+        # Clean up hash maps
+        if content_hash and content_hash in self._content_hashes:
+            del self._content_hashes[content_hash]
+            del self._hash_to_chunks[content_hash]
+            
+        # Remove from processed_files
+        del self.processed_files[filename]
+        
+        logger.info(f"Removed document {filename} from context ({removed_count} chunks)")
+        return True
+
     def clear_context(self) -> None:
         """Clear all context including enhanced chunks."""
         self.documents_by_type.clear()

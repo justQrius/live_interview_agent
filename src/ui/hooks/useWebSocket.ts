@@ -61,6 +61,8 @@ export type MessageType =
   | 'RAG_STATE'
   | 'CACHE_REFRESH_COMPLETE'
   | 'DATA_CLEARED'
+  | 'DELETE_DOCUMENT'
+  | 'DOCUMENT_DELETED'
   // Listening Control
   | 'PAUSE_LISTENING'
   | 'RESUME_LISTENING'
@@ -415,6 +417,26 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       }
       break;
     }
+
+    case 'DOCUMENT_DELETED': {
+      const data = message.data as { filename: string; success: boolean; error?: string };
+      if (data.success) {
+        wsLogger.info(`Document deleted: ${data.filename}`);
+        // Remove from persistent RAG state
+        store.removeRagDocument(data.filename);
+        
+        // Remove from currently loaded context files (if present)
+        // We need to find the file ID by name since loadedContextFiles uses ID
+        const fileToRemove = store.loadedContextFiles.find(f => f.name === data.filename);
+        if (fileToRemove) {
+          store.removeContextFile(fileToRemove.id);
+        }
+      } else {
+        wsLogger.error(`Failed to delete document: ${data.error}`);
+        store.setLastError(data.error || 'Failed to delete document');
+      }
+      break;
+    }
     
     // Listening Control (Phase 8)
     case 'LISTENING_PAUSED': {
@@ -646,6 +668,13 @@ export const useWebSocket = () => {
     });
   };
 
+  const deleteDocument = (filename: string) => {
+    sendMessage({
+      type: 'DELETE_DOCUMENT',
+      data: { filename },
+    });
+  };
+
   // Custom message handler registration (for component-level handling)
   const addMessageHandler = (handler: MessageHandler) => {
     customMessageHandlers.add(handler);
@@ -666,6 +695,7 @@ export const useWebSocket = () => {
     deleteSession,
     // Preparation
     requestPreparation,
+    deleteDocument,
     // Custom message handlers (Phase 5: Document Type Inference)
     addMessageHandler,
     removeMessageHandler,

@@ -335,6 +335,7 @@ export interface SessionState {
   setRagRefreshing: (refreshing: boolean) => void;
   setRagClearing: (clearing: boolean) => void;
   clearRagState: () => void;
+  removeRagDocument: (filename: string) => void;
   
   // Listening Control Actions
   setListeningPaused: (paused: boolean) => void;
@@ -745,6 +746,19 @@ export const useSessionStore = create<SessionState>((set) => ({
         isRefreshing: false,
         isClearing: false,
       },
+    }),
+
+  removeRagDocument: (filename) =>
+    set((state) => {
+      const newDocuments = state.ragState.documents.filter((d) => d.filename !== filename);
+      return {
+        ragState: {
+          ...state.ragState,
+          documents: newDocuments,
+          documentCount: newDocuments.length,
+          hasDocuments: newDocuments.length > 0,
+        },
+      };
     }),
     
   // Listening Control Actions
