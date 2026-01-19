@@ -206,9 +206,12 @@ export interface RagState {
 
 export interface SessionState {
   // Session status
-  status: 'idle' | 'calibrating' | 'listening' | 'processing';
+  status: 'idle' | 'calibrating' | 'listening' | 'processing' | 'listening_paused';
   isScreenInvisible: boolean;
   voiceProfileActive: boolean;
+  
+  // Listening control: when true, audio/STT is paused but manual input works
+  listeningPaused: boolean;
 
   // Context loading status (for status indicator)
   contextStatus: 'empty' | 'analyzing' | 'uploading' | 'cache_ready' | 'rag_ready' | 'cache_expired' | 'error';
@@ -332,6 +335,9 @@ export interface SessionState {
   setRagRefreshing: (refreshing: boolean) => void;
   setRagClearing: (clearing: boolean) => void;
   clearRagState: () => void;
+  
+  // Listening Control Actions
+  setListeningPaused: (paused: boolean) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -339,6 +345,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   status: 'idle',
   isScreenInvisible: false,
   voiceProfileActive: false,
+  listeningPaused: false,
   apiKey: null,
   contextStatus: 'empty',
 
@@ -739,4 +746,7 @@ export const useSessionStore = create<SessionState>((set) => ({
         isClearing: false,
       },
     }),
+    
+  // Listening Control Actions
+  setListeningPaused: (paused) => set({ listeningPaused: paused }),
 }));

@@ -29,6 +29,10 @@ class MessageType(str, Enum):
     LOAD_RAG_STATE = "LOAD_RAG_STATE"  # Phase 8: Check existing RAG state on startup
     REFRESH_CACHE = "REFRESH_CACHE"  # Phase 8: Refresh Gemini cache from existing docs
     CLEAR_ALL_DATA = "CLEAR_ALL_DATA"  # Phase 8: Clear all persistent data
+    
+    # Listening Control
+    PAUSE_LISTENING = "PAUSE_LISTENING"  # Pause audio capture and STT
+    RESUME_LISTENING = "RESUME_LISTENING"  # Resume audio capture and STT
 
     # Server -> Client
     TRANSCRIPTION = "TRANSCRIPTION"
@@ -71,6 +75,10 @@ class MessageType(str, Enum):
     RAG_STATE = "RAG_STATE"  # Phase 8: Response with existing RAG state
     CACHE_REFRESH_COMPLETE = "CACHE_REFRESH_COMPLETE"  # Phase 8: Cache refresh done
     DATA_CLEARED = "DATA_CLEARED"  # Phase 8: All data cleared confirmation
+    
+    # Listening Control - Server -> Client
+    LISTENING_PAUSED = "LISTENING_PAUSED"  # Confirm listening paused
+    LISTENING_RESUMED = "LISTENING_RESUMED"  # Confirm listening resumed
 
 
 class SessionStatus(str, Enum):
@@ -80,6 +88,7 @@ class SessionStatus(str, Enum):
     LISTENING = "listening"
     PROCESSING = "processing"
     CALIBRATING = "calibrating"
+    LISTENING_PAUSED = "listening_paused"  # Audio/STT paused, manual input only
 
 
 class ConfidenceLevel(str, Enum):

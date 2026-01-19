@@ -145,6 +145,8 @@ class SessionState:
     persistent_session_id: Optional[str] = None
     # Phase 3B: Pre-interview preparation summary
     preparation_summary: Optional[str] = None
+    # Listening control: when True, audio/STT is paused but manual input works
+    listening_paused: bool = False
 
 
 class SidecarServer:
@@ -363,6 +365,9 @@ class SidecarServer:
             MessageType.LOAD_RAG_STATE: self._handle_load_rag_state,
             MessageType.REFRESH_CACHE: self._handle_refresh_cache,
             MessageType.CLEAR_ALL_DATA: self._handle_clear_all_data,
+            # Listening Control
+            MessageType.PAUSE_LISTENING: self._handle_pause_listening,
+            MessageType.RESUME_LISTENING: self._handle_resume_listening,
         }
 
         handler = handlers.get(message.type)
@@ -3097,6 +3102,124 @@ Provide a concise, punchy version that hits the key points quickly."""
                 error=str(e)
             )
             await websocket.send(response_msg.to_json())
+
+    async def _handle_pause_listening(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle PAUSE_LISTENING message.
+        
+        Stops audio capture and streaming STT while keeping the session active.
+        Manual question posting, RAG, and LLM will continue to work.
+        """
+        if self.session_state.listening_paused:
+            logger.info("Listening already paused")
+            return
+            
+        try:
+            # Stop audio processing
+            await self._stop_audio_processing()
+            logger.info("Audio processing stopped")
+            
+            # Stop streaming STT
+            if self.streaming_stt_manager:
+                try:
+                    await self.streaming_stt_manager.stop_session()
+                    logger.info("Stopped streaming STT session")
+                except Exception as e:
+                    logger.warning(f"Error stopping streaming STT: {e}")
+            
+            # Update state
+            self.session_state.listening_paused = True
+            self.session_state.status = SessionStatus.LISTENING_PAUSED
+            
+            # Notify client
+            response_msg = Message(
+                type=MessageType.LISTENING_PAUSED,
+                data={"success": True}
+            )
+            await self.broadcast(response_msg)
+            
+            # Also send status update
+            status_msg = create_status_message(SessionStatus.LISTENING_PAUSED)
+            await self.broadcast(status_msg)
+            
+            logger.info("Listening paused - manual input only mode")
+            
+        except Exception as e:
+            logger.error(f"Failed to pause listening: {e}")
+            error_msg = create_error_message(
+                f"Failed to pause listening: {e}",
+                code="ERR_PAUSE_FAILED"
+            )
+            await websocket.send(error_msg.to_json())
+    
+    async def _handle_resume_listening(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle RESUME_LISTENING message.
+        
+        Restarts audio capture and streaming STT.
+        """
+        if not self.session_state.listening_paused:
+            logger.info("Listening not paused, nothing to resume")
+            return
+            
+        try:
+            # Restart audio processing
+            await self._start_audio_processing()
+            logger.info("Audio processing restarted")
+            
+            # Restart streaming STT if enabled
+            if self.streaming_stt_enabled and self.provider_factory:
+                try:
+                    if not self.streaming_stt_manager:
+                        self.streaming_stt_manager = StreamingSTTManager(self.provider_factory)
+                    
+                    callbacks = StreamingSTTCallbacks(
+                        on_interim=self._on_streaming_interim,
+                        on_final=self._on_streaming_final,
+                        on_end_of_turn=self._on_streaming_end_of_turn,
+                        on_error=self._on_streaming_error,
+                    )
+                    
+                    streaming_started = await self.streaming_stt_manager.start_session(callbacks)
+                    if streaming_started:
+                        logger.info(f"Streaming STT restarted: {self.streaming_stt_manager.provider_name}")
+                    else:
+                        logger.info("Streaming STT not available, using batch STT only")
+                except Exception as e:
+                    logger.warning(f"Failed to restart streaming STT: {e}")
+            
+            # Update state
+            self.session_state.listening_paused = False
+            self.session_state.status = SessionStatus.LISTENING
+            
+            # Notify client
+            response_msg = Message(
+                type=MessageType.LISTENING_RESUMED,
+                data={"success": True}
+            )
+            await self.broadcast(response_msg)
+            
+            # Also send status update
+            status_msg = create_status_message(SessionStatus.LISTENING)
+            await self.broadcast(status_msg)
+            
+            logger.info("Listening resumed - live transcription active")
+            
+        except Exception as e:
+            logger.error(f"Failed to resume listening: {e}")
+            error_msg = create_error_message(
+                f"Failed to resume listening: {e}",
+                code="ERR_RESUME_FAILED"
+            )
+            await websocket.send(error_msg.to_json())
 
     def _retrieve_context(self, question: str) -> tuple[list[str], ConfidenceLevel]:
         """

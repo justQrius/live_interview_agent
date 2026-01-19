@@ -60,7 +60,12 @@ export type MessageType =
   | 'CLEAR_ALL_DATA'
   | 'RAG_STATE'
   | 'CACHE_REFRESH_COMPLETE'
-  | 'DATA_CLEARED';
+  | 'DATA_CLEARED'
+  // Listening Control
+  | 'PAUSE_LISTENING'
+  | 'RESUME_LISTENING'
+  | 'LISTENING_PAUSED'
+  | 'LISTENING_RESUMED';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -400,21 +405,29 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
     }
 
     case 'DATA_CLEARED': {
-      const data = message.data as {
-        success: boolean;
-        clearedItems: Record<string, number>;
-        error: string | null;
-      };
+      const data = message.data as { success: boolean; error?: string };
       store.setRagClearing(false);
       if (data.success) {
         store.clearRagState();
-        store.setContextStatus('empty');
-        // Also clear loaded context files from UI
-        const files = store.loadedContextFiles;
-        files.forEach(f => store.removeContextFile(f.id));
+        wsLogger.info('All persistent data cleared successfully');
       } else {
         store.setLastError(data.error || 'Failed to clear data');
       }
+      break;
+    }
+    
+    // Listening Control (Phase 8)
+    case 'LISTENING_PAUSED': {
+      store.setListeningPaused(true);
+      store.setStatus('listening_paused');
+      wsLogger.info('Listening paused confirmed by server');
+      break;
+    }
+    
+    case 'LISTENING_RESUMED': {
+      store.setListeningPaused(false);
+      store.setStatus('listening');
+      wsLogger.info('Listening resumed confirmed by server');
       break;
     }
 
