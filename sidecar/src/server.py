@@ -417,6 +417,16 @@ class SidecarServer:
                 if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
                     self.utterance_accumulator.set_llm_provider(self.llm)
                 
+                # Phase 5 Fix: Create Gemini cache if context was uploaded BEFORE session start
+                # This fixes the timing bug where UPLOAD_CONTEXT happens before START_SESSION
+                if (self.gemini_cache_manager and 
+                    self.gemini_file_uploader and 
+                    self.gemini_file_uploader.has_files() and
+                    not self.gemini_cache_manager.current_cache_name and
+                    hasattr(self.llm, 'set_cached_content')):
+                    logger.info("Context was uploaded before session start - creating Gemini cache now")
+                    self._create_background_task(self._create_gemini_cache_background())
+                
             except Exception as e:
                 logger.warning(f"No LLM provider available: {e}")
                 self.llm = None
@@ -782,6 +792,9 @@ class SidecarServer:
                 if self.gemini_cache_manager and self.gemini_file_uploader and self.llm:
                     # Run cache creation in background to avoid blocking UI response
                     self._create_background_task(self._create_gemini_cache_background())
+                elif self.gemini_cache_manager and self.gemini_file_uploader and not self.llm:
+                    # Log why cache creation is deferred - will be created on START_SESSION
+                    logger.info("Gemini cache creation deferred - LLM not yet initialized (will create on START_SESSION)")
         
         except Exception as e:
             logger.error(f"Context upload fatal error: {e}")
