@@ -74,6 +74,13 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Context Preservation**: Resume context across session restarts within the same app session.
 - **Secure Key Storage**: API keys stored in OS keychain, never in plaintext.
 
+### RAG Persistence (Phase 8)
+- **Document Persistence**: Uploaded documents survive app restarts without re-uploading.
+- **Automatic State Restoration**: On app launch, previously uploaded documents are automatically detected and shown in UI.
+- **Cache Expiration Handling**: Gemini context cache expires after 2 hours; UI shows "Refresh Cache" button to rebuild.
+- **Clear All Data**: One-click button to permanently delete all uploaded documents and start fresh.
+- **Robust Connection Handling**: Retry mechanism ensures RAG state loads regardless of frontend/backend startup order.
+
 ## Getting Started
 
 ### Prerequisites
@@ -232,6 +239,7 @@ graph TB
 | Phase 5 | Gemini Integration | - | 🟡 Implemented |
 | Phase 6 | Utterance Accumulation | - | ✅ Complete |
 | Phase 7 | Streaming STT & Semantic Endpointing | - | ✅ Complete |
+| Phase 8 | RAG Persistence | - | ✅ Complete |
 
 ## License
 
