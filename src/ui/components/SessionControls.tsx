@@ -9,6 +9,8 @@ const SessionControls: React.FC = () => {
   const clearSession = useSessionStore((state) => state.clearSession);
   const cancelEnhancement = useSessionStore((state) => state.cancelEnhancement);
   const preferredSttProvider = useSessionStore((state) => state.preferredSttProvider);
+  const listeningPaused = useSessionStore((state) => state.listeningPaused);
+  const setListeningPaused = useSessionStore((state) => state.setListeningPaused);
   const { sendMessage, isConnected } = useWebSocket();
 
   const [showStopConfirm, setShowStopConfirm] = useState(false);
@@ -115,14 +117,31 @@ const SessionControls: React.FC = () => {
     // Don't send message yet, let CalibrationModal handle the recording and sending
   };
 
+  const handleToggleListening = () => {
+    if (status === 'idle') return;
+    
+    if (listeningPaused) {
+      sendMessage({ type: 'RESUME_LISTENING' });
+      // Optimistic update
+      setListeningPaused(false);
+      setStatus('listening');
+    } else {
+      sendMessage({ type: 'PAUSE_LISTENING' });
+      // Optimistic update
+      setListeningPaused(true);
+      setStatus('listening_paused');
+    }
+  };
+
   const getStatusText = () => {
-    const statusMap = {
+    const statusMap: Record<string, string> = {
       idle: 'Idle',
       listening: 'Listening',
       processing: 'Processing',
       calibrating: 'Calibrating',
+      listening_paused: 'Paused',
     };
-    return statusMap[status];
+    return statusMap[status] || status;
   };
 
   return (
@@ -132,14 +151,16 @@ const SessionControls: React.FC = () => {
         <h2 className="text-sm font-semibold text-text-primary">Session Controls</h2>
         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
           status === 'listening' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+          status === 'listening_paused' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
           status === 'processing' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-          status === 'calibrating' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+          status === 'calibrating' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
           'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
         }`}>
           <span className={`w-1.5 h-1.5 rounded-full ${
             status === 'listening' ? 'bg-green-500 animate-pulse' :
+            status === 'listening_paused' ? 'bg-amber-500' :
             status === 'processing' ? 'bg-blue-500 animate-pulse' :
-            status === 'calibrating' ? 'bg-amber-500 animate-pulse' :
+            status === 'calibrating' ? 'bg-purple-500 animate-pulse' :
             'bg-slate-400'
           }`} />
           {getStatusText()}
@@ -198,6 +219,34 @@ const SessionControls: React.FC = () => {
         </button>
         
         <div className="grid grid-cols-2 gap-2">
+          {status !== 'idle' && (
+            <button
+              onClick={handleToggleListening}
+              className={`col-span-2 text-sm font-medium py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 border ${
+                listeningPaused
+                  ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20'
+                  : 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/20'
+              }`}
+            >
+              {listeningPaused ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Resume Listening
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Pause Listening
+                </>
+              )}
+            </button>
+          )}
+
           <button
             onClick={handleStopSession}
             disabled={status === 'idle'}

@@ -525,10 +525,11 @@ const AnswerDisplay: React.FC = () => {
         )}
 
         {/* Manual Question Input - In main chat window */}
-        {status === 'listening' && (
+        {(status === 'listening' || status === 'listening_paused') && (
           <div className="pt-3 border-t border-border">
-            <label htmlFor="manual-question" className="block text-xs font-medium text-text-secondary mb-1.5">
-              Ask Manually
+            <label htmlFor="manual-question" className="block text-xs font-medium text-text-secondary mb-1.5 flex justify-between">
+              <span>Ask Manually</span>
+              {status === 'listening_paused' && <span className="text-amber-500 font-semibold">Listening Paused</span>}
             </label>
             <textarea
               id="manual-question"
@@ -538,7 +539,7 @@ const AnswerDisplay: React.FC = () => {
               placeholder="Type & Enter to ask a question..."
               className="w-full p-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-border rounded-lg resize-none focus:ring-1 focus:ring-primary focus:border-primary text-text-primary placeholder:text-text-muted transition-colors"
               rows={2}
-              disabled={!isConnected || status !== 'listening'}
+              disabled={!isConnected || (status !== 'listening' && status !== 'listening_paused')}
             />
           </div>
         )}
