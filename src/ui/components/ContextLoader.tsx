@@ -23,12 +23,26 @@ const ContextLoader: React.FC = () => {
   const updateContextFile = useSessionStore((state) => state.updateContextFile);
   const removeContextFile = useSessionStore((state) => state.removeContextFile);
   const setContextStatus = useSessionStore((state) => state.setContextStatus);
+  const contextStatus = useSessionStore((state) => state.contextStatus);
+  const ragState = useSessionStore((state) => state.ragState);
+  const setRagLoading = useSessionStore((state) => state.setRagLoading);
+  const setRagRefreshing = useSessionStore((state) => state.setRagRefreshing);
+  const setRagClearing = useSessionStore((state) => state.setRagClearing);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   
   // Staging state for hybrid classification
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isInferring, setIsInferring] = useState(false);
+
+  // Load RAG state on mount
+  useEffect(() => {
+    if (isConnected) {
+      setRagLoading(true);
+      sendMessage({ type: 'LOAD_RAG_STATE', data: {} });
+    }
+  }, [isConnected, sendMessage, setRagLoading]);
 
   // Handle messages from backend
   useEffect(() => {
@@ -296,15 +310,166 @@ const ContextLoader: React.FC = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Refresh Gemini cache for existing documents
+  const handleRefreshCache = async () => {
+    if (!isConnected) return;
+    
+    setRagRefreshing(true);
+    
+    // Fetch API keys for cache refresh
+    const apiKeys: Record<string, string> = {};
+    const providers = ['gemini', 'groq', 'openai', 'anthropic', 'deepgram'];
+    
+    try {
+      await Promise.all(providers.map(async (provider) => {
+        try {
+          const key = await invoke<string>('get_api_key', { provider });
+          if (key) {
+            apiKeys[provider] = key;
+          }
+        } catch {
+          // Ignore missing keys
+        }
+      }));
+    } catch (e) {
+      console.warn('Failed to fetch API keys for cache refresh:', e);
+    }
+    
+    sendMessage({
+      type: 'REFRESH_CACHE',
+      data: { apiKeys }
+    });
+  };
+
+  // Clear all RAG data (ChromaDB, MemoryStore, manifest)
+  const handleClearAllData = () => {
+    if (!isConnected) return;
+    
+    setRagClearing(true);
+    setShowClearConfirm(false);
+    
+    sendMessage({
+      type: 'CLEAR_ALL_DATA',
+      data: {}
+    });
+  };
+
   return (
     <div className="space-y-3">
       {/* Minimal Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-text-primary">Context Documents</h2>
-        {loadedContextFiles.length > 0 && (
-          <span className="text-xs text-text-muted">{loadedContextFiles.length} loaded</span>
-        )}
+        <div className="flex items-center gap-2">
+          {(loadedContextFiles.length > 0 || ragState.hasDocuments) && (
+            <span className="text-xs text-text-muted">
+              {loadedContextFiles.length || ragState.documentCount} loaded
+            </span>
+          )}
+          {/* Clear All Data button */}
+          {(loadedContextFiles.length > 0 || ragState.hasDocuments) && (
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              disabled={ragState.isClearing}
+              className="text-xs text-text-muted hover:text-destructive transition-colors"
+              title="Clear all data"
+            >
+              {ragState.isClearing ? (
+                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Cache Expired Warning */}
+      {contextStatus === 'cache_expired' && ragState.hasDocuments && (
+        <div className="flex items-center justify-between p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-xs text-amber-800 dark:text-amber-300">
+              Cache expired • {ragState.documentCount} docs available
+            </span>
+          </div>
+          <button
+            onClick={handleRefreshCache}
+            disabled={ragState.isRefreshing}
+            className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium py-1 px-2.5 rounded transition-colors"
+          >
+            {ragState.isRefreshing ? (
+              <>
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Refreshing...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Refresh Cache</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Existing Docs from Previous Session */}
+      {ragState.hasDocuments && loadedContextFiles.length === 0 && contextStatus !== 'cache_expired' && (
+        <div className="p-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span className="text-xs text-green-800 dark:text-green-300">
+              {ragState.documentCount} docs restored from previous session
+            </span>
+          </div>
+          <ul className="mt-2 space-y-1">
+            {ragState.documents.slice(0, 3).map((doc, idx) => (
+              <li key={idx} className="text-[10px] text-green-700 dark:text-green-400 truncate pl-6">
+                • {doc.filename} ({doc.documentType})
+              </li>
+            ))}
+            {ragState.documentCount > 3 && (
+              <li className="text-[10px] text-green-600 dark:text-green-500 pl-6">
+                +{ragState.documentCount - 3} more...
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Clear Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-surface border border-border rounded-xl p-4 max-w-sm mx-4 shadow-xl">
+            <h3 className="text-sm font-semibold text-text-primary mb-2">Clear All Data?</h3>
+            <p className="text-xs text-text-muted mb-4">
+              This will permanently delete all uploaded documents, extracted data, and cached context. 
+              You'll need to re-upload your documents.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="text-xs text-text-secondary hover:text-text-primary py-1.5 px-3 rounded border border-border transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="bg-destructive hover:bg-red-600 text-white text-xs font-medium py-1.5 px-3 rounded transition-colors"
+              >
+                Clear Everything
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="space-y-3">
         <input

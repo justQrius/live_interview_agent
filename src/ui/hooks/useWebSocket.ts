@@ -5,7 +5,8 @@ import {
   StorySuggestion, 
   StructureHint, 
   Contradiction,
-  ExtractionResult
+  ExtractionResult,
+  RagStateDocument
 } from '../store/sessionStore';
 import { wsLogger } from '../utils/logger';
 
@@ -52,7 +53,14 @@ export type MessageType =
   | 'INFER_DOCUMENT_TYPES'
   | 'DOCUMENT_TYPE_SUGGESTIONS'
   // Utterance Accumulation (Phase 6)
-  | 'ACCUMULATING';
+  | 'ACCUMULATING'
+  // RAG Persistence (Phase 8)
+  | 'LOAD_RAG_STATE'
+  | 'REFRESH_CACHE'
+  | 'CLEAR_ALL_DATA'
+  | 'RAG_STATE'
+  | 'CACHE_REFRESH_COMPLETE'
+  | 'DATA_CLEARED';
 
 export interface WebSocketMessage {
   type: MessageType;
@@ -341,6 +349,69 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         segmentCount: data.segmentCount,
         durationSeconds: data.durationSeconds,
       });
+      break;
+    }
+
+    // RAG Persistence (Phase 8)
+    case 'RAG_STATE': {
+      const data = message.data as {
+        hasDocuments: boolean;
+        documentCount: number;
+        documents: RagStateDocument[];
+        cacheExpired: boolean;
+        lastCacheTimestamp: string | null;
+      };
+      store.setRagState({
+        hasDocuments: data.hasDocuments,
+        documentCount: data.documentCount,
+        documents: data.documents,
+        cacheExpired: data.cacheExpired,
+        lastCacheTimestamp: data.lastCacheTimestamp,
+        isLoading: false,
+      });
+      // Update contextStatus based on RAG state
+      if (data.hasDocuments) {
+        if (data.cacheExpired) {
+          store.setContextStatus('cache_expired');
+        } else {
+          store.setContextStatus('rag_ready');
+        }
+      }
+      break;
+    }
+
+    case 'CACHE_REFRESH_COMPLETE': {
+      const data = message.data as {
+        success: boolean;
+        cacheName: string | null;
+        error: string | null;
+      };
+      store.setRagRefreshing(false);
+      if (data.success) {
+        store.setRagState({ cacheExpired: false });
+        store.setContextStatus('rag_ready');
+      } else {
+        store.setLastError(data.error || 'Cache refresh failed');
+      }
+      break;
+    }
+
+    case 'DATA_CLEARED': {
+      const data = message.data as {
+        success: boolean;
+        clearedItems: Record<string, number>;
+        error: string | null;
+      };
+      store.setRagClearing(false);
+      if (data.success) {
+        store.clearRagState();
+        store.setContextStatus('empty');
+        // Also clear loaded context files from UI
+        const files = store.loadedContextFiles;
+        files.forEach(f => store.removeContextFile(f.id));
+      } else {
+        store.setLastError(data.error || 'Failed to clear data');
+      }
       break;
     }
 
