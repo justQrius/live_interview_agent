@@ -95,6 +95,9 @@ class DeepgramStreamingSession(StreamingSession):
     the SDK's typed event system.
     """
     
+    # Keepalive interval in seconds (Deepgram timeout is ~10s, send keepalive every 5s)
+    KEEPALIVE_INTERVAL_S = 5.0
+    
     def __init__(self, provider: DeepgramStreamingProvider, config: StreamingConfig):
         super().__init__(provider, config)
         self._connection: Any = None  # SDK AsyncV1SocketClient
@@ -102,6 +105,7 @@ class DeepgramStreamingSession(StreamingSession):
         self._transcript_buffer: str = ""
         self._start_time_ms: int = 0
         self._last_audio_time_ms: int = 0
+        self._keepalive_task: Optional[asyncio.Task] = None
     
     async def _connect(self) -> None:
         """Establish WebSocket connection using SDK v5.x."""
@@ -163,6 +167,9 @@ class DeepgramStreamingSession(StreamingSession):
             
             self._is_connected = True
             self._start_time_ms = int(time.time() * 1000)
+            
+            # Start keepalive task to prevent timeout during silence
+            self._keepalive_task = asyncio.create_task(self._keepalive_loop())
             
             logger.info(f"Deepgram streaming connected via SDK: model={provider.model}")
             
@@ -295,10 +302,49 @@ class DeepgramStreamingSession(StreamingSession):
             await self.close()
             raise
     
+    async def _keepalive_loop(self) -> None:
+        """
+        Background task to send periodic keepalive messages.
+        
+        Deepgram closes connections that receive no data for ~10-15 seconds.
+        Since Browser VAD filters silence before sending to server, we need
+        to send explicit KeepAlive messages during quiet periods.
+        """
+        try:
+            from deepgram.extensions.types.sockets import ListenV1ControlMessage  # type: ignore
+            
+            while self.is_connected and not self._is_closed:
+                await asyncio.sleep(self.KEEPALIVE_INTERVAL_S)
+                
+                if not self.is_connected or self._is_closed or self._connection is None:
+                    break
+                
+                try:
+                    control = ListenV1ControlMessage(type="KeepAlive")
+                    await self._connection.send_control(control)
+                    logger.debug("Deepgram keepalive sent")
+                except Exception as e:
+                    logger.warning(f"Deepgram keepalive failed: {e}")
+                    break
+                    
+        except asyncio.CancelledError:
+            logger.debug("Deepgram keepalive task cancelled")
+        except Exception as e:
+            logger.warning(f"Deepgram keepalive loop error: {e}")
+    
     async def close(self) -> None:
         """Close the WebSocket connection."""
         self._is_closed = True
         self._is_connected = False
+        
+        # Cancel keepalive task first
+        if self._keepalive_task and not self._keepalive_task.done():
+            self._keepalive_task.cancel()
+            try:
+                await self._keepalive_task
+            except asyncio.CancelledError:
+                pass
+            self._keepalive_task = None
         
         if self._connection and self._context_manager:
             try:

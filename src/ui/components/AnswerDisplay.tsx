@@ -22,6 +22,8 @@ type CombinedHistoryItem =
 // Patterns that indicate LLM "thinking" vs actual answer content
 // Expanded to catch more thinking patterns while avoiding false positives
 const THINKING_PATTERNS = [
+  /^<thinking>/m,             // Explicit <thinking> tag (primary format)
+  /^>\s*\*Thinking:/m,        // Markdown blockquote thinking (legacy Gemini)
   /^\*\*[^*]+\*\*$/m,           // **Bold headers** on their own line
   /^My focus/m,                 // "My focus is..."
   /^I'm exploring/m,            // "I'm exploring..."
@@ -46,6 +48,36 @@ const THINKING_PATTERNS = [
 // Try to separate thinking from answer
 function separateThinkingFromAnswer(text: string): { thinking: string | null; answer: string } {
   if (!text) return { thinking: null, answer: '' };
+
+  // Priority 1: Check for explicit <thinking> tags (most reliable)
+  const thinkingTagMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
+  if (thinkingTagMatch) {
+    const thinkingContent = thinkingTagMatch[1].trim();
+    const answerContent = text.replace(/<thinking>[\s\S]*?<\/thinking>\s*/, '').trim();
+    
+    if (thinkingContent.length > 10 && answerContent.length > 10) {
+      return {
+        thinking: thinkingContent,
+        answer: answerContent
+      };
+    }
+  }
+
+  // Priority 2: Check for markdown blockquote thinking (legacy format)
+  const blockquoteMatch = text.match(/^>\s*\*Thinking:\s*([\s\S]*?)\*\s*\n\n/m);
+  if (blockquoteMatch) {
+    const thinkingContent = blockquoteMatch[1].trim();
+    const answerContent = text.replace(/^>\s*\*Thinking:[\s\S]*?\*\s*\n\n/m, '').trim();
+    
+    if (thinkingContent.length > 10 && answerContent.length > 10) {
+      return {
+        thinking: thinkingContent,
+        answer: answerContent
+      };
+    }
+  }
+
+  // Priority 3: Heuristic pattern matching (fallback)
 
   // Look for patterns that mark the start of actual answer
   // Comprehensive list of answer markers

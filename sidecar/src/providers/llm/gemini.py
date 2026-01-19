@@ -253,8 +253,8 @@ class GeminiLLMProvider(LLMProvider):
                                  for part in parts:
                                      # Handle thinking trace (Phase 7 Gen 1)
                                      if hasattr(part, 'thought') and part.thought:
-                                         # Format thoughts as blockquotes for UI rendering
-                                         yield f"\n> *Thinking: {part.thought}*\n\n"
+                                         # Use consistent <thinking> tag format for UI parsing
+                                         yield f"<thinking>{part.thought}</thinking>\n\n"
                                          yielded_any = True
                                      
                                      if hasattr(part, 'text') and part.text:
