@@ -58,7 +58,12 @@ def mock_vector_store():
             return [0.0, 1.0, 0.0]
         return [0.0, 0.0, 1.0] # Unrelated
     
+    # Mock batch embedding (used by warm_up)
+    def embed_batch(texts):
+        return [embed(t) for t in texts]
+    
     store.embed_query.side_effect = embed
+    store.embed_queries.side_effect = embed_batch
     return store
 
 @pytest.mark.asyncio

@@ -114,8 +114,21 @@ class GeminiLLMProvider(LLMProvider):
             if formatted_context:
                 parts.append(f"Relevant Context:\n{formatted_context}")
         elif self._cached_content_name:
-            # Cache is set - remind model to use cached documents
-            parts.append("(Use the uploaded documents in cache for context. Resume = YOUR background.)")
+            # Cache is set - provide detailed grounding reminder since system prompt is suppressed
+            parts.append("""## Cached Document Context
+Your full documents are loaded in the context cache. Use them to ground your answers:
+
+**Document Priority:**
+1. **SAMPLE_QA** → Prepared answers. If one matches, USE IT as your primary source.
+2. **RESUME** → YOUR work history, skills, education. This is YOUR background.
+3. **JOB_DESCRIPTION** → The role requirements. Tailor answers to these.
+4. **COMPANY_INFO** → Company research. Use for "Why us?" questions.
+
+**Critical Reminders:**
+- The RESUME describes YOU (the candidate). Speak in first person about those experiences.
+- Any INTERVIEWER/HIRING MANAGER info is about who you're talking TO, not your experience.
+- Reference specific details from these documents. Avoid vague claims.
+- Check SAMPLE_QA first for prepared answers before constructing new ones.""")
 
         if history:
             parts.append("\n## Conversation History:")

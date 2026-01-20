@@ -183,10 +183,16 @@ class TestPromptQuality:
         assert "15%" in BEHAVIORAL_ADDON or "60%" in BEHAVIORAL_ADDON
 
     def test_prompts_are_reasonable_length(self):
-        """Test that prompts aren't excessively long."""
-        # Master prompt should be under 3500 chars (includes acronym expansion rule)
-        assert len(MASTER_SYSTEM_PROMPT) < 3500
+        """Test that prompts aren't excessively long.
         
-        # Full prompt with addon should be under 6500 chars
+        Note: Master prompt was expanded in Phase 9 to include comprehensive
+        grounding rules, source priority hierarchy, and anti-hallucination
+        instructions. The increased length (~5000 chars / ~1200 tokens) is
+        justified for improved context utilization accuracy.
+        """
+        # Master prompt should be under 5500 chars (includes enhanced grounding rules)
+        assert len(MASTER_SYSTEM_PROMPT) < 5500
+        
+        # Full prompt with addon should be under 8500 chars
         full_prompt, _ = build_system_prompt("Tell me about a time you solved a problem")
-        assert len(full_prompt) < 6500
+        assert len(full_prompt) < 8500

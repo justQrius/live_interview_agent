@@ -79,6 +79,13 @@ A cross-platform desktop application that provides real-time AI assistance durin
 - **Clear All Data**: One-click button to permanently delete all uploaded documents and start fresh.
 - **Robust Connection Handling**: Retry mechanism ensures RAG state loads regardless of frontend/backend startup order.
 
+### Answer Quality & Grounding (Phase 9)
+- **Enhanced Grounding Instructions**: LLM prompts include explicit citation requirements, source priority hierarchy, and verification checklist.
+- **Source Priority**: SAMPLE_QA > RESUME > JD > COMPANY_INFO ensures answers use the most relevant context first.
+- **Groundedness Evaluation**: RAGAS-style evaluation module measures how well answers use retrieved context.
+- **Context Utilization Tracking**: SQLite-based analytics logs chunk retrieval and usage patterns per session.
+- **Heuristic + LLM Evaluation**: Fast heuristic check (<5ms) with optional LLM-based semantic evaluation for detailed analysis.
+
 ## Getting Started
 
 ### Prerequisites
@@ -241,6 +248,7 @@ graph TB
 | Phase 6 | Utterance Accumulation | - | ✅ Complete |
 | Phase 7 | Streaming STT & Semantic Endpointing | - | ✅ Complete |
 | Phase 8 | RAG Persistence | - | ✅ Complete |
+| Phase 9 | Answer Quality & Grounding | - | ✅ Complete |
 
 ## License
 

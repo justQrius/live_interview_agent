@@ -79,6 +79,8 @@ from src.coaching.story_recaller import StoryRecaller
 from src.coaching.structure_suggester import StructureSuggester
 from src.coaching.consistency_tracker import ConsistencyTracker
 from src.classification.document_classifier import DocumentClassifier
+from src.evaluation.groundedness import GroundednessEvaluator
+from src.evaluation.context_tracker import ContextUsageTracker
 
 # Phase 7: Streaming STT for low-latency semantic endpointing
 from src.providers.stt.streaming_manager import StreamingSTTManager, StreamingSTTCallbacks
@@ -237,6 +239,11 @@ class SidecarServer:
         
         # Phase 8: RAG Persistence
         self.rag_manifest = RagManifest()
+        
+        # Phase 9: Groundedness Evaluation & Context Tracking
+        self.groundedness_evaluator = GroundednessEvaluator()
+        self.context_tracker = ContextUsageTracker()
+        self.groundedness_evaluation_enabled = True  # Feature flag for rollout
 
     def _create_background_task(self, coro) -> asyncio.Task:
         """Create and track a background task."""
@@ -2764,6 +2771,69 @@ Provide a concise, punchy version that hits the key points quickly."""
         except Exception as e:
             logger.warning(f"Consistency check failed: {e}")
 
+    async def _evaluate_groundedness(
+        self,
+        question: str,
+        answer: str,
+        context_chunks: List[str]
+    ) -> None:
+        """
+        Evaluate answer groundedness in background (Phase 9).
+        
+        Runs asynchronously after answer generation to avoid adding latency.
+        Results are logged for analysis and debugging.
+        """
+        try:
+            # Combine context for evaluation
+            context_str = "\n\n".join(context_chunks)
+            
+            # Run groundedness evaluation
+            groundedness_result = await self.groundedness_evaluator.evaluate_groundedness(
+                answer=answer,
+                context=context_str,
+                question=question,
+            )
+            
+            # Analyze context utilization (synchronous, fast)
+            utilization_result = self.groundedness_evaluator.analyze_context_utilization(
+                answer=answer,
+                context_chunks=context_chunks,
+            )
+            
+            # Log results
+            session_id = self.session_state.persistent_session_id or "unknown"
+            
+            if groundedness_result.score >= 0:  # -1 indicates skip/error
+                logger.info(
+                    f"Groundedness evaluation: score={groundedness_result.score:.2f}, "
+                    f"claims={groundedness_result.claim_count}, "
+                    f"supported={groundedness_result.supported_count}, "
+                    f"utilization={utilization_result.utilization_rate:.2f}, "
+                    f"latency={groundedness_result.latency_ms:.0f}ms"
+                )
+                
+                # Track in persistent storage
+                self.context_tracker.log_groundedness_score(
+                    session_id=session_id,
+                    question=question,
+                    answer=answer,
+                    score=groundedness_result.score,
+                    claim_count=groundedness_result.claim_count,
+                    supported_count=groundedness_result.supported_count,
+                    unsupported_count=groundedness_result.unsupported_count,
+                    context_utilization=utilization_result.utilization_rate,
+                    latency_ms=groundedness_result.latency_ms,
+                )
+                
+                # Log any issues for debugging
+                if groundedness_result.issues:
+                    logger.debug(f"Groundedness issues: {groundedness_result.issues}")
+            else:
+                logger.debug(f"Groundedness evaluation skipped: {groundedness_result.issues}")
+                
+        except Exception as e:
+            logger.warning(f"Groundedness evaluation failed: {e}")
+
     async def _generate_answer_with_context(
         self,
         original_question: str,
@@ -2885,6 +2955,12 @@ Provide a concise, punchy version that hits the key points quickly."""
             
             # Phase 4E: Check consistency
             self._create_background_task(self._check_consistency(full_answer))
+            
+            # Phase 9: Background groundedness evaluation (non-blocking)
+            if self.groundedness_evaluation_enabled and context_chunks:
+                self._create_background_task(
+                    self._evaluate_groundedness(question, full_answer, context_chunks)
+                )
             
             self.session_state.conversation_history.append({
                 "role": "user",
