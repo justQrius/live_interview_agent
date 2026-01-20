@@ -35,6 +35,9 @@ source venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
+    # For NVIDIA GPU support (Windows):
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
 # Run standalone (development)
 # ALWAYS run with -m flag from sidecar directory to ensure correct package resolution
 python -m src.server
@@ -335,8 +338,6 @@ Real-time WebSocket-based speech-to-text with semantic endpointing for lower lat
 | Provider | File | Model | Endpointing | Latency |
 |----------|------|-------|-------------|---------|
 | Deepgram | `deepgram_streaming.py` | `nova-3` | Acoustic (`utterance_end_ms`) | ~150ms |
-| AssemblyAI | `assemblyai_streaming.py` | `best` (V3) | Semantic (`end_of_turn_confidence`) | ~256ms |
-| OpenAI Realtime | `openai_realtime.py` | `gpt-realtime` (GA) | Semantic (`semantic_vad`) | ~250ms |
 
 #### Core Components
 - **StreamingSTTProvider** (`streaming_base.py`): Abstract base class for streaming providers
@@ -370,8 +371,6 @@ The accumulator supports three endpointing modes via `ACCUMULATOR_ENDPOINTING_MO
 ### Configuration (Environment Variables)
 ```bash
 # Streaming STT
-ASSEMBLYAI_API_KEY=xxx           # Required for AssemblyAI streaming (V3)
-OPENAI_API_KEY=xxx               # Required for OpenAI Realtime (GA)
 
 # Endpointing Mode
 ACCUMULATOR_ENDPOINTING_MODE=hybrid   # timing, streaming, or hybrid
