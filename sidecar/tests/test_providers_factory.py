@@ -237,17 +237,23 @@ class TestProviderFactory:
         assert factory.config == config
 
     def test_factory_get_available_stt_providers(self):
-        """Test listing available STT providers based on API keys."""
+        """Test listing available STT providers based on API keys.
+        
+        Note: After Phase 3 STT Simplification, only LOCAL_WHISPER and GEMINI
+        are supported as batch STT providers.
+        """
         config = ProviderConfig(
             gemini_api_key="g-key",
-            groq_api_key="gr-key"
+            groq_api_key="gr-key"  # GROQ is no longer used for STT (removed in Phase 3)
         )
         factory = ProviderFactory(config)
 
         available = factory.get_available_stt_providers()
 
-        assert ProviderType.GEMINI in available
-        assert ProviderType.GROQ in available
+        assert ProviderType.LOCAL_WHISPER in available  # Always available (local)
+        assert ProviderType.GEMINI in available  # Has API key
+        # GROQ is no longer an STT provider after Phase 3
+        assert ProviderType.GROQ not in available
         assert ProviderType.OPENAI not in available
 
     def test_factory_get_available_llm_providers(self):
@@ -265,29 +271,37 @@ class TestProviderFactory:
         assert ProviderType.GEMINI not in available
 
     def test_factory_stt_fallback_order_default(self):
-        """Test default STT fallback order only includes providers with API keys."""
-        # Without any API keys, fallback order should be empty
+        """Test default STT fallback order includes LOCAL_WHISPER first.
+        
+        Note: After Phase 3 STT Simplification, only LOCAL_WHISPER and GEMINI
+        are supported as batch STT providers.
+        """
+        # Without any API keys, LOCAL_WHISPER is still first (it's local, no key needed)
         config = ProviderConfig()
         factory = ProviderFactory(config)
 
         order = factory.get_stt_fallback_order()
-        assert order == []
+        assert order == [ProviderType.LOCAL_WHISPER]  # LOCAL_WHISPER is always first
         
-        # With API keys, fallback order contains those providers
+        # With Gemini API key, fallback order contains Gemini after LOCAL_WHISPER
         config_with_keys = ProviderConfig(
-            groq_api_key="groq-key",
-            deepgram_api_key="deepgram-key"
+            gemini_api_key="gemini-key",
+            groq_api_key="groq-key",  # GROQ is no longer used for STT (removed in Phase 3)
+            deepgram_api_key="deepgram-key"  # DEEPGRAM batch is no longer used (only streaming)
         )
         factory_with_keys = ProviderFactory(config_with_keys)
         
         order_with_keys = factory_with_keys.get_stt_fallback_order()
-        assert ProviderType.GROQ in order_with_keys
-        assert ProviderType.DEEPGRAM in order_with_keys
-        assert ProviderType.OPENAI not in order_with_keys  # No key provided
+        assert order_with_keys[0] == ProviderType.LOCAL_WHISPER  # Always first
+        assert ProviderType.GEMINI in order_with_keys  # Has API key and is supported
+        # These are no longer STT providers after Phase 3
+        assert ProviderType.GROQ not in order_with_keys
+        assert ProviderType.DEEPGRAM not in order_with_keys
+        assert ProviderType.OPENAI not in order_with_keys
 
     def test_factory_stt_fallback_order_with_preference(self):
-        """Test STT fallback order with preferred provider first (only if key available)."""
-        # Preference without key - preference is still added but needs key to work
+        """Test STT fallback order with preferred provider first."""
+        # Preference with key - preferred provider goes first, then LOCAL_WHISPER
         config = ProviderConfig(
             preferred_stt=ProviderType.GEMINI,
             gemini_api_key="gemini-key"
@@ -298,8 +312,8 @@ class TestProviderFactory:
 
         # Gemini should be first since we have the key and it's preferred
         assert order[0] == ProviderType.GEMINI
-        # No other providers without keys
-        assert len(order) == 1
+        # LOCAL_WHISPER is added after (always in the fallback chain)
+        assert ProviderType.LOCAL_WHISPER in order
 
     def test_factory_llm_fallback_order_default(self):
         """Test default LLM fallback order only includes providers with API keys."""

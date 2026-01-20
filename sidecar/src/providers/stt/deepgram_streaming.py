@@ -8,11 +8,13 @@ Features:
 - Real-time interim results (~150ms latency)
 - utterance_end_ms for acoustic-based endpointing
 - Smart formatting for numbers, dates, etc.
-- Built-in keep-alive and reconnection
+- Built-in keep-alive and reconnection with exponential backoff
+- Automatic 1011 error detection and recovery
 - Typed event handling
 """
 import asyncio
 import logging
+import random
 import time
 from typing import Optional, List, Any, TYPE_CHECKING
 
@@ -95,8 +97,13 @@ class DeepgramStreamingSession(StreamingSession):
     the SDK's typed event system.
     """
     
-    # Keepalive interval in seconds (Deepgram timeout is ~10s, send keepalive every 5s)
-    KEEPALIVE_INTERVAL_S = 5.0
+    # Keepalive interval in seconds (Deepgram timeout is ~10s, send keepalive every 3s for safety)
+    KEEPALIVE_INTERVAL_S = 3.0
+    
+    # Reconnection settings with exponential backoff
+    MAX_RECONNECT_ATTEMPTS = 5
+    RECONNECT_BASE_DELAY_S = 1.0
+    RECONNECT_MAX_DELAY_S = 60.0
     
     def __init__(self, provider: DeepgramStreamingProvider, config: StreamingConfig):
         super().__init__(provider, config)
@@ -205,8 +212,21 @@ class DeepgramStreamingSession(StreamingSession):
         self._is_connected = False
     
     def _on_error(self, error: Any) -> None:
-        """Handle connection error."""
+        """Handle connection error with 1011 timeout detection."""
+        error_str = str(error)
         logger.error(f"Deepgram WebSocket error: {error}")
+        
+        # Detect 1011 timeout error (internal error - no audio/keepalive received in timeout window)
+        # Also detect NET-0001 which is Deepgram's network error code
+        if "1011" in error_str or "NET-0001" in error_str or "timeout" in error_str.lower():
+            logger.warning("Deepgram timeout detected (1011), marking session for reconnection")
+            self._needs_reconnection = True
+            self._is_connected = False
+        elif "1006" in error_str:
+            # Connection was closed abnormally (e.g., network issue)
+            logger.warning("Deepgram abnormal close (1006), marking session for reconnection")
+            self._needs_reconnection = True
+            self._is_connected = False
     
     async def _handle_message_async(self, message: Any) -> None:
         """Process incoming message asynchronously."""
@@ -426,3 +446,59 @@ class DeepgramStreamingSession(StreamingSession):
         except Exception as e:
             logger.error(f"Error finalizing Deepgram stream: {e}")
             return None
+    
+    @property
+    def needs_reconnection(self) -> bool:
+        """Check if session needs reconnection (for streaming manager)."""
+        return self._needs_reconnection
+    
+    def mark_needs_reconnection(self) -> None:
+        """Mark that this session needs reconnection."""
+        self._needs_reconnection = True
+    
+    def clear_reconnection_flag(self) -> None:
+        """Clear reconnection flag after successful reconnect."""
+        self._needs_reconnection = False
+    
+    async def reconnect_with_backoff(self) -> bool:
+        """
+        Attempt to reconnect with exponential backoff.
+        
+        Returns:
+            True if reconnection successful, False if all retries exhausted
+        """
+        for attempt in range(self.MAX_RECONNECT_ATTEMPTS):
+            try:
+                # Close existing connection if any
+                await self.close()
+                
+                # Reset state for new connection
+                self._is_closed = False
+                self._needs_reconnection = False
+                self._transcript_buffer = ""
+                
+                # Reconnect
+                await self._connect()
+                
+                logger.info(f"Deepgram reconnected after {attempt + 1} attempts")
+                return True
+                
+            except Exception as e:
+                # Calculate delay with exponential backoff + jitter
+                delay = min(
+                    self.RECONNECT_BASE_DELAY_S * (2 ** attempt),
+                    self.RECONNECT_MAX_DELAY_S
+                )
+                jitter = random.uniform(0, delay * 0.1)
+                total_delay = delay + jitter
+                
+                logger.warning(
+                    f"Deepgram reconnect attempt {attempt + 1}/{self.MAX_RECONNECT_ATTEMPTS} "
+                    f"failed: {e}, retrying in {total_delay:.1f}s"
+                )
+                
+                if attempt < self.MAX_RECONNECT_ATTEMPTS - 1:
+                    await asyncio.sleep(total_delay)
+        
+        logger.error(f"Deepgram reconnection failed after {self.MAX_RECONNECT_ATTEMPTS} attempts")
+        return False

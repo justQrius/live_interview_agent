@@ -6,6 +6,7 @@ Provides a facade that can be used alongside or instead of batch STT.
 """
 import asyncio
 import logging
+import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional, List, Any, TYPE_CHECKING
 
@@ -57,9 +58,10 @@ class StreamingSTTManager:
         await manager.stop_session()
     """
     
-    # Reconnection settings
-    MAX_RECONNECT_ATTEMPTS = 3
-    RECONNECT_DELAY_S = 2.0
+    # Reconnection settings with exponential backoff
+    MAX_RECONNECT_ATTEMPTS = 5
+    RECONNECT_BASE_DELAY_S = 1.0
+    RECONNECT_MAX_DELAY_S = 30.0
     WATCHDOG_INTERVAL_S = 5.0
     
     def __init__(self, factory: Optional["ProviderFactory"] = None):
@@ -84,8 +86,8 @@ class StreamingSTTManager:
         """Check if session needs reconnection (e.g., after keepalive failures)."""
         if not self._session:
             return False
-        # Check if session has the _needs_reconnection flag (Deepgram specific)
-        return getattr(self._session, '_needs_reconnection', False)
+        # Use the standardized needs_reconnection property from base class
+        return self._session.needs_reconnection
     
     @property
     def provider_name(self) -> Optional[str]:
@@ -228,7 +230,7 @@ class StreamingSTTManager:
     
     async def reconnect(self) -> bool:
         """
-        Attempt to reconnect a failed streaming session.
+        Attempt to reconnect a failed streaming session with exponential backoff.
         
         Returns:
             True if reconnection successful, False otherwise
@@ -238,7 +240,19 @@ class StreamingSTTManager:
             return False
         
         self._reconnect_attempts += 1
-        logger.info(f"Attempting streaming STT reconnection ({self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS})")
+        
+        # Calculate delay with exponential backoff + jitter
+        delay = min(
+            self.RECONNECT_BASE_DELAY_S * (2 ** (self._reconnect_attempts - 1)),
+            self.RECONNECT_MAX_DELAY_S
+        )
+        jitter = random.uniform(0, delay * 0.1)
+        total_delay = delay + jitter
+        
+        logger.info(
+            f"Attempting streaming STT reconnection ({self._reconnect_attempts}/{self.MAX_RECONNECT_ATTEMPTS}) "
+            f"in {total_delay:.1f}s"
+        )
         
         # Clean up old session without triggering callbacks
         try:
@@ -250,6 +264,9 @@ class StreamingSTTManager:
                     pass
             
             if self._session:
+                # Clear the reconnection flag before closing
+                if hasattr(self._session, 'clear_reconnection_flag'):
+                    self._session.clear_reconnection_flag()
                 await self._session.close()
         except Exception as e:
             logger.debug(f"Cleanup during reconnect: {e}")
@@ -258,8 +275,8 @@ class StreamingSTTManager:
         self._receive_task = None
         self._is_active = False
         
-        # Wait before reconnecting
-        await asyncio.sleep(self.RECONNECT_DELAY_S)
+        # Wait before reconnecting (exponential backoff)
+        await asyncio.sleep(total_delay)
         
         # Reconnect using stored config (don't overwrite callbacks)
         if not self._provider or not self._stored_config:

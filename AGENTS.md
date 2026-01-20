@@ -148,7 +148,7 @@ live_interview_agent/
 │       ├── memory/         # Phase 4: store.py, models.py
 │       ├── playbook/       # Phase 4: assembler.py, question_generator.py, answer_drafter.py
 │       ├── providers/      
-│       │   ├── stt/        # Groq, Deepgram, OpenAI, Gemini, Streaming (Phase 7)
+│       │   ├── stt/        # LocalWhisper (primary), Gemini (fallback), Deepgram Streaming
 │       │   ├── llm/        # OpenAI, Anthropic, Gemini, gemini_search.py
 │       │   └── factory.py  # Provider instantiation logic
 │       ├── rag/            # engine.py, enhanced_engine.py, speculative.py, gemini_embeddings.py
@@ -179,6 +179,17 @@ Port: `localhost:8765`
 | `LOAD_SESSION` | Load session data | `{sessionId}` |
 | `EXPORT_SESSION` | Export session | `{sessionId, format}` |
 | `DELETE_SESSION` | Delete session | `{sessionId}` |
+
+### Preferences Object (START_SESSION)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `sttProvider` | string | `"auto"` | STT provider: `"auto"`, `"local_whisper"`, `"gemini"` |
+| `llmProvider` | string | `"auto"` | LLM provider: `"auto"`, `"gemini"`, `"openai"`, `"anthropic"` |
+| `whisperModelSize` | string | `"large-v3-turbo"` | Local Whisper model: `"large-v3-turbo"`, `"distil-large-v3"`, `"medium"`, `"small"` |
+| `streamingSttProvider` | string | `"disabled"` | Streaming STT: `"disabled"`, `"auto"`, `"deepgram"`, `"deepgram_flux"` |
+| `extendedThinking` | boolean | `false` | Enable high reasoning mode (GPT-5/Claude 4) |
+| `searchEnabled` | boolean | `true` | Enable Google Search grounding |
 
 ### Server → Client Messages
 

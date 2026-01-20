@@ -178,6 +178,24 @@ class StreamingSession(ABC):
         """Check if session is connected."""
         return self._is_connected and not self._is_closed
     
+    @property
+    def needs_reconnection(self) -> bool:
+        """
+        Check if session needs reconnection due to unhealthy state.
+        
+        Subclasses should override this to check provider-specific health signals.
+        Default implementation checks for internal _needs_reconnection flag.
+        """
+        return getattr(self, '_needs_reconnection', False)
+    
+    def mark_needs_reconnection(self) -> None:
+        """Mark that this session needs reconnection."""
+        self._needs_reconnection = True  # type: ignore
+    
+    def clear_reconnection_flag(self) -> None:
+        """Clear reconnection flag after successful reconnect."""
+        self._needs_reconnection = False  # type: ignore
+    
     @abstractmethod
     async def send_audio(self, audio_data: bytes) -> None:
         """

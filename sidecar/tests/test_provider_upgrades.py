@@ -1,50 +1,17 @@
 """
-Tests for recent provider upgrades including OpenAI STT, Search Abstraction, and Factory updates.
+Tests for recent provider upgrades including Search Abstraction and Factory updates.
+
+Note: OpenAI STT tests were removed in Phase 3 STT Simplification.
 """
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
-from src.providers.base import TranscriptionResult, GroundedResponse, GroundingSource, SearchProvider
-from src.providers.stt.openai import OpenAISTTProvider
+from src.providers.base import GroundedResponse, GroundingSource, SearchProvider
 from src.providers.search.duckduckgo import DuckDuckGoSearchProvider
 from src.providers.search.gemini import GeminiSearchProvider
 from src.providers.llm.openai import OpenAILLMProvider
 from src.providers.llm.anthropic import AnthropicLLMProvider
 from src.providers.factory import ProviderFactory, ProviderConfig, ProviderType
-
-# --- OpenAI STT Tests ---
-
-class TestOpenAISTTProvider:
-    @patch("src.providers.stt.openai.AsyncOpenAI")
-    def test_init(self, mock_openai):
-        """Should initialize with valid API key."""
-        provider = OpenAISTTProvider(api_key="sk-test")
-        assert provider.client is not None
-        mock_openai.assert_called_once_with(api_key="sk-test")
-
-    def test_init_missing_key(self):
-        """Should raise ValueError if no API key."""
-        with pytest.raises(ValueError, match="API key is required"):
-            OpenAISTTProvider(api_key="")
-
-    @patch("src.providers.stt.openai.AsyncOpenAI")
-    @pytest.mark.asyncio
-    async def test_transcribe(self, mock_openai_cls):
-        """Should return transcription result."""
-        mock_client = MagicMock()
-        mock_openai_cls.return_value = mock_client
-        
-        # Mock transcription response
-        mock_transcript = MagicMock()
-        mock_transcript.text = "Hello world"
-        mock_client.audio.transcriptions.create = AsyncMock(return_value=mock_transcript)
-        
-        provider = OpenAISTTProvider(api_key="sk-test")
-        result = await provider.transcribe(b"audio_bytes")
-        
-        assert isinstance(result, TranscriptionResult)
-        assert result.text == "Hello world"
-        assert result.confidence == 1.0
 
 # --- Search Provider Tests ---
 
@@ -142,3 +109,58 @@ class TestProviderFactoryUpgrades:
         
         provider = factory.get_search_provider()
         mock_gemini_cls.assert_called_with("gemini-key")
+
+
+# --- STT Factory Tests (Phase 3 Simplified) ---
+
+class TestProviderFactorySTTSimplified:
+    """Tests for the simplified STT provider configuration after Phase 3."""
+    
+    def test_stt_fallback_order_simplified(self):
+        """Should only include LOCAL_WHISPER and GEMINI in fallback order."""
+        config = ProviderConfig(gemini_api_key="gemini-key")
+        factory = ProviderFactory(config)
+        
+        order = factory.get_stt_fallback_order()
+        
+        # Only LOCAL_WHISPER and GEMINI should be in the order
+        assert ProviderType.LOCAL_WHISPER in order
+        assert ProviderType.GEMINI in order
+        # Removed providers should NOT be in order
+        assert ProviderType.GROQ not in order
+        assert ProviderType.DEEPGRAM not in order
+        assert ProviderType.OPENAI not in order
+    
+    def test_available_stt_providers_simplified(self):
+        """Should only list LOCAL_WHISPER and GEMINI as available."""
+        config = ProviderConfig(
+            gemini_api_key="gemini-key",
+            groq_api_key="groq-key",  # Should be ignored for STT
+            openai_api_key="openai-key",  # Should be ignored for STT
+        )
+        factory = ProviderFactory(config)
+        
+        available = factory.get_available_stt_providers()
+        
+        assert ProviderType.LOCAL_WHISPER in available
+        assert ProviderType.GEMINI in available
+        # GROQ and OPENAI should NOT be listed even with keys
+        assert ProviderType.GROQ not in available
+        assert ProviderType.OPENAI not in available
+    
+    def test_available_streaming_providers_only_deepgram(self):
+        """Should only list Deepgram streaming modes."""
+        config = ProviderConfig(
+            deepgram_api_key="deepgram-key",
+            openai_api_key="openai-key",  # Should be ignored for streaming
+        )
+        factory = ProviderFactory(config)
+        
+        from src.providers.config import StreamingMode
+        available = factory.get_available_streaming_providers()
+        
+        assert StreamingMode.AUTO in available
+        assert StreamingMode.DEEPGRAM in available
+        assert StreamingMode.DEEPGRAM_FLUX in available
+        # Removed streaming modes should NOT be available
+        # Note: These enums are removed from config.py, so we can't even reference them

@@ -75,13 +75,19 @@ const SettingsPanel: React.FC = () => {
   };
 
   const getSttModels = () => {
-    if (preferredSttProvider === 'auto' || preferredSttProvider === 'anthropic') return [];
-    return MODEL_OPTIONS.stt[preferredSttProvider as keyof typeof MODEL_OPTIONS.stt] || [];
+    // Simplified: only local_whisper and gemini have models
+    if (preferredSttProvider === 'auto') return MODEL_OPTIONS.stt.local_whisper || [];
+    if (preferredSttProvider === 'local_whisper') return MODEL_OPTIONS.stt.local_whisper || [];
+    if (preferredSttProvider === 'gemini') return MODEL_OPTIONS.stt.gemini || [];
+    return [];
   };
 
   const getStreamingSttModels = () => {
-    if (preferredStreamingSttProvider === 'auto' || preferredStreamingSttProvider === 'disabled') return [];
-    return MODEL_OPTIONS.streamingStt[preferredStreamingSttProvider as keyof typeof MODEL_OPTIONS.streamingStt] || [];
+    // Simplified: only deepgram and deepgram_flux have streaming models
+    if (preferredStreamingSttProvider === 'auto') return MODEL_OPTIONS.streamingStt.deepgram_flux || [];
+    if (preferredStreamingSttProvider === 'deepgram') return MODEL_OPTIONS.streamingStt.deepgram || [];
+    if (preferredStreamingSttProvider === 'deepgram_flux') return MODEL_OPTIONS.streamingStt.deepgram_flux || [];
+    return [];
   };
 
   useEffect(() => {
@@ -238,14 +244,17 @@ const SettingsPanel: React.FC = () => {
               </div>
             </div>
 
-            {/* Batch STT Settings */}
+            {/* Batch STT Settings (Simplified) */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                 <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
-                Speech-to-Text (Batch)
+                Speech-to-Text
               </h4>
+              <p className="text-xs text-text-muted -mt-1">
+                Local Whisper (GPU) is primary. Gemini is cloud fallback when GPU unavailable.
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-text-muted mb-1.5">Provider</label>
@@ -257,11 +266,9 @@ const SettingsPanel: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                   >
-                    <option value="auto">Auto (Default)</option>
-                    <option value="gemini">Google Gemini</option>
-                    <option value="groq">Groq</option>
-                    <option value="deepgram">Deepgram</option>
-                    <option value="openai">OpenAI</option>
+                    <option value="auto">Auto (Local GPU → Gemini)</option>
+                    <option value="local_whisper">Local Whisper (GPU, Fastest)</option>
+                    <option value="gemini">Google Gemini (Cloud)</option>
                   </select>
                 </div>
                 <div>
@@ -279,19 +286,32 @@ const SettingsPanel: React.FC = () => {
                   </select>
                 </div>
               </div>
+              
+              {/* Info box for Local Whisper */}
+              {(preferredSttProvider === 'auto' || preferredSttProvider === 'local_whisper') && (
+                <div className="p-3 bg-green-500/5 dark:bg-green-500/10 rounded-lg border border-green-500/20">
+                  <div className="flex gap-2">
+                    <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <p className="text-xs text-text-secondary">
+                      <strong>Local Whisper</strong>: ~100ms latency, 100% private, works offline. Requires NVIDIA GPU with 1.5GB+ VRAM.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Streaming STT Settings */}
+            {/* Streaming STT Settings (Simplified - Deepgram only) */}
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                 <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Streaming STT (Low Latency)
-                <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">Phase 7</span>
+                Streaming STT (Optional)
               </h4>
               <p className="text-xs text-text-muted -mt-1">
-                Real-time transcription with semantic endpointing for faster response times.
+                Real-time transcription for lower latency. Requires Deepgram API key.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
@@ -304,11 +324,10 @@ const SettingsPanel: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 bg-surface-elevated dark:bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                   >
-                    <option value="auto">Auto (Best Available)</option>
-                    <option value="deepgram">Deepgram (~150ms)</option>
-                    <option value="assemblyai">AssemblyAI (~256ms, Semantic)</option>
-                    <option value="openai_realtime">OpenAI Realtime (~300ms)</option>
-                    <option value="disabled">Disabled</option>
+                    <option value="disabled">Disabled (Default)</option>
+                    <option value="auto">Auto (Deepgram Flux)</option>
+                    <option value="deepgram_flux">Deepgram Flux (Semantic)</option>
+                    <option value="deepgram">Deepgram Nova-3 (Acoustic)</option>
                   </select>
                 </div>
                 <div>
