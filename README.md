@@ -44,12 +44,10 @@ A cross-platform desktop application that provides real-time AI assistance durin
 
 ### Streaming STT & Semantic Endpointing (Phase 7 - 2026 Gen 1)
 - **Real-time Streaming Transcription**: WebSocket-based streaming STT for instant interim results as the interviewer speaks.
-- **Semantic Endpointing**: Providers like AssemblyAI and OpenAI Realtime detect turn completion based on meaning, not just pauses.
+- **Semantic Endpointing**: Advanced endpointing detects turn completion based on meaning, not just pauses.
 - **Hybrid Mode**: Combines streaming semantic endpointing with timing-based accumulation for best of both worlds.
 - **Gen 1 2026 Providers**:
   - **Deepgram** (~150ms latency): **Nova-3** model with acoustic endpointing via `utterance_end_ms`.
-  - **AssemblyAI** (~256ms latency): **V3 Endpoint** with semantic endpointing via `end_of_turn_confidence`.
-  - **OpenAI Realtime** (~250ms latency): **GPT-Realtime** (GA) semantic VAD.
 - **Automatic Fallback**: Gracefully degrades to batch STT if streaming unavailable.
 - **~30-50% Latency Improvement**: Streaming eliminates VAD buffering delays.
 
@@ -115,7 +113,11 @@ A cross-platform desktop application that provides real-time AI assistance durin
     # Windows: venv\Scripts\activate
     # macOS/Linux: source venv/bin/activate
 
+    # Install dependencies
     pip install -r requirements.txt
+
+    # For NVIDIA GPU support (Windows):
+    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
     cd ..
     ```
 
