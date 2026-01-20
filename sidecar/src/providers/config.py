@@ -227,7 +227,7 @@ class ProviderConfig:
                 pass  # Invalid provider, use auto
 
         # Parse streaming mode preference
-        streaming_mode = StreamingMode.AUTO
+        streaming_mode = StreamingMode.DISABLED
         streaming_pref = preferences.get("streamingSttProvider")
         if streaming_pref:
             try:

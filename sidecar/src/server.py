@@ -57,7 +57,7 @@ from src.audio.vad import VADProcessor, SpeechSegment
 from src.audio.noise_reduction import NoiseReducer
 from src.providers.base import STTProvider, LLMProvider
 from src.providers.factory import ProviderFactory
-from src.providers.config import ProviderConfig, GeminiModels
+from src.providers.config import ProviderConfig, GeminiModels, StreamingMode
 from src.context.enhanced_manager import EnhancedContextManager, DocumentType as ContextDocumentType
 from src.context.manager import ContextManager
 from src.rag.store import VectorStore
@@ -504,39 +504,43 @@ class SidecarServer:
         
         # Phase 7: Initialize Streaming STT for low-latency semantic endpointing
         if self.streaming_stt_enabled and self.provider_factory:
-            try:
-                self.streaming_stt_manager = StreamingSTTManager(self.provider_factory)
-                
-                # Create callbacks for streaming events
-                callbacks = StreamingSTTCallbacks(
-                    on_interim=self._on_streaming_interim,
-                    on_final=self._on_streaming_final,
-                    on_end_of_turn=self._on_streaming_end_of_turn,
-                    on_error=self._on_streaming_error,
-                )
-                
-                # Start streaming session in background (non-blocking)
-                streaming_started = await self.streaming_stt_manager.start_session(callbacks)
-                if streaming_started:
-                    logger.info(f"Streaming STT started: {self.streaming_stt_manager.provider_name} "
-                               f"(semantic={self.streaming_stt_manager.supports_semantic_endpointing})")
+            # Check mode before initializing - avoid warning for DISABLED mode
+            if config.streaming_mode != StreamingMode.DISABLED:
+                try:
+                    self.streaming_stt_manager = StreamingSTTManager(self.provider_factory)
                     
-                    # Phase 7: Auto-adjust accumulator based on provider capability
-                    # Semantic providers (AssemblyAI, OpenAI) handle endpointing well → disable accumulator
-                    # Acoustic providers (Deepgram) only detect pauses → keep accumulator for safety
-                    if self.streaming_stt_manager.supports_semantic_endpointing:
-                        if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
-                            self.utterance_accumulator.config.endpointing_mode = "streaming"
-                            logger.info("Auto-switched to streaming endpointing mode (semantic provider detected)")
+                    # Create callbacks for streaming events
+                    callbacks = StreamingSTTCallbacks(
+                        on_interim=self._on_streaming_interim,
+                        on_final=self._on_streaming_final,
+                        on_end_of_turn=self._on_streaming_end_of_turn,
+                        on_error=self._on_streaming_error,
+                    )
+                    
+                    # Start streaming session in background (non-blocking)
+                    streaming_started = await self.streaming_stt_manager.start_session(callbacks)
+                    if streaming_started:
+                        logger.info(f"Streaming STT started: {self.streaming_stt_manager.provider_name} "
+                                   f"(semantic={self.streaming_stt_manager.supports_semantic_endpointing})")
+                        
+                        # Phase 7: Auto-adjust accumulator based on provider capability
+                        # Semantic providers (AssemblyAI, OpenAI) handle endpointing well → disable accumulator
+                        # Acoustic providers (Deepgram) only detect pauses → keep accumulator for safety
+                        if self.streaming_stt_manager.supports_semantic_endpointing:
+                            if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
+                                self.utterance_accumulator.config.endpointing_mode = "streaming"
+                                logger.info("Auto-switched to streaming endpointing mode (semantic provider detected)")
+                        else:
+                            if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
+                                self.utterance_accumulator.config.endpointing_mode = "hybrid"
+                                logger.info("Using hybrid endpointing mode (acoustic provider detected)")
                     else:
-                        if hasattr(self, 'utterance_accumulator') and self.utterance_accumulator:
-                            self.utterance_accumulator.config.endpointing_mode = "hybrid"
-                            logger.info("Using hybrid endpointing mode (acoustic provider detected)")
-                else:
-                    logger.info("Streaming STT not available, using batch STT only")
-            except Exception as e:
-                logger.warning(f"Failed to start streaming STT: {e}")
-                self.streaming_stt_manager = None
+                        logger.info("Streaming STT not available, using batch STT only")
+                except Exception as e:
+                    logger.warning(f"Failed to start streaming STT: {e}")
+                    self.streaming_stt_manager = None
+            else:
+                logger.info("Streaming STT disabled by configuration")
 
         status_msg = create_status_message(self.session_state.status)
         await websocket.send(status_msg.to_json())

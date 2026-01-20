@@ -76,23 +76,43 @@ class StoryRecaller:
             
         logger.info(f"Warming up embeddings for {len(stories)} stories")
         
-        # Run embedding generation in executor to avoid blocking
-        loop = asyncio.get_running_loop()
+        # Collect all texts for batch embedding
+        story_texts = []
+        story_ids = []
         
         for story in stories:
             # Create rich representation for embedding
             # Combine title, situation, tags, and action for semantic matching
             text = f"{story.title}. {story.situation}. {story.action}. Tags: {', '.join(story.tags)}"
+            story_texts.append(text)
+            story_ids.append(story.id)
             
-            try:
-                embedding = await loop.run_in_executor(
+        # Run batch embedding in executor to avoid blocking
+        loop = asyncio.get_running_loop()
+        
+        try:
+            # Batch size of 100 is reasonable for most embedding APIs
+            BATCH_SIZE = 100
+            total_embeddings = []
+            
+            for i in range(0, len(story_texts), BATCH_SIZE):
+                batch_texts = story_texts[i:i + BATCH_SIZE]
+                batch_embeddings = await loop.run_in_executor(
                     None, 
-                    lambda t=text: self.vector_store.embed_query(t)
+                    lambda t=batch_texts: self.vector_store.embed_queries(t)
                 )
-                if embedding is not None and len(embedding) > 0:
-                    self.story_embeddings[story.id] = embedding
-            except Exception as e:
-                logger.error(f"Failed to embed story {story.id}: {e}")
+                total_embeddings.extend(batch_embeddings)
+                
+                # Small yield to let other tasks run during heavy processing
+                await asyncio.sleep(0.01)
+            
+            # Map embeddings back to IDs
+            for i, embedding in enumerate(total_embeddings):
+                if embedding and len(embedding) > 0:
+                    self.story_embeddings[story_ids[i]] = embedding
+                    
+        except Exception as e:
+            logger.error(f"Failed to batch embed stories: {e}")
                 
         self._is_warmed_up = True
         logger.info(f"Warmed up {len(self.story_embeddings)} story embeddings")

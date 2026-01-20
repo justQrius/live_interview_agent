@@ -77,7 +77,7 @@ class GeminiLLMProvider(LLMProvider):
         except Exception as e:
             raise GeminiLLMProviderError(f"Failed to initialize Gemini client: {e}")
 
-    def set_candidate_profile(self, profile: str):
+    def set_candidate_profile(self, profile: Optional[str]):
         """Set candidate profile context."""
         self._candidate_profile = profile
 
@@ -233,7 +233,11 @@ class GeminiLLMProvider(LLMProvider):
                     
                     while True:
                         # Wait for next chunk from thread
-                        chunk = await queue.get()
+                        try:
+                            chunk = await asyncio.wait_for(queue.get(), timeout=REQUEST_TIMEOUT_SECONDS)
+                        except asyncio.TimeoutError:
+                            logger.error(f"Gemini streaming timed out after {REQUEST_TIMEOUT_SECONDS}s")
+                            raise GeminiLLMProviderError(f"Streaming timed out after {REQUEST_TIMEOUT_SECONDS}s")
                         
                         # Check for sentinel (end of stream)
                         if chunk is None:
