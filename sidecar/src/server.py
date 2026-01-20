@@ -190,6 +190,9 @@ class SidecarServer:
         self.gemini_cache_manager: Optional[GeminiCacheManager] = None
         self.gemini_file_uploader: Optional[GeminiFileUploader] = None
         
+        # Task tracking for interruption (Barge-in)
+        self._current_answer_task: Optional[asyncio.Task] = None
+        
         # Initialize storage and managers
         self.session_store = SessionHistoryStore()
         self.context_manager = EnhancedContextManager()
@@ -290,6 +293,41 @@ class SidecarServer:
         self.context_manager.clear_context()
 
         logger.info("Sidecar server stopped")
+
+    async def _cancel_ongoing_answer(self) -> None:
+        """
+        Cancel the currently running answer generation task (Barge-in).
+        
+        Call this when:
+        1. New interviewer speech is detected (Interruption)
+        2. Manual question is submitted (Correction)
+        """
+        if self._current_answer_task and not self._current_answer_task.done():
+            logger.info("Cancelling ongoing answer generation (Barge-in)")
+            self._current_answer_task.cancel()
+            try:
+                await self._current_answer_task
+            except asyncio.CancelledError:
+                pass
+            self._current_answer_task = None
+            
+            # Notify UI that answer was cancelled (so it stops typing effect)
+            # We send an empty chunk with complete=True to finalize the bubble
+            await self.broadcast(create_answer_chunk_message(
+                chunk=" [Interrupted]",
+                complete=True
+            ))
+
+    def _start_answer_task(self, coro) -> None:
+        """Start a new answer generation task and track it."""
+        # Create background task
+        task = asyncio.create_task(coro)
+        self._current_answer_task = task
+        # Add done callback to clear reference
+        def _on_done(t):
+            if self._current_answer_task == t:
+                self._current_answer_task = None
+        task.add_done_callback(_on_done)
 
     async def _handle_client(self, websocket: ServerConnection) -> None:
         """
@@ -1183,6 +1221,10 @@ class SidecarServer:
             await websocket.send(error_msg.to_json())
             return
 
+        # INTERRUPTION LOGIC (Barge-in):
+        # Cancel any ongoing answer generation to prioritize this manual input
+        await self._cancel_ongoing_answer()
+
         logger.info(f"Manual question received: {question[:50]}...")
 
         self.session_state.status = SessionStatus.PROCESSING
@@ -1230,81 +1272,97 @@ class SidecarServer:
                 logger.error(f"RAG retrieval failed: {e}")
 
         if self.llm:
-            try:
-                # Signal start of answer
-                await self.broadcast(Message(type=MessageType.ANSWER_START))
-                
-                context_str = "\n\n".join(context_chunks)
-                # Collect full answer for history
-                full_answer_parts: List[str] = []
-                
-                # Check for empty context
-                if not context_chunks and "hiring manager" in self.session_state.conversation_history:
-                     # This check is illustrative; actual fix involves clearing persistent state
-                     pass 
-
-                # Explicitly add Source Metadata to context string if RAG is used
-                # This helps LLM distinguish between "Resume" vs "Interviewer Info"
-                if context_chunks and retrieval_results:
-                    context_parts = []
-                    for res in retrieval_results:
-                        meta = res.metadata or {}
-                        doc_type = meta.get("document_type", "unknown")
-                        source = meta.get("source", "unknown")
-                        context_parts.append(f"Source: {source} ({doc_type})\n{res.text}")
-                    context_str = "\n\n".join(context_parts)
-
-                async for chunk in self.llm.generate_response(
-                    question, context_str, self.session_state.conversation_history
-                ):
-                    full_answer_parts.append(chunk)
-                    answer_msg = create_answer_chunk_message(
-                        chunk=chunk,
-                        complete=False
-                    )
-                    await websocket.send(answer_msg.to_json())
-
-                await websocket.send(create_answer_chunk_message(
-                    chunk="",
-                    complete=True,
-                    confidence=rag_confidence
-                ).to_json())
-                
-                # Append Q&A to conversation history for future context
-                full_answer = "".join(full_answer_parts)
-                self.session_state.conversation_history.append({
-                    "role": "user",
-                    "content": question
-                })
-                self.session_state.conversation_history.append({
-                    "role": "assistant",
-                    "content": full_answer
-                })
-                logger.debug(f"Added manual Q&A to history. Total exchanges: {len(self.session_state.conversation_history) // 2}")
-                
-            except Exception as e:
-                logger.error(f"LLM generation failed: {e}")
-                error_msg = create_error_message(
-                    f"Failed to generate answer: {e}",
-                    code="ERR_LLM_GENERATION"
+            # Start answer generation in background (non-blocking)
+            self._start_answer_task(
+                self._generate_manual_answer_task(
+                    question, context_chunks, retrieval_results, rag_confidence
                 )
-                await websocket.send(error_msg.to_json())
+            )
         else:
              error_msg = create_error_message(
                 "LLM not initialized",
                 code="ERR_LLM_NOT_READY"
             )
              await websocket.send(error_msg.to_json())
+             
+             # Restore status immediately since we won't enter generation task
+             self.session_state.status = SessionStatus.IDLE
+             await websocket.send(create_status_message(SessionStatus.IDLE).to_json())
 
-        # Restore status based on listening_paused state
-        if self.session_state.listening_paused:
-            self.session_state.status = SessionStatus.LISTENING_PAUSED
-            status_msg = create_status_message(SessionStatus.LISTENING_PAUSED)
-        else:
-            self.session_state.status = SessionStatus.LISTENING
-            status_msg = create_status_message(SessionStatus.LISTENING)
+    async def _generate_manual_answer_task(
+        self,
+        question: str,
+        context_chunks: List[str],
+        retrieval_results: list,
+        rag_confidence: ConfidenceLevel
+    ) -> None:
+        """Background task for manual answer generation."""
+        try:
+            # Signal start of answer
+            await self.broadcast(Message(type=MessageType.ANSWER_START))
             
-        await websocket.send(status_msg.to_json())
+            context_str = "\n\n".join(context_chunks)
+            # Collect full answer for history
+            full_answer_parts: List[str] = []
+            
+            # Explicitly add Source Metadata to context string if RAG is used
+            if context_chunks and retrieval_results:
+                context_parts = []
+                for res in retrieval_results:
+                    meta = res.metadata or {}
+                    doc_type = meta.get("document_type", "unknown")
+                    source = meta.get("source", "unknown")
+                    context_parts.append(f"Source: {source} ({doc_type})\n{res.text}")
+                context_str = "\n\n".join(context_parts)
+
+            async for chunk in self.llm.generate_response(
+                question, context_str, self.session_state.conversation_history
+            ):
+                full_answer_parts.append(chunk)
+                answer_msg = create_answer_chunk_message(
+                    chunk=chunk,
+                    complete=False
+                )
+                await self.broadcast(answer_msg)
+
+            await self.broadcast(create_answer_chunk_message(
+                chunk="",
+                complete=True,
+                confidence=rag_confidence
+            ))
+            
+            # Append Q&A to conversation history for future context
+            full_answer = "".join(full_answer_parts)
+            self.session_state.conversation_history.append({
+                "role": "user",
+                "content": question
+            })
+            self.session_state.conversation_history.append({
+                "role": "assistant",
+                "content": full_answer
+            })
+            logger.debug(f"Added manual Q&A to history. Total exchanges: {len(self.session_state.conversation_history) // 2}")
+            
+        except asyncio.CancelledError:
+            logger.info("Manual answer generation cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}")
+            error_msg = create_error_message(
+                f"Failed to generate answer: {e}",
+                code="ERR_LLM_GENERATION"
+            )
+            await self.broadcast(error_msg)
+        finally:
+            # Restore status based on listening_paused state
+            if self.session_state.listening_paused:
+                self.session_state.status = SessionStatus.LISTENING_PAUSED
+                status_msg = create_status_message(SessionStatus.LISTENING_PAUSED)
+            else:
+                self.session_state.status = SessionStatus.LISTENING
+                status_msg = create_status_message(SessionStatus.LISTENING)
+                
+            await self.broadcast(status_msg)
 
     # Session History Handlers (Phase 3: STORY-039)
 
@@ -2463,6 +2521,11 @@ Provide a concise, punchy version that hits the key points quickly."""
                 logger.warning(f"Failed to persist transcription: {e}")
         
         if speaker == Speaker.INTERVIEWER:
+            # INTERRUPTION LOGIC (Barge-in):
+            # If the interviewer speaks again, they might be correcting us or adding info.
+            # We should cancel any ongoing answer generation to process this new input.
+            await self._cancel_ongoing_answer()
+
             # Phase 6: Utterance Accumulation
             # Buffer segments from the same speaker until the utterance is semantically complete
             if self.accumulation_enabled and hasattr(self, 'utterance_accumulator'):
@@ -2502,13 +2565,17 @@ Provide a concise, punchy version that hits the key points quickly."""
                 logger.info(f"Question detection: {q_type} (confidence={confidence:.2f})")
                 
                 if is_question and confidence >= self.question_confidence_threshold:
-                    # Phase 3C: Enhanced processing pipeline
-                    await self._process_question_pipeline(text, q_type, pipeline_start)
+                    # Phase 3C: Enhanced processing pipeline (NON-BLOCKING)
+                    self._start_answer_task(
+                        self._process_question_pipeline(text, q_type, pipeline_start)
+                    )
                 else:
                     logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
             else:
-                # Feature flag disabled - original behavior
-                await self._generate_answer_for_question(text, pipeline_start)
+                # Feature flag disabled - original behavior (NON-BLOCKING)
+                self._start_answer_task(
+                    self._generate_answer_for_question(text, pipeline_start)
+                )
 
     def _identify_speaker(self, audio: bytes) -> Speaker:
         """Identify speaker as User or Interviewer based on voice calibration."""
