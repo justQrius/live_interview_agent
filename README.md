@@ -5,7 +5,7 @@ A cross-platform desktop application that provides real-time AI assistance durin
 ## Key Features
 
 ### Core Capabilities
-- **Multi-Provider Support**: Choose from **Groq** (ultra-fast), **Deepgram** (Nova-3), or **Gemini** for STT, and **OpenAI** (GPT-5), **Anthropic** (Claude 4), or **Gemini** (Gemini 3) for LLM reasoning.
+- **Multi-Provider Support**: Default **Local Whisper** (GPU-accelerated) for STT with **Gemini** (Cloud) fallback. Optional **Deepgram** for streaming. Supports **OpenAI** (GPT-5), **Anthropic** (Claude 4), and **Gemini** (Gemini 3) for LLM reasoning.
 - **Real-time Audio Capture & Transcription**: High-accuracy speech recognition with speaker diarization.
 - **Context-Aware Assistance**: RAG-powered answers grounded in your resume and job description.
 - **Stealth Mode**: Invisible during screen shares.
@@ -145,12 +145,11 @@ npm run tauri build
 
 1.  Launch the app and click the **Settings** icon.
 2.  Enter API keys for your preferred providers:
-    -   **Groq**: Ultra-fast transcription (Recommended for STT).
-    -   **OpenAI**: GPT-4o for high-quality answers.
+    -   **OpenAI**: GPT-4o for high-quality answers (LLM only).
     -   **Anthropic**: Claude 3.5 Sonnet for complex reasoning.
     -   **Deepgram**: Alternative high-speed STT.
     -   **Gemini**: Full-stack provider (STT, LLM, Embeddings, Caching).
-3.  Select your preferred **STT** and **LLM** providers from the dropdowns.
+3.  **STT** defaults to **Local Whisper** (uses GPU). You can enable **Deepgram** for streaming in Settings.
 4.  Keys are stored securely in your OS keychain.
 
 ## Architecture
@@ -168,9 +167,9 @@ graph TB
         Factory[Provider Factory]
         
         subgraph "Providers"
-            Groq[Groq STT]
+            LocalWhisper[Local Whisper STT]
             Deepgram[Deepgram STT]
-            OpenAI[OpenAI STT/LLM]
+            OpenAI[OpenAI LLM]
             Anthropic[Anthropic LLM]
             Gemini["Gemini STT/LLM/Cache<br/>(File API)"]
         end
