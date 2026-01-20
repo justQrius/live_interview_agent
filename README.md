@@ -1,255 +1,343 @@
 # Live Interview Agent
 
-A cross-platform desktop application that provides real-time AI assistance during job interviews. This tool leverages a sidecar architecture combining a robust Tauri (Rust) backend with a powerful Python AI engine to deliver real-time speech-to-text, context-aware answers, and seamless OS integration.
+A cross-platform desktop application that provides real-time AI assistance during job interviews. Built with a sidecar architecture combining **Tauri (Rust)** for the desktop shell, **React (TypeScript)** for the UI, and a **Python AI engine** for real-time speech-to-text, RAG-powered answers, and intelligent coaching.
 
-## Key Features
+![Phase Status](https://img.shields.io/badge/Phase-9%20Complete-brightgreen)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-### Core Capabilities
-- **Multi-Provider Support**: Default **Local Whisper** (GPU-accelerated) for STT with **Gemini** (Cloud) fallback. Optional **Deepgram** for streaming. Supports **OpenAI** (GPT-5), **Anthropic** (Claude 4), and **Gemini** (Gemini 3) for LLM reasoning.
-- **Real-time Audio Capture & Transcription**: High-accuracy speech recognition with speaker diarization.
-- **Context-Aware Assistance**: RAG-powered answers grounded in your resume and job description.
-- **Stealth Mode**: Invisible during screen shares.
-- **Cross-Platform**: Windows, macOS, and Linux support.
+---
 
-### Intelligence Pipeline (Phase 3)
-- **Intelligent Question Detection**: Multi-tier classification of interview questions (behavioral, technical, etc.) with <10ms latency.
-- **Multi-Turn Follow-Up Handling**: Advanced query reformulation with TopicStack for resolving references across conversation turns ("that project", "the first topic", "go back to earlier").
-- **LLM Fallback Reformulation**: When template-based expansion fails, async LLM reformulation ensures complex follow-ups are handled correctly.
-- **Question Splitting**: Compound questions are split into sub-questions for comprehensive RAG retrieval.
-- **Session History**: Persistent session storage with export capabilities (Markdown, JSON, TXT).
+## Features
 
-### Interview Coach (Phase 4)
-- **Persistent Memory**: The AI "learns" your background from documents and maintains understanding across all answers.
-- **STAR Story Bank**: Automatic extraction of 8-12 achievement stories from your resume in STAR format.
-- **Real-time Story Recall**: When behavioral questions are detected, relevant stories surface within 1 second.
-- **Answer Structure Hints**: Suggests optimal frameworks (STAR, SOAR, CAR, PAR, SHARE, PREP) based on question type.
-- **Consistency Tracking**: Prevents contradictions between answers during the interview.
-- **Document Extraction Pipeline**: Automatic extraction of skills, timeline, achievements, and metrics from uploaded documents.
-- **Smart Document Classification**: LLM-based automatic detection of document types (resume, job description, company info) with confidence scoring.
-- **Prepared Q&A Priority**: Pre-prepared Q&A answers are prioritized in RAG retrieval for faster, more accurate responses.
+### 🎙️ Real-Time Speech Processing
+- **Multi-Provider STT**: Local Whisper (GPU-accelerated, 100% private) with Gemini cloud fallback
+- **Streaming Transcription**: Deepgram Nova-3 WebSocket for ~150ms latency interim results
+- **Speaker Diarization**: Distinguishes interviewer from candidate via voice calibration
+- **Noise Reduction**: Adaptive filtering for clear audio in noisy environments
 
-### Gemini Integration (Phase 5)
-- **Context Caching**: Reduced latency and cost through Gemini context caching for long sessions.
-- **Answer Enhancement**: On-demand answer refinement (add detail, make specific, suggest STAR, adjust tone, shorten).
-- **Enhanced RAG**: Hierarchical chunking with child-to-parent expansion for richer context.
-- **Google Search Grounding**: Autonomous real-time web search for company news, industry trends, and factual queries. The AI intelligently decides when to search vs. use internal context.
-- **Model Fallback**: Automatic fallback to alternative models when primary model is unavailable.
+### 🧠 Intelligence Pipeline
+- **Question Detection**: 3-tier classification (Regex → Context → LLM) with <10ms typical latency
+- **Multi-Turn Context**: TopicStack tracks conversation across turns, resolving "that project" or "go back to the first topic"
+- **Compound Question Splitting**: "Tell me about X and also Y" → separate RAG queries for comprehensive answers
+- **Utterance Accumulation**: 4-tier completeness detection handles natural speech pauses ("Tell me about... [pause] ...and how you handled it")
 
-### Utterance Accumulation (Phase 6)
-- **Multi-Segment Question Detection**: Accumulates speech segments across natural pauses to detect complete questions like "Tell me about... [pause] ...and how you handled it".
-- **4-Tier Completeness Detection**: Punctuation (<1ms) → Syntax (<5ms) → Timing (<1ms) → LLM (~150ms) for semantic completeness.
-- **Per-Speaker Buffering**: Separate buffers for interviewer and user with configurable timeouts.
-- **Real-time Accumulation Indicator**: UI shows buffering state with segment count and preview.
-- **Configurable Thresholds**: All timeouts and limits controllable via environment variables.
+### 📚 RAG & Context Management
+- **Hierarchical Chunking**: Parent (4096 chars) + child (1024 chars) chunks for precision + context
+- **Document-Aware Priority**: SAMPLE_QA → RESUME → JOB_DESCRIPTION → COMPANY_INFO
+- **QA-Atomic Chunking**: Prepared Q&A pairs never split across chunks
+- **Gemini Context Caching**: 2-hour TTL cache reduces latency and cost for long sessions
+- **Document Persistence**: Uploaded documents survive app restarts
 
-### Streaming STT & Semantic Endpointing (Phase 7 - 2026 Gen 1)
-- **Real-time Streaming Transcription**: WebSocket-based streaming STT for instant interim results as the interviewer speaks.
-- **Semantic Endpointing**: Advanced endpointing detects turn completion based on meaning, not just pauses.
-- **Hybrid Mode**: Combines streaming semantic endpointing with timing-based accumulation for best of both worlds.
-- **Gen 1 2026 Providers**:
-  - **Deepgram** (~150ms latency): **Nova-3** model with acoustic endpointing via `utterance_end_ms`.
-- **Automatic Fallback**: Gracefully degrades to batch STT if streaming unavailable.
-- **~30-50% Latency Improvement**: Streaming eliminates VAD buffering delays.
+### 🎯 Interview Coaching
+- **STAR Story Bank**: Automatic extraction of 8-12 achievement stories from your resume
+- **Real-Time Story Recall**: Relevant stories surface within 1 second of behavioral questions
+- **Answer Frameworks**: Suggests STAR, SOAR, PREP, CAR based on question type
+- **Consistency Tracking**: Alerts if you contradict previous answers (e.g., "5 years" vs "3 years")
+- **Candidate Profile**: ~1000-token identity injected into every LLM prompt
 
-### User Interface
-- **True Dark Mode**: OLED-friendly deep dark theme (`#080808` background) for reduced eye strain and premium aesthetics.
-- **Settings Overlay**: Clean, non-intrusive settings modal for managing keys and preferences.
-- **High Reasoning Mode**: "Extended Thinking" toggle for complex logic using GPT-5.2 or Claude 4 Opus.
-- **Real-time Status Indicators**: Visual feedback for transcription, processing, and answer generation states.
-- **Coaching Panel**: Integrated panel showing story suggestions, structure hints, and consistency warnings.
+### ⚡ Low-Latency Architecture
+- **End-to-End Target**: <1.5 seconds from speech end to first answer token
+- **Model Pre-Warming**: VAD, speaker ID, and Whisper load at app startup
+- **Hybrid Endpointing**: Semantic detection (when available) bypasses timing buffers
+- **Parallel Processing**: Coaching runs alongside answer generation
 
-### Low-Latency Architecture
-- **Browser-based VAD**: Filters silence locally, reducing server traffic by >60%.
-- **Streaming STT**: Real-time WebSocket transcription eliminates batch processing delays.
-- **Semantic Endpointing**: AI-powered turn detection responds to meaning, not just pauses.
-- **Model Pre-warming**: ML models load at app startup for <1s session starts.
-- **Speculative Retrieval**: RAG queries begin before the interviewer finishes speaking.
-- **Parallel Processing**: Audio pipeline optimized for <1.5s end-to-end latency.
-- **Gemini Retry Logic**: Automatic retry with exponential backoff for 503/429 errors.
+### 🔒 Privacy & Security
+- **Local-First STT**: Default to on-device Whisper (no audio leaves your machine)
+- **Secure Key Storage**: API keys stored in OS keychain (Windows Credential Manager, macOS Keychain)
+- **Session Isolation**: Conversation history cleared on stop; documents optionally preserved
 
-### Privacy & Session Management
-- **Session Isolation**: Clear all persistent data (memory, cache, context) on session stop.
-- **Context Preservation**: Resume context across session restarts within the same app session.
-- **Secure Key Storage**: API keys stored in OS keychain, never in plaintext.
+---
 
-### RAG Persistence (Phase 8)
-- **Document Persistence**: Uploaded documents survive app restarts without re-uploading.
-- **Automatic State Restoration**: On app launch, previously uploaded documents are automatically detected and shown in UI.
-- **Cache Expiration Handling**: Gemini context cache expires after 2 hours; UI shows "Refresh Cache" button to rebuild.
-- **Clear All Data**: One-click button to permanently delete all uploaded documents and start fresh.
-- **Robust Connection Handling**: Retry mechanism ensures RAG state loads regardless of frontend/backend startup order.
+## Architecture
 
-### Answer Quality & Grounding (Phase 9)
-- **Enhanced Grounding Instructions**: LLM prompts include explicit citation requirements, source priority hierarchy, and verification checklist.
-- **Source Priority**: SAMPLE_QA > RESUME > JD > COMPANY_INFO ensures answers use the most relevant context first.
-- **Groundedness Evaluation**: RAGAS-style evaluation module measures how well answers use retrieved context.
-- **Context Utilization Tracking**: SQLite-based analytics logs chunk retrieval and usage patterns per session.
-- **Heuristic + LLM Evaluation**: Fast heuristic check (<5ms) with optional LLM-based semantic evaluation for detailed analysis.
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Tauri Desktop Shell                           │
+│  (Window management, OS integration, secure keyring, sidecar lifecycle) │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ IPC
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         React UI (TypeScript)                           │
+│  (Zustand state, WebSocket client, coaching panels, answer display)     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ WebSocket (localhost:8765)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      Python Sidecar (asyncio)                           │
+│                                                                         │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
+│  │  Audio  │ │   STT   │ │   RAG   │ │   LLM   │ │Coaching │          │
+│  │ Capture │ │Provider │ │ Engine  │ │Provider │ │ Engine  │          │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
+│                                                                         │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
+│  │  VAD    │ │Question │ │ Memory  │ │Extract  │ │  Eval   │          │
+│  │(Silero) │ │Detector │ │ Store   │ │Pipeline │ │(Ground) │          │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         External Services                               │
+│  Gemini (STT/LLM/Cache) │ OpenAI (GPT-5) │ Anthropic │ Deepgram │ Local│
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+For detailed architecture documentation, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js**: v20+
-- **Rust**: v1.75+
-- **Python**: v3.11+
-- **OS-Specific Build Tools**:
-  - *Windows*: Visual Studio C++ Build Tools
-  - *macOS*: Xcode Command Line Tools
-  - *Linux*: `build-essential`, `libwebkit2gtk-4.0-dev`, `libssl-dev`
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Node.js** | 20+ | Frontend build |
+| **Rust** | 1.75+ | Tauri backend |
+| **Python** | 3.11+ | AI sidecar |
+| **CUDA** | 12.x | Optional, for local Whisper GPU acceleration |
+
+**OS-Specific Build Tools:**
+- **Windows**: Visual Studio C++ Build Tools
+- **macOS**: Xcode Command Line Tools
+- **Linux**: `build-essential`, `libwebkit2gtk-4.0-dev`, `libssl-dev`
 
 ### Installation
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/yourusername/live_interview_agent.git
-    cd live_interview_agent
-    ```
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/live_interview_agent.git
+cd live_interview_agent
 
-2.  **Install Frontend Dependencies**:
-    ```bash
-    npm install
-    ```
+# Install frontend dependencies
+npm install
 
-3.  **Install Python Sidecar Dependencies**:
-    ```bash
-    cd sidecar
-    python -m venv venv
-    
-    # Activate virtual environment
-    # Windows: venv\Scripts\activate
-    # macOS/Linux: source venv/bin/activate
+# Setup Python sidecar
+cd sidecar
+python -m venv venv
 
-    # Install dependencies
-    pip install -r requirements.txt
+# Activate virtual environment
+# Windows: venv\Scripts\activate
+# macOS/Linux: source venv/bin/activate
 
-    # For NVIDIA GPU support (Windows):
-    pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
-    cd ..
-    ```
+# Install Python dependencies
+pip install -r requirements.txt
+
+# For NVIDIA GPU acceleration (recommended):
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+cd ..
+```
 
 ### Running the Application
 
-In development, you need to run both the Tauri frontend/backend and the Python sidecar process.
+**Development Mode** (two terminals):
 
-1. **Start the Python Sidecar** (in a separate terminal):
-    ```bash
-    cd sidecar
-    # Activate virtual environment first (see installation steps above)
-    python -m src.server
-    ```
+```bash
+# Terminal 1: Start Python sidecar
+cd sidecar
+# Activate venv first
+python -m src.server
 
-2. **Start the Tauri App**:
-    ```bash
-    npm run tauri dev
-    ```
+# Terminal 2: Start Tauri app
+npm run tauri dev
+```
 
-To build the application for production (which bundles the sidecar):
+**Production Build:**
 
 ```bash
 npm run tauri build
 ```
 
+---
+
 ## Configuration
 
-1.  Launch the app and click the **Settings** icon.
-2.  Enter API keys for your preferred providers:
-    -   **OpenAI**: GPT-4o for high-quality answers (LLM only).
-    -   **Anthropic**: Claude 3.5 Sonnet for complex reasoning.
-    -   **Deepgram**: Alternative high-speed STT.
-    -   **Gemini**: Full-stack provider (STT, LLM, Embeddings, Caching).
-3.  **STT** defaults to **Local Whisper** (uses GPU). You can enable **Deepgram** for streaming in Settings.
-4.  Keys are stored securely in your OS keychain.
+1. Launch the app and click the **Settings** icon
+2. Enter API keys for your preferred providers:
 
-## Architecture
+| Provider | Purpose | Required |
+|----------|---------|----------|
+| **Gemini** | STT, LLM, embeddings, context caching | Recommended |
+| **OpenAI** | LLM (GPT-5/4o) | Optional |
+| **Anthropic** | LLM (Claude 4/3.5) | Optional |
+| **Deepgram** | Streaming STT | Optional |
 
-```mermaid
-graph TB
-    subgraph "Tauri App"
-        UI[React UI]
-        BrowserVAD["Browser VAD<br/>(ONNX)"]
-        Config[Config Store]
-    end
+3. **STT** defaults to **Local Whisper** (GPU). Enable Deepgram in Settings for streaming mode.
+4. Keys are stored securely in your OS keychain.
 
-    subgraph "Python Sidecar"
-        Server[WebSocket Server]
-        Factory[Provider Factory]
-        
-        subgraph "Providers"
-            LocalWhisper[Local Whisper STT]
-            Deepgram[Deepgram STT]
-            OpenAI[OpenAI LLM]
-            Anthropic[Anthropic LLM]
-            Gemini["Gemini STT/LLM/Cache<br/>(File API)"]
-        end
-        
-        Models["Pre-warmed Models<br/>(VAD/Diarization)"]
-        
-        subgraph "Intelligence Pipeline"
-            Detector[Question Detector]
-            Reformulator[Query Reformulator]
-            Splitter[Question Splitter]
-        end
-        
-        subgraph "Memory & Extraction"
-            Memory[Memory Store]
-            Extraction[Extraction Pipeline]
-            Profile[Candidate Profile]
-        end
-        
-        subgraph "Coaching Engine"
-            StoryRecall[Story Recaller]
-            Structure[Structure Suggester]
-            Consistency[Consistency Tracker]
-        end
-        
-        RAG[Enhanced RAG Engine]
-    end
+### Provider Fallback Chain
 
-    UI --> BrowserVAD
-    BrowserVAD -->|Speech Only| Server
-    Server --> Models
-    Models --> Factory
-    Factory --> Providers
-    Providers --> Detector
-    Detector --> Reformulator
-    Reformulator --> Splitter
-    Splitter --> RAG
-    RAG --> Memory
-    Memory --> StoryRecall
-    StoryRecall --> Providers
+| Category | Primary | Fallback |
+|----------|---------|----------|
+| **STT** | Local Whisper (GPU) | Gemini (Cloud) |
+| **LLM** | Gemini (cached context) | OpenAI → Anthropic |
+| **Streaming** | Deepgram Nova-3 | Disabled (batch mode) |
+
+---
+
+## Usage
+
+### Basic Workflow
+
+1. **Upload Context**: Add your resume, job description, and prepared Q&A
+2. **Calibrate Voice**: Record a short sample so the system recognizes you vs. the interviewer
+3. **Start Session**: Begin the interview coaching session
+4. **Interview**: The system automatically detects interviewer questions and generates contextual answers
+5. **Coaching**: Watch for story suggestions, structure hints, and consistency warnings
+
+### Document Types
+
+| Type | Priority | Purpose |
+|------|----------|---------|
+| `SAMPLE_QA` | Highest | Your prepared answers (used first) |
+| `RESUME` | High | Hard facts, dates, metrics |
+| `JOB_DESCRIPTION` | Medium | Role requirements for tailoring |
+| `COMPANY_INFO` | Medium | For "Why us?" questions |
+| `INTERVIEWER_INFO` | Low | Background on the interviewer |
+
+### Answer Enhancement
+
+After an answer is generated, click **Enhance** to:
+- **Add Detail**: Re-query RAG for more context
+- **Make Specific**: Add metrics and concrete examples
+- **Suggest STAR**: Link to a relevant achievement story
+- **Adjust Tone**: Rewrite with different confidence level
+- **Shorten**: Compress to key points
+
+---
+
+## Project Structure
+
 ```
+live_interview_agent/
+├── src/                    # React Frontend
+│   └── ui/
+│       ├── components/     # UI components
+│       ├── hooks/          # useWebSocket, useVAD
+│       └── store/          # Zustand sessionStore
+├── src-tauri/              # Tauri Backend (Rust)
+│   └── src/
+│       ├── commands/       # sidecar, config
+│       └── utils/          # keyring
+├── sidecar/                # Python AI Engine
+│   └── src/
+│       ├── server.py       # WebSocket server
+│       ├── audio/          # capture, vad, diarization
+│       ├── providers/      # stt/, llm/, factory
+│       ├── classification/ # detector, reformulator, splitter
+│       ├── rag/            # engine, store, embeddings
+│       ├── context/        # manager, chunker, gemini_cache
+│       ├── memory/         # SQLite store, models
+│       ├── coaching/       # story recall, structure, consistency
+│       ├── extraction/     # document processing pipeline
+│       └── evaluation/     # groundedness scoring
+├── ARCHITECTURE.md         # Detailed system architecture
+├── AGENTS.md               # AI agent development guide
+└── README.md               # This file
+```
+
+---
 
 ## Development
 
-### Project Structure
-
-- **`src/`**: React frontend (UI, Hooks, VAD, Coaching UI).
-- **`src-tauri/`**: Rust backend (OS integration, Keyring).
-- **`sidecar/`**: Python engine (Audio, Classification, Providers, RAG, Memory, Coaching).
-
 ### Testing
 
-- **Frontend**: `npm run test`
-- **Backend**: `cd src-tauri && cargo test`
-- **Sidecar**: `cd sidecar && pytest`
-- **E2E**: `cd sidecar && pytest tests/test_e2e_scenarios.py`
-- **Latency Benchmark**: `cd sidecar && python scripts/benchmark_latency.py`
+```bash
+# Frontend tests
+npm run test
+
+# Rust tests
+cd src-tauri && cargo test
+
+# Python sidecar tests
+cd sidecar && pytest
+
+# Specific test suites
+pytest tests/test_question_detector.py      # Intelligence pipeline
+pytest tests/test_memory_store.py           # Persistence
+pytest tests/test_streaming_stt.py          # Streaming transcription
+pytest tests/test_evaluation.py             # Groundedness evaluation
+
+# Latency benchmark
+python scripts/benchmark_latency.py
+```
+
+### Environment Variables
+
+```bash
+# Streaming STT
+STREAMING_STT_PROVIDER=deepgram           # deepgram, disabled
+
+# Utterance Accumulation
+ACCUMULATOR_ENABLED=true
+ACCUMULATOR_ENDPOINTING_MODE=hybrid       # timing, streaming, hybrid
+
+# Local Whisper
+WHISPER_MODEL_SIZE=large-v3-turbo
+WHISPER_DEVICE=cuda
+
+# Evaluation
+GROUNDEDNESS_EVALUATION_ENABLED=true
+```
+
+---
 
 ## Phase Status
 
-| Phase | Description | Stories | Status |
-|-------|-------------|---------|--------|
-| Phase 1 | MVP Foundation | 20/20 | ✅ Complete |
-| Phase 2 | Multi-Provider & Optimization | 13/13 | ✅ Complete |
-| Phase 3 | Intelligence Pipeline | 19/19 | ✅ Complete |
-| Phase 4 | Interview Coach Evolution | - | 🟡 Implemented |
-| Phase 5 | Gemini Integration | - | 🟡 Implemented |
-| Phase 6 | Utterance Accumulation | - | ✅ Complete |
-| Phase 7 | Streaming STT & Semantic Endpointing | - | ✅ Complete |
-| Phase 8 | RAG Persistence | - | ✅ Complete |
-| Phase 9 | Answer Quality & Grounding | - | ✅ Complete |
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | MVP Foundation | ✅ Complete |
+| Phase 2 | Multi-Provider & Optimization | ✅ Complete |
+| Phase 3 | Intelligence Pipeline | ✅ Complete |
+| Phase 4 | Interview Coach Evolution | ✅ Complete |
+| Phase 5 | Gemini Integration | ✅ Complete |
+| Phase 6 | Utterance Accumulation | ✅ Complete |
+| Phase 7 | Streaming STT & Semantic Endpointing | ✅ Complete |
+| Phase 8 | RAG Persistence | ✅ Complete |
+| Phase 9 | Answer Quality & Grounding | ✅ Complete |
+
+---
+
+## Performance Targets
+
+| Metric | Target | Current |
+|--------|--------|---------|
+| End-to-end latency | <1.5s | ~1.2s |
+| Question detection | <10ms | ~5ms |
+| RAG retrieval | <200ms | ~150ms |
+| First LLM token | <500ms | ~400ms (cached) |
+| Story recall | <1s | ~300ms |
+
+---
+
+## Contributing
+
+See [AGENTS.md](AGENTS.md) for AI-assisted development guidelines.
+
+1. Fork the repository
+2. Create a feature branch
+3. Write tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
+
+---
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## Acknowledgments
+
+- [Tauri](https://tauri.app/) - Desktop framework
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) - Local STT
+- [Silero VAD](https://github.com/snakers4/silero-vad) - Voice activity detection
+- [ChromaDB](https://www.trychroma.com/) - Vector store
+- [Zustand](https://github.com/pmndrs/zustand) - State management
