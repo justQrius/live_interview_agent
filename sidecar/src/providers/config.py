@@ -127,16 +127,22 @@ class ProviderType(Enum):
     ANTHROPIC = "anthropic"
     ASSEMBLYAI = "assemblyai"
     DUCKDUCKGO = "duckduckgo"
+    LOCAL_WHISPER = "local_whisper"  # Local GPU-accelerated Whisper (faster-whisper)
 
 
 class StreamingMode(Enum):
-    """Streaming STT mode preference."""
+    """
+    Streaming STT mode preference.
+    
+    Simplified in Phase 3 - only Deepgram streaming is supported.
+    """
     DISABLED = "disabled"  # Use batch STT only
-    AUTO = "auto"          # Auto-select best available (prefers semantic providers)
+    AUTO = "auto"          # Auto-select best available (prefers Flux)
     DEEPGRAM = "deepgram"  # Deepgram Nova-3 (acoustic endpointing)
     DEEPGRAM_FLUX = "deepgram_flux"  # Deepgram Flux (semantic endpointing) - RECOMMENDED
-    ASSEMBLYAI = "assemblyai"  # AssemblyAI V3 (semantic endpointing)
-    OPENAI_REALTIME = "openai_realtime"  # OpenAI Realtime (semantic endpointing)
+    # Removed in Phase 3:
+    # ASSEMBLYAI = "assemblyai"  # AssemblyAI V3 (semantic endpointing)
+    # OPENAI_REALTIME = "openai_realtime"  # OpenAI Realtime (semantic endpointing)
 
 
 @dataclass
@@ -165,8 +171,8 @@ class ProviderConfig:
     stt_model: Optional[str] = None
     streaming_stt_model: Optional[str] = None
     
-    # Streaming STT preference
-    streaming_mode: StreamingMode = StreamingMode.AUTO
+    # Streaming STT preference (disabled by default - user must opt-in)
+    streaming_mode: StreamingMode = StreamingMode.DISABLED
 
     # Fallback settings
     fallback_enabled: bool = True
@@ -176,6 +182,9 @@ class ProviderConfig:
     thinking_budget: Optional[int] = 1024 # Default token budget for thinking models
     search_enabled: bool = True  # Enable Google Search grounding for Gemini LLM
     extended_thinking: bool = False # Enable High Reasoning Mode (GPT-5/Claude 4)
+    
+    # Local Whisper settings (STT Simplification Phase 4)
+    whisper_model_size: Optional[str] = None  # None = auto (large-v3-turbo)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProviderConfig":
@@ -245,6 +254,11 @@ class ProviderConfig:
         # Extended thinking toggle
         extended_thinking = preferences.get("extendedThinking", False)
         
+        # Local Whisper model size (STT Simplification Phase 4)
+        whisper_model_size = preferences.get("whisperModelSize")
+        if whisper_model_size == "auto":
+            whisper_model_size = None
+        
         return cls(
             gemini_api_key=api_keys.get("gemini"),
             groq_api_key=api_keys.get("groq"),
@@ -260,7 +274,8 @@ class ProviderConfig:
             streaming_mode=streaming_mode,
             thinking_budget=preferences.get("thinkingBudget"),
             search_enabled=search_enabled,
-            extended_thinking=extended_thinking
+            extended_thinking=extended_thinking,
+            whisper_model_size=whisper_model_size
         )
 
     def has_api_key(self, provider_type: ProviderType) -> bool:

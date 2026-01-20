@@ -40,12 +40,12 @@ export interface ContextFile {
   extractionResult?: ExtractionResult;
 }
 
-export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic' | 'assemblyai';
+export type Provider = 'gemini' | 'groq' | 'deepgram' | 'openai' | 'anthropic' | 'assemblyai' | 'local_whisper';
 
-// Streaming STT provider options (Phase 7)
-export type StreamingSTTProvider = 'auto' | 'deepgram' | 'assemblyai' | 'openai_realtime' | 'disabled';
+// Streaming STT provider options (Phase 7 - Simplified in STT Simplification)
+export type StreamingSTTProvider = 'auto' | 'deepgram' | 'deepgram_flux' | 'disabled';
 
-// Model options by provider (Jan 2026 - Gen 1 Flagships)
+// Model options by provider (Jan 2026 - Gen 1 Flagships, STT Simplified)
 export const MODEL_OPTIONS = {
   // LLM Models
   llm: {
@@ -70,41 +70,28 @@ export const MODEL_OPTIONS = {
       { id: 'claude-3.7-sonnet', name: 'Claude 3.7 Sonnet' },
     ],
   },
-  // Batch STT Models
+  // Batch STT Models (Simplified: only local_whisper and gemini)
   stt: {
-    groq: [
-      { id: 'whisper-large-v3-turbo', name: 'Whisper V3 Turbo (Fast)' },
-      { id: 'whisper-large-v3', name: 'Whisper V3' },
-    ],
-    deepgram: [
-      { id: 'nova-3', name: 'Nova-3 (Latest)' },
-      { id: 'nova-2', name: 'Nova-2' },
-      { id: 'flux', name: 'Flux (Specialized)' },
-    ],
-    openai: [
-      { id: 'whisper-1', name: 'Whisper-1' },
+    local_whisper: [
+      { id: 'large-v3-turbo', name: 'Large V3 Turbo (Default, ~100ms)' },
+      { id: 'distil-large-v3', name: 'Distil Large V3 (Slightly Better Accuracy)' },
+      { id: 'medium', name: 'Medium (Lower VRAM)' },
+      { id: 'small', name: 'Small (Very Low VRAM)' },
     ],
     gemini: [
       { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview (Native Audio)' },
       { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
     ],
   },
-  // Streaming STT Models
+  // Streaming STT Models (Simplified: only Deepgram after Phase 3)
   streamingStt: {
     deepgram: [
-      { id: 'nova-3', name: 'Nova-3 (Recommended)' },
+      { id: 'nova-3', name: 'Nova-3 (Acoustic Endpointing)' },
       { id: 'nova-3-general', name: 'Nova-3 General' },
       { id: 'nova-3-meeting', name: 'Nova-3 Meeting' },
-      { id: 'nova-2', name: 'Nova-2 (Legacy)' },
     ],
-    assemblyai: [
-      { id: 'best', name: 'Best (Auto-select)' },
-      { id: 'nano', name: 'Nano (Fast)' },
-    ],
-    openai_realtime: [
-      { id: 'gpt-realtime', name: 'GPT Realtime (GA)' },
-      { id: 'gpt-realtime-mini', name: 'GPT Realtime Mini' },
-      { id: 'gpt-4o-realtime-preview', name: 'GPT-4o Realtime (Beta)' },
+    deepgram_flux: [
+      { id: 'flux-general-en', name: 'Flux (Semantic Endpointing, Recommended)' },
     ],
   },
 } as const;
@@ -357,7 +344,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   // Model selections (Phase 7)
   preferredLlmModel: (localStorage.getItem('preferredLlmModel') as string) || 'auto',
   preferredSttModel: (localStorage.getItem('preferredSttModel') as string) || 'auto',
-  preferredStreamingSttProvider: (localStorage.getItem('preferredStreamingSttProvider') as StreamingSTTProvider) || 'auto',
+  preferredStreamingSttProvider: (localStorage.getItem('preferredStreamingSttProvider') as StreamingSTTProvider) || 'disabled',
   preferredStreamingSttModel: (localStorage.getItem('preferredStreamingSttModel') as string) || 'auto',
   extendedThinking: localStorage.getItem('extendedThinking') === 'true',
 

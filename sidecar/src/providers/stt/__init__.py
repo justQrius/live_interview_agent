@@ -1,9 +1,13 @@
 """
 STT Provider implementations.
+
+Simplified in Phase 3 of STT Simplification:
+- LocalWhisperProvider: Local GPU-accelerated Whisper (faster-whisper) - PRIMARY
+- GeminiSTTProvider: Cloud fallback for native audio processing
+- DeepgramStreamingProvider/DeepgramFluxProvider: Streaming STT (user opt-in)
 """
 from .gemini import GeminiSTTProvider
-from .groq import GroqSTTProvider
-from .deepgram import DeepgramSTTProvider
+from .local_whisper import LocalWhisperProvider
 from .streaming_base import (
     StreamingSTTProvider,
     StreamingSession,
@@ -14,15 +18,12 @@ from .streaming_base import (
 )
 from .deepgram_streaming import DeepgramStreamingProvider
 from .deepgram_flux import DeepgramFluxProvider
-from .assemblyai_streaming import AssemblyAIStreamingProvider
-from .openai_realtime import OpenAIRealtimeProvider
 from .streaming_manager import StreamingSTTManager, StreamingSTTCallbacks
 
 __all__ = [
-    # Batch providers
-    "GeminiSTTProvider",
-    "GroqSTTProvider", 
-    "DeepgramSTTProvider",
+    # Batch providers (simplified)
+    "LocalWhisperProvider",  # Primary - local GPU
+    "GeminiSTTProvider",     # Cloud fallback
     # Streaming base
     "StreamingSTTProvider",
     "StreamingSession",
@@ -30,11 +31,9 @@ __all__ = [
     "InterimResult",
     "EndOfTurnEvent",
     "EndpointingType",
-    # Streaming providers
+    # Streaming providers (Deepgram only)
     "DeepgramStreamingProvider",
     "DeepgramFluxProvider",
-    "AssemblyAIStreamingProvider",
-    "OpenAIRealtimeProvider",
     # Streaming manager
     "StreamingSTTManager",
     "StreamingSTTCallbacks",

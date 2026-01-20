@@ -212,24 +212,27 @@ class ProviderFactory:
         raise Exception(f"Failed to create streaming STT provider for mode: {mode}")
 
     def get_stt_fallback_order(self) -> List[ProviderType]:
-        """Get the order of STT providers to try."""
+        """
+        Get the order of STT providers to try.
+        
+        Simplified in Phase 3:
+        1. LOCAL_WHISPER (primary, local GPU)
+        2. GEMINI (cloud fallback)
+        """
         order = []
         
-        # 1. Configured preference
-        if self.config.preferred_stt:
+        # 1. Configured preference (if still valid after simplification)
+        if self.config.preferred_stt in (ProviderType.LOCAL_WHISPER, ProviderType.GEMINI):
             order.append(self.config.preferred_stt)
-            
-        # 2. High quality/speed providers
-        defaults = [
-            ProviderType.GROQ,      # Fastest
-            ProviderType.DEEPGRAM,  # Very fast & accurate
-            ProviderType.GEMINI,    # Multimodal native
-            ProviderType.OPENAI,    # Reliable fallback
-        ]
         
-        for p in defaults:
-            if p not in order and self.config.has_api_key(p):
-                order.append(p)
+        # 2. LOCAL_WHISPER first (if GPU available - checked during creation)
+        # This is the fastest and most private option
+        if ProviderType.LOCAL_WHISPER not in order:
+            order.append(ProviderType.LOCAL_WHISPER)
+            
+        # 3. Gemini as cloud fallback (native audio processing)
+        if ProviderType.GEMINI not in order and self.config.has_api_key(ProviderType.GEMINI):
+            order.append(ProviderType.GEMINI)
                 
         return order
 
@@ -268,15 +271,24 @@ class ProviderFactory:
         return order
 
     def get_available_stt_providers(self) -> List[ProviderType]:
-        """Get list of available STT providers (have API keys)."""
-        stt_providers = [
-            ProviderType.GROQ,
-            ProviderType.DEEPGRAM,
-            ProviderType.GEMINI,
-            ProviderType.OPENAI,
-            ProviderType.ASSEMBLYAI,
-        ]
-        return [p for p in stt_providers if self.config.has_api_key(p)]
+        """
+        Get list of available STT providers.
+        
+        Simplified in Phase 3:
+        - LOCAL_WHISPER: Always available (checked for GPU during creation)
+        - GEMINI: Available if API key is set
+        """
+        providers = []
+        
+        # LOCAL_WHISPER is always potentially available (no API key needed)
+        # It will be checked for GPU availability during creation
+        providers.append(ProviderType.LOCAL_WHISPER)
+        
+        # Gemini is the only cloud STT fallback
+        if self.config.has_api_key(ProviderType.GEMINI):
+            providers.append(ProviderType.GEMINI)
+                
+        return providers
 
     def get_available_llm_providers(self) -> List[ProviderType]:
         """Get list of available LLM providers (have API keys)."""
@@ -296,22 +308,21 @@ class ProviderFactory:
         return providers
 
     def get_available_streaming_providers(self) -> List[Any]:
-        """Get list of available Streaming STT modes."""
+        """
+        Get list of available Streaming STT modes.
+        
+        Simplified in Phase 3: Only Deepgram streaming is supported.
+        """
         from .config import StreamingMode
         modes = []
         
         # Always allow AUTO/DISABLED
         modes.append(StreamingMode.AUTO)
         
+        # Only Deepgram streaming is supported after Phase 3
         if self.config.has_api_key(ProviderType.DEEPGRAM):
             modes.append(StreamingMode.DEEPGRAM)
             modes.append(StreamingMode.DEEPGRAM_FLUX)
-            
-        if self.config.has_api_key(ProviderType.ASSEMBLYAI):
-            modes.append(StreamingMode.ASSEMBLYAI)
-            
-        if self.config.has_api_key(ProviderType.OPENAI):
-            modes.append(StreamingMode.OPENAI_REALTIME)
             
         return modes
 
@@ -349,29 +360,48 @@ class ProviderFactory:
         return provider
 
     def _create_stt_provider(self, provider_type: ProviderType) -> Optional[STTProvider]:
-        """Create an STT provider instance."""
+        """
+        Create an STT provider instance.
+        
+        Simplified in Phase 3 - only supports:
+        - LOCAL_WHISPER: Primary, local GPU-accelerated (faster-whisper)
+        - GEMINI: Cloud fallback with native audio processing
+        """
+        # LOCAL_WHISPER doesn't need an API key - it's local
+        if provider_type == ProviderType.LOCAL_WHISPER:
+            try:
+                from .stt.local_whisper import LocalWhisperProvider, _check_gpu_available
+                
+                # Only create if GPU is available (for performance)
+                # Note: LocalWhisperProvider can run on CPU but is much slower
+                if not _check_gpu_available():
+                    logger.info("No GPU available, skipping LOCAL_WHISPER provider")
+                    return None
+                
+                # Use whisper_model_size preference, or stt_model as fallback, or default
+                model = self.config.whisper_model_size or self.config.stt_model or "large-v3-turbo"
+                return LocalWhisperProvider(model_size=model)
+            except ImportError as e:
+                logger.warning(f"Failed to import LocalWhisperProvider: {e}")
+                return None
+            except Exception as e:
+                logger.warning(f"Failed to create LocalWhisperProvider: {e}")
+                return None
+        
         api_key = self.config.get_api_key(provider_type)
         if not api_key:
             return None
             
         try:
-            # Lazy imports
-            if provider_type == ProviderType.GROQ:
-                from .stt.groq import GroqSTTProvider
-                model = self.config.stt_model or "whisper-large-v3-turbo"
-                return GroqSTTProvider(api_key, model=model)
-            elif provider_type == ProviderType.DEEPGRAM:
-                from .stt.deepgram import DeepgramSTTProvider
-                model = self.config.stt_model or "nova-3"
-                return DeepgramSTTProvider(api_key, model=model)
-            elif provider_type == ProviderType.GEMINI:
+            # Simplified: Only Gemini as cloud STT fallback
+            if provider_type == ProviderType.GEMINI:
                 from .stt.gemini import GeminiSTTProvider
                 model = self.config.stt_model or GeminiModels.DEFAULT_STT
                 return GeminiSTTProvider(api_key, model_name=model)
-            elif provider_type == ProviderType.OPENAI:
-                from .stt.openai import OpenAISTTProvider
-                model = self.config.stt_model or OpenAIModels.DEFAULT_STT
-                return OpenAISTTProvider(api_key, model=model)
+            # Other provider types (GROQ, DEEPGRAM, OPENAI) removed in Phase 3
+            # They were redundant with local faster-whisper
+            else:
+                logger.debug(f"STT provider {provider_type.value} not supported (removed in Phase 3)")
         except ImportError as e:
             logger.warning(f"Failed to import {provider_type.value} STT provider: {e}")
         except Exception as e:
@@ -380,7 +410,13 @@ class ProviderFactory:
         return None
 
     def _create_streaming_stt_provider(self, mode: Any) -> Optional[StreamingSTTProvider]:
-        """Create a Streaming STT provider instance."""
+        """
+        Create a Streaming STT provider instance.
+        
+        Simplified in Phase 3 - only supports Deepgram streaming:
+        - DEEPGRAM: Nova-3 with acoustic endpointing
+        - DEEPGRAM_FLUX: Flux with semantic endpointing (recommended)
+        """
         from .config import StreamingMode
         
         try:
@@ -398,48 +434,14 @@ class ProviderFactory:
                 model = self.config.streaming_stt_model or "flux-general-en"
                 return DeepgramFluxProvider(api_key, model=model)
                 
-            elif mode == StreamingMode.ASSEMBLYAI:
-                api_key = self.config.assemblyai_api_key
-                if not api_key: return None
-                from .stt.assemblyai_streaming import AssemblyAIStreamingProvider
-                model = self.config.streaming_stt_model or "best"
-                return AssemblyAIStreamingProvider(api_key, model=model)
-                
-            elif mode == StreamingMode.OPENAI_REALTIME:
-                api_key = self.config.openai_api_key
-                if not api_key: return None
-                from .stt.openai_realtime import OpenAIRealtimeProvider
-                model = self.config.streaming_stt_model or OpenAIModels.REALTIME
-                return OpenAIRealtimeProvider(api_key, model=model)
-                
             elif mode == StreamingMode.AUTO:
-                # AUTO mode: Prefer streaming provider that matches preferred_stt,
-                # then fall back to any available streaming provider.
-                # This ensures users who select "OpenAI STT" don't get Deepgram streaming.
-                preferred = self.config.preferred_stt
-                
-                # Map preferred_stt to matching streaming mode
-                if preferred == ProviderType.DEEPGRAM and self.config.deepgram_api_key:
+                # AUTO mode: Only Deepgram streaming is supported after Phase 3 simplification
+                # Prefer Flux (semantic endpointing) over Nova-3 (acoustic)
+                if self.config.deepgram_api_key:
                     return self._create_streaming_stt_provider(StreamingMode.DEEPGRAM_FLUX)
-                if preferred == ProviderType.ASSEMBLYAI and self.config.assemblyai_api_key:
-                    return self._create_streaming_stt_provider(StreamingMode.ASSEMBLYAI)
-                if preferred == ProviderType.OPENAI and self.config.openai_api_key:
-                    return self._create_streaming_stt_provider(StreamingMode.OPENAI_REALTIME)
                 
-                # For providers without streaming support (Gemini, Groq), 
-                # or if preferred is None (auto), fall back to default order
-                if preferred in (None, ProviderType.GEMINI, ProviderType.GROQ):
-                    # No streaming for Gemini/Groq batch STT, check if any streaming available
-                    if self.config.deepgram_api_key:
-                        return self._create_streaming_stt_provider(StreamingMode.DEEPGRAM_FLUX)
-                    if self.config.assemblyai_api_key:
-                        return self._create_streaming_stt_provider(StreamingMode.ASSEMBLYAI)
-                    if self.config.openai_api_key:
-                        return self._create_streaming_stt_provider(StreamingMode.OPENAI_REALTIME)
-                
-                # If preferred provider doesn't have streaming, don't use any
-                # (e.g., user explicitly selected Gemini STT)
-                logger.info(f"No streaming STT available for preferred provider: {preferred}")
+                # No streaming available without Deepgram key
+                logger.info("No streaming STT available (Deepgram API key required)")
                     
         except ImportError as e:
             logger.warning(f"Failed to import streaming provider for {mode}: {e}")

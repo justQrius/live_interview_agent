@@ -89,9 +89,9 @@ class TestProviderConfigStreaming:
     """Tests for StreamingMode in ProviderConfig."""
     
     def test_streaming_mode_default(self):
-        """Default streaming mode should be AUTO."""
+        """Default streaming mode should be DISABLED."""
         config = ProviderConfig()
-        assert config.streaming_mode == StreamingMode.AUTO
+        assert config.streaming_mode == StreamingMode.DISABLED
     
     def test_streaming_mode_from_dict(self):
         """StreamingMode should be parsed from dict."""
@@ -110,12 +110,6 @@ class TestProviderConfigStreaming:
         }
         config = ProviderConfig.from_dict(data)
         assert config.streaming_mode == StreamingMode.DISABLED
-    
-    def test_assemblyai_api_key(self):
-        """AssemblyAI API key should be stored."""
-        config = ProviderConfig(assemblyai_api_key="test_key")
-        assert config.has_api_key(ProviderType.ASSEMBLYAI)
-        assert config.get_api_key(ProviderType.ASSEMBLYAI) == "test_key"
 
 
 class TestStreamingSTTManager:
@@ -223,3 +217,196 @@ class TestEndpointingType:
         """Types should be accessible by value."""
         assert EndpointingType("silence") == EndpointingType.SILENCE
         assert EndpointingType("semantic") == EndpointingType.SEMANTIC
+
+
+class TestDeepgramErrorDetection:
+    """Tests for Deepgram 1011 error detection and reconnection."""
+    
+    def test_deepgram_session_detects_1011_error(self):
+        """Deepgram session should mark needs_reconnection on 1011 error."""
+        # Import here to avoid issues if Deepgram SDK not installed
+        try:
+            from src.providers.stt.deepgram_streaming import (
+                DeepgramStreamingSession,
+                DeepgramStreamingProvider,
+            )
+        except ImportError:
+            pytest.skip("Deepgram SDK not installed")
+        
+        # Create a mock provider and session
+        provider = MagicMock(spec=DeepgramStreamingProvider)
+        provider.model = "nova-3"
+        
+        config = StreamingConfig()
+        session = DeepgramStreamingSession(provider, config)
+        
+        # Initially should not need reconnection
+        assert session._needs_reconnection is False
+        
+        # Simulate 1011 error
+        error = Exception("received 1011 (internal error)")
+        session._on_error(error)
+        
+        # Should now be marked for reconnection
+        assert session._needs_reconnection is True
+        assert session._is_connected is False
+    
+    def test_deepgram_session_detects_1006_error(self):
+        """Deepgram session should mark needs_reconnection on 1006 abnormal close."""
+        try:
+            from src.providers.stt.deepgram_streaming import (
+                DeepgramStreamingSession,
+                DeepgramStreamingProvider,
+            )
+        except ImportError:
+            pytest.skip("Deepgram SDK not installed")
+        
+        provider = MagicMock(spec=DeepgramStreamingProvider)
+        provider.model = "nova-3"
+        
+        config = StreamingConfig()
+        session = DeepgramStreamingSession(provider, config)
+        
+        # Simulate 1006 error
+        error = Exception("received 1006 (abnormal closure)")
+        session._on_error(error)
+        
+        assert session._needs_reconnection is True
+    
+    def test_deepgram_session_detects_NET_0001_error(self):
+        """Deepgram session should mark needs_reconnection on NET-0001 error."""
+        try:
+            from src.providers.stt.deepgram_streaming import (
+                DeepgramStreamingSession,
+                DeepgramStreamingProvider,
+            )
+        except ImportError:
+            pytest.skip("Deepgram SDK not installed")
+        
+        provider = MagicMock(spec=DeepgramStreamingProvider)
+        provider.model = "nova-3"
+        
+        config = StreamingConfig()
+        session = DeepgramStreamingSession(provider, config)
+        
+        # Simulate NET-0001 error
+        error = Exception("NET-0001: network error")
+        session._on_error(error)
+        
+        assert session._needs_reconnection is True
+    
+    def test_deepgram_session_regular_error_no_reconnection(self):
+        """Regular errors should not trigger reconnection."""
+        try:
+            from src.providers.stt.deepgram_streaming import (
+                DeepgramStreamingSession,
+                DeepgramStreamingProvider,
+            )
+        except ImportError:
+            pytest.skip("Deepgram SDK not installed")
+        
+        provider = MagicMock(spec=DeepgramStreamingProvider)
+        provider.model = "nova-3"
+        
+        config = StreamingConfig()
+        session = DeepgramStreamingSession(provider, config)
+        
+        # Simulate regular error
+        error = Exception("some other error")
+        session._on_error(error)
+        
+        # Should not mark for reconnection
+        assert session._needs_reconnection is False
+    
+    def test_deepgram_session_reconnection_constants(self):
+        """Verify reconnection constants are configured correctly."""
+        try:
+            from src.providers.stt.deepgram_streaming import DeepgramStreamingSession
+        except ImportError:
+            pytest.skip("Deepgram SDK not installed")
+        
+        # Verify constants
+        assert DeepgramStreamingSession.KEEPALIVE_INTERVAL_S == 3.0  # 3s for safety margin
+        assert DeepgramStreamingSession.MAX_RECONNECT_ATTEMPTS == 5
+        assert DeepgramStreamingSession.RECONNECT_BASE_DELAY_S == 1.0
+        assert DeepgramStreamingSession.RECONNECT_MAX_DELAY_S == 60.0
+
+
+class TestStreamingSessionBaseClass:
+    """Tests for StreamingSession base class health signals."""
+    
+    def test_base_session_needs_reconnection_property(self):
+        """Base session should have needs_reconnection property."""
+        from src.providers.stt.streaming_base import StreamingSession, StreamingSTTProvider, StreamingConfig as BaseConfig
+        
+        # Create a minimal concrete implementation
+        class MockProvider(StreamingSTTProvider):
+            @property
+            def provider_name(self) -> str:
+                return "mock"
+            
+            @property
+            def supports_semantic_endpointing(self) -> bool:
+                return False
+            
+            async def connect(self, config) -> "MockSession":  # type: ignore
+                return MockSession(self, config)
+        
+        class MockSession(StreamingSession):
+            async def send_audio(self, audio_data: bytes) -> None:
+                pass
+            
+            async def close(self) -> None:
+                pass
+            
+            async def finalize(self):
+                return None
+        
+        provider = MockProvider("test_key")
+        session = MockSession(provider, StreamingConfig())
+        
+        # Initially should not need reconnection
+        assert session.needs_reconnection is False
+        
+        # Mark for reconnection
+        session.mark_needs_reconnection()
+        assert session.needs_reconnection is True
+        
+        # Clear flag
+        session.clear_reconnection_flag()
+        assert session.needs_reconnection is False
+
+
+class TestStreamingManagerReconnection:
+    """Tests for StreamingSTTManager reconnection with exponential backoff."""
+    
+    def test_manager_reconnection_constants(self):
+        """Verify manager reconnection constants."""
+        manager = StreamingSTTManager()
+        
+        assert manager.MAX_RECONNECT_ATTEMPTS == 5
+        assert manager.RECONNECT_BASE_DELAY_S == 1.0
+        assert manager.RECONNECT_MAX_DELAY_S == 30.0
+    
+    @pytest.mark.asyncio
+    async def test_manager_detects_session_needs_reconnection(self):
+        """Manager should detect when session needs reconnection."""
+        # Create mock session with needs_reconnection = True
+        mock_session = MagicMock()
+        mock_session.is_connected = True
+        mock_session.needs_reconnection = True
+        
+        mock_provider = MagicMock()
+        mock_provider.provider_name = "test"
+        mock_provider.supports_semantic_endpointing = False
+        
+        factory = MagicMock()
+        factory.get_streaming_stt_provider.return_value = mock_provider
+        
+        manager = StreamingSTTManager(factory)
+        manager._session = mock_session
+        manager._provider = mock_provider
+        manager._is_active = True
+        
+        # Manager should detect needs_reconnection
+        assert manager.needs_reconnection is True
