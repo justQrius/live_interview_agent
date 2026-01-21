@@ -33,6 +33,7 @@ try:
     from src.classification.query_reformulator import QueryReformulator
     from src.classification.question_splitter import QuestionSplitter
     from src.rag.enhanced_engine import EnhancedRAGEngine
+
     EXISTING_COMPONENTS_AVAILABLE = True
 except ImportError:
     EXISTING_COMPONENTS_AVAILABLE = False
@@ -53,7 +54,7 @@ class LiveKitInterviewCoachAgent:
     simpler wrapper approach (turn_detector_wrapper.py).
     """
 
-    def __init__(self, broadcast_callback=None):
+    def __init__(self, broadcast_callback=None, vector_store=None, context_manager=None):
         if not LIVEKIT_AGENTS_AVAILABLE:
             raise ImportError(
                 "livekit-agents package not installed. "
@@ -84,10 +85,20 @@ class LiveKitInterviewCoachAgent:
         self.question_splitter = QuestionSplitter()
         rag_engine = None
 
-        try:
-            rag_engine = EnhancedRAGEngine()
-        except Exception as e:
-            logger.warning(f"Could not initialize RAG engine: {e}")
+        # Initialize EnhancedRAGEngine if dependencies are provided
+        if vector_store is not None and EXISTING_COMPONENTS_AVAILABLE:
+            try:
+                rag_engine = EnhancedRAGEngine(
+                    vector_store,
+                    context_manager=context_manager
+                )
+                logger.info("[Agent] EnhancedRAGEngine initialized successfully")
+            except Exception as e:
+                logger.warning(f"[Agent] Could not initialize RAG engine: {e}")
+        elif vector_store is None:
+            logger.info("[Agent] RAG engine not available - running without contextual retrieval")
+        else:
+            logger.warning("[Agent] VectorStore provided but EnhancedRAGEngine not available")
 
         self.rag_engine = rag_engine
 
@@ -364,16 +375,26 @@ Structure your response with:
 
 
 # Agent factory function
-def create_interview_coach_agent(broadcast_callback=None) -> LiveKitInterviewCoachAgent:
+def create_interview_coach_agent(
+    broadcast_callback=None,
+    vector_store=None,
+    context_manager=None
+) -> LiveKitInterviewCoachAgent:
     """
     Factory function to create agent instance.
 
     Args:
         broadcast_callback: Optional async callable for WebSocket broadcasting.
                           Signature: callback(message_json: str) -> None
+        vector_store: Optional VectorStore instance for RAG retrieval.
+        context_manager: Optional context manager for RAG expansion.
 
     Returns:
         Initialized LiveKitInterviewCoachAgent instance
     """
 
-    return LiveKitInterviewCoachAgent(broadcast_callback=broadcast_callback)
+    return LiveKitInterviewCoachAgent(
+        broadcast_callback=broadcast_callback,
+        vector_store=vector_store,
+        context_manager=context_manager
+    )
