@@ -668,14 +668,16 @@ class SidecarServer:
         # Phase 2: Initialize LiveKit Session Manager (AgentSession approach)
         if self.livekit_session_manager_enabled and LIVEKIT_AVAILABLE and get_session_manager is not None:
             try:
-                # Create singleton session manager with broadcast callback
+                # Create singleton session manager with broadcast callback and RAG dependencies
                 self.livekit_session_manager = get_session_manager(
                     config={
                         'turn_detection_enabled': True,
                         'max_history_turns': 10,
                         'inference_timeout': 3.0
                     },
-                    broadcast_callback=self._broadcast_message
+                    broadcast_callback=self._broadcast_message,
+                    vector_store=self.vector_store,
+                    context_manager=self.context_manager
                 )
 
                 # Start the session manager

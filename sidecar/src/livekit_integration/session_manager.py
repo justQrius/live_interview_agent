@@ -23,6 +23,14 @@ except ImportError:
 
 from .agent import create_interview_coach_agent
 
+# ONNX inference executor for semantic turn detection (no JobContext required)
+try:
+    from .onnx_inference_executor import get_onnx_executor
+    ONNX_EXECUTOR_AVAILABLE = True
+except ImportError:
+    ONNX_EXECUTOR_AVAILABLE = False
+    get_onnx_executor = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +51,8 @@ class LiveKitSessionManager:
     turn_detector_wrapper.py approach. Both can coexist.
     """
 
-    def __init__(self, config: Optional[Dict] = None, broadcast_callback=None):
+    def __init__(self, config: Optional[Dict] = None, broadcast_callback=None,
+                 vector_store=None, context_manager=None):
         """
         Initialize the session manager.
 
@@ -54,6 +63,8 @@ class LiveKitSessionManager:
                 - inference_timeout: float (default: 3.0)
             broadcast_callback: Optional async callable for WebSocket broadcasting.
                                 Signature: callback(message_json: str) -> None
+            vector_store: Optional VectorStore instance for RAG retrieval.
+            context_manager: Optional context manager for RAG expansion.
         """
 
         if not LIVEKIT_AGENTS_AVAILABLE:
@@ -66,6 +77,8 @@ class LiveKitSessionManager:
         self.session: Optional[AgentSession] = None
         self.agent = None
         self._broadcast_callback = broadcast_callback
+        self._vector_store = vector_store
+        self._context_manager = context_manager
         self._is_running = False
 
         # Configuration
@@ -78,6 +91,12 @@ class LiveKitSessionManager:
         self._inference_timeout = self.config.get(
             'inference_timeout', 3.0
         )
+        self._use_semantic_detection = self.config.get(
+            'use_semantic_detection', True
+        )
+
+        # ONNX inference executor for semantic turn detection
+        self._onnx_executor = None
 
         logger.info("LiveKit Session Manager initialized")
 
@@ -95,17 +114,44 @@ class LiveKitSessionManager:
         logger.info("Starting LiveKit Session Manager...")
 
         try:
-            # Create agent instance with broadcast callback
+            # Create agent instance with broadcast callback and RAG dependencies
             self.agent = create_interview_coach_agent(
-                broadcast_callback=self._broadcast_callback
+                broadcast_callback=self._broadcast_callback,
+                vector_store=self._vector_store,
+                context_manager=self._context_manager
             )
+
+            # Initialize ONNX inference executor for semantic turn detection
+            # This provides ~25ms latency without requiring LiveKit JobContext
+            if self._turn_detection_enabled and self._use_semantic_detection and ONNX_EXECUTOR_AVAILABLE:
+                try:
+                    self._onnx_executor = get_onnx_executor()
+                    await self._onnx_executor.initialize()
+                    logger.info(
+                        f"Semantic turn detection enabled via ONNX executor "
+                        f"(model_path='{self._onnx_executor.model_path}')"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to initialize ONNX semantic turn detector: {e}. "
+                        f"Falling back to timing-based detection."
+                    )
+                    self._onnx_executor = None
+            elif self._turn_detection_enabled and not ONNX_EXECUTOR_AVAILABLE:
+                logger.info(
+                    "ONNX executor not available, falling back to timing-based turn detection"
+                )
 
             # Configure turn detector if enabled
             # Note: For non-AgentSession deployments, we skip loading MultilingualModel
             # to avoid requiring a LiveKit job context. Turn detection will be handled
-            # through the turn_detector_wrapper in handle_transcript().            turn_detector_model = None
+            # through the ONNX executor or wrapper in handle_transcript().
+            turn_detector_model = None
             if self._turn_detection_enabled:
-                logger.info("Turn detection enabled (using wrapper in handle_transcript)")
+                if self._onnx_executor:
+                    logger.info("Turn detection enabled (using ONNX semantic detection)")
+                else:
+                    logger.info("Turn detection enabled (using wrapper in handle_transcript)")
             else:
                 logger.info("Turn detection disabled by config")
 
@@ -186,23 +232,28 @@ class LiveKitSessionManager:
             if role == "user" and self._turn_detection_enabled:
                 # In a proper implementation, LiveKit's turn detector would
                 # automatically detect turn completion and call agent.on_user_turn_completed().
-                # For this wrapper approach, we simulate that by directly calling it.
-
-                # Check if user turn is complete using turn detector
-                # (This would normally happen automatically in AgentSession)
-                from .turn_detector_wrapper import get_turn_detector
-
-                detector = get_turn_detector()
+                # We use ONNX executor for semantic detection or fallback to wrapper.
 
                 # Build conversation history
                 history = self._extract_chat_context_history()
 
                 # Check if turn is complete
-                is_finished, confidence = await detector.check(
-                    text=transcript,
-                    conversation_history=history[-self._max_history_turns:],
-                    timeout=self._inference_timeout
-                )
+                if self._onnx_executor:
+                    # Use ONNX semantic turn detection (faster, no JobContext required)
+                    is_finished, confidence = await self._onnx_executor.predict_end_of_turn(
+                        messages=history[-self._max_history_turns:],
+                        timeout=self._inference_timeout
+                    )
+                else:
+                    # Fallback to wrapper-based turn detection
+                    from .turn_detector_wrapper import get_turn_detector
+
+                    detector = get_turn_detector()
+                    is_finished, confidence = await detector.check(
+                        text=transcript,
+                        conversation_history=history[-self._max_history_turns:],
+                        timeout=self._inference_timeout
+                    )
 
                 if is_finished and confidence >= 0.5:
                     logger.info(
@@ -299,6 +350,11 @@ class LiveKitSessionManager:
         logger.info("Stopping LiveKit Session Manager...")
 
         try:
+            # Cleanup ONNX executor
+            if self._onnx_executor:
+                await self._onnx_executor.close()
+                self._onnx_executor = None
+
             # Cleanup session
             if self.session:
                 # AgentSession would have cleanup methods in a real deployment
@@ -344,7 +400,9 @@ _session_manager_instance: Optional[LiveKitSessionManager] = None
 
 def get_session_manager(
     config: Optional[Dict] = None,
-    broadcast_callback=None
+    broadcast_callback=None,
+    vector_store=None,
+    context_manager=None
 ) -> LiveKitSessionManager:
     """
     Get or create singleton session manager.
@@ -352,6 +410,8 @@ def get_session_manager(
     Args:
         config: Optional configuration dictionary
         broadcast_callback: Optional async callable for WebSocket broadcasting.
+        vector_store: Optional VectorStore instance for RAG retrieval.
+        context_manager: Optional context manager for RAG expansion.
 
     Returns:
         LiveKitSessionManager instance
@@ -365,7 +425,9 @@ def get_session_manager(
     if _session_manager_instance is None:
         _session_manager_instance = LiveKitSessionManager(
             config=config,
-            broadcast_callback=broadcast_callback
+            broadcast_callback=broadcast_callback,
+            vector_store=vector_store,
+            context_manager=context_manager
         )
     elif config is not None:
         # Config provided but instance exists
