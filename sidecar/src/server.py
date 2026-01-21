@@ -50,6 +50,9 @@ from src.protocol import (
     create_enhanced_answer_complete_message,
     create_document_type_suggestions_message,
     create_document_deleted_message,
+    # Phase 10: LiveKit metrics
+    create_livekit_metrics_message,
+    create_livekit_health_message,
 )
 from src.audio.diarization import SpeakerRecognizer
 from src.audio.capture import AudioCapture, AudioCaptureError
@@ -90,6 +93,21 @@ from src.providers.stt.streaming_base import StreamingConfig, EndOfTurnEvent, En
 from src.classification.utterance_accumulator import UtteranceAccumulator
 from src.classification.accumulator_models import AccumulatorConfig
 from src.protocol import create_accumulating_message
+
+# LiveKit Turn Detection Integration
+LIVEKIT_AVAILABLE = False
+try:
+    from src.livekit_integration.turn_detector_wrapper import get_turn_detector
+    from src.livekit_integration.config import LiveKitConfig
+    from src.livekit_integration.session_manager import get_session_manager, reset_session_manager
+    LIVEKIT_AVAILABLE = True
+except ImportError as e:
+    # LiveKit packages not installed
+    # Note: logger not defined yet, so use print() for this warning
+    print(f"Warning: LiveKit packages not installed ({e}). Set LIVEKIT_TURN_DETECTION_ENABLED=false in .env")
+    LiveKitConfig = None
+    get_session_manager = None
+    reset_session_manager = None
 
 # Phase 5: Gemini Features
 from src.context.gemini_cache import GeminiCacheManager
@@ -237,6 +255,15 @@ class SidecarServer:
         self.streaming_stt_manager: Optional[StreamingSTTManager] = None
         self.streaming_stt_enabled = True  # Feature flag for rollout
         
+        # LiveKit Turn Detection for semantic endpointing
+        self.livekit_turn_detector = None
+        self.livekit_turn_detection_enabled = True  # Feature flag for rollout
+        self.livekit_config: Optional[LiveKitConfig] = None
+
+        # Phase 2: LiveKit Session Manager (AgentSession approach)
+        self.livekit_session_manager = None
+        self.livekit_session_manager_enabled = True  # Feature flag for rollout
+        
         # Phase 8: RAG Persistence
         self.rag_manifest = RagManifest()
         
@@ -251,6 +278,32 @@ class SidecarServer:
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return task
+
+    async def _broadcast_message(self, message_json: str):
+        """
+        Broadcast a message to all connected WebSocket clients.
+
+        This is used by the LiveKit Session Manager to send messages
+        to the Tauri frontend.
+
+        Args:
+            message_json: JSON string to broadcast
+        """
+        if not self.clients:
+            logger.debug("No clients connected, skipping broadcast")
+            return
+
+        # Send to all connected clients asynchronously
+        send_tasks = []
+        for client in self.clients:
+            send_tasks.append(client.send(message_json))
+
+        # Wait for all sends to complete (or fail gracefully)
+        if send_tasks:
+            try:
+                await asyncio.gather(*send_tasks, return_exceptions=True)
+            except Exception as e:
+                logger.error(f"Error broadcasting message: {e}")
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -415,6 +468,9 @@ class SidecarServer:
             # Listening Control
             MessageType.PAUSE_LISTENING: self._handle_pause_listening,
             MessageType.RESUME_LISTENING: self._handle_resume_listening,
+            # Phase 10: LiveKit Turn Detection Metrics
+            MessageType.GET_LIVEKIT_METRICS: self._handle_get_livekit_metrics,
+            MessageType.GET_LIVEKIT_HEALTH: self._handle_get_livekit_health,
         }
 
         handler = handlers.get(message.type)
@@ -586,6 +642,51 @@ class SidecarServer:
                     self.streaming_stt_manager = None
             else:
                 logger.info("Streaming STT disabled by configuration")
+
+        # Phase 10: Initialize LiveKit Turn Detection for semantic endpointing
+        if self.livekit_turn_detection_enabled and LIVEKIT_AVAILABLE:
+            try:
+                # Load configuration from environment
+                self.livekit_config = LiveKitConfig.from_env()
+
+                if self.livekit_config.livekit_turn_detection_enabled:
+                    self.livekit_turn_detector = get_turn_detector()
+
+                    # Initialize model (lazy loading happens on first use, but we can pre-load here if desired)
+                    await self.livekit_turn_detector.initialize()
+
+                    logger.info(f"LiveKit Turn Detection enabled (model={self.livekit_config.turn_detector_model})")
+                else:
+                    logger.info("LiveKit Turn Detection disabled by configuration")
+                    self.livekit_turn_detector = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize LiveKit Turn Detection: {e}")
+                self.livekit_turn_detector = None
+        elif not LIVEKIT_AVAILABLE:
+            logger.info("LiveKit packages not available, disabling LiveKit Turn Detection")
+
+        # Phase 2: Initialize LiveKit Session Manager (AgentSession approach)
+        if self.livekit_session_manager_enabled and LIVEKIT_AVAILABLE and get_session_manager is not None:
+            try:
+                # Create singleton session manager with broadcast callback
+                self.livekit_session_manager = get_session_manager(
+                    config={
+                        'turn_detection_enabled': True,
+                        'max_history_turns': 10,
+                        'inference_timeout': 3.0
+                    },
+                    broadcast_callback=self._broadcast_message
+                )
+
+                # Start the session manager
+                await self.livekit_session_manager.start()
+
+                logger.info("LiveKit Session Manager (AgentSession approach) enabled")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LiveKit Session Manager: {e}")
+                self.livekit_session_manager = None
+        elif not LIVEKIT_AVAILABLE:
+            logger.info("LiveKit packages not available, disabling Session Manager")
 
         status_msg = create_status_message(self.session_state.status)
         await websocket.send(status_msg.to_json())
@@ -1586,6 +1687,29 @@ To get started:
             )
             await websocket.send(error_msg.to_json())
     
+    def _build_livekit_conversation_history(self, max_turns: int = 10) -> List[dict]:
+        """
+        Build conversation history formatted for LiveKit turn detector.
+        
+        Args:
+            max_turns: Maximum number of conversation turns to include
+            
+        Returns:
+            List of dictionaries with 'role' and 'content' keys
+        """
+        history = []
+        
+        for turn in self.session_state.conversation_history[-max_turns:]:
+            # Map speaker to role for LiveKit
+            role = "user" if turn.speaker == Speaker.INTERVIEWER else "assistant"
+            
+            history.append({
+                "role": role,
+                "content": turn.text.strip()
+            })
+        
+        return history
+    
     def _build_preparation_prompt(self, chunks: list) -> str:
         """Build prompt for preparation generation from context chunks."""
         # Group chunks by source/type
@@ -2378,8 +2502,44 @@ Provide a concise, punchy version that hits the key points quickly."""
         if speaker != Speaker.INTERVIEWER:
             return
         
+        # Phase 10: Try LiveKit Turn Detection first (semantic endpointing)
+        # This provides conversation-aware turn detection with 50-160ms latency
+        livekit_turn_complete = None
+        if (self.livekit_turn_detection_enabled and 
+            self.livekit_turn_detector and
+            LIVEKIT_AVAILABLE):
+            try:
+                import time
+                livekit_start = time.time()
+                
+                # Build conversation history for LiveKit
+                history = self._build_livekit_conversation_history()
+                
+                # Check if turn is complete using LiveKit's semantic model
+                is_finished, livekit_confidence = await self.livekit_turn_detector.check(
+                    text=text,
+                    conversation_history=history
+                )
+                
+                livekit_latency = (time.time() - livekit_start) * 1000
+                logger.info(f"LiveKit turn detection: finished={is_finished} "
+                           f"(confidence={livekit_confidence:.2f}, latency={livekit_latency:.1f}ms)")
+                
+                # If LiveKit is confident the turn is complete, use it directly
+                if is_finished and livekit_confidence >= 0.6:
+                    livekit_turn_complete = True
+                    logger.info("LiveKit detected turn complete - bypassing accumulation")
+                # If LiveKit says incomplete, we still need to check with accumulator
+                # because LiveKit might be conservative
+                elif not is_finished:
+                    logger.info("LiveKit detected turn incomplete - deferring to accumulator")
+            
+            except Exception as e:
+                logger.warning(f"LiveKit turn detection failed: {e}. Falling back to accumulator.")
+        
         # Phase 7: Integrate with UtteranceAccumulator in hybrid mode
         # High-confidence semantic endpointing can bypass timing-based detection
+        # LiveKit or streaming STT already verified turn is complete, so we use the text directly
         if (self.accumulation_enabled and 
             hasattr(self, 'utterance_accumulator') and 
             self.utterance_accumulator):
@@ -2408,29 +2568,71 @@ Provide a concise, punchy version that hits the key points quickly."""
                 )
                 
                 if complete_utterance is None:
-                    # Still buffering
-                    buffer = self.utterance_accumulator.get_buffer(speaker.value)
-                    if buffer and self.utterance_accumulator.config.emit_accumulating_status:
-                        preview = self.utterance_accumulator.get_buffer_preview(speaker.value)
-                        accumulating_msg = create_accumulating_message(
-                            speaker=speaker.value,
-                            buffer_preview=preview,
-                            segment_count=buffer.segment_count,
-                            duration_s=buffer.duration_s
-                        )
-                        await self.broadcast(accumulating_msg)
-                    return
+                    # Still buffering according to accumulator
+                    # Check if LiveKit has a different opinion
+                    if livekit_turn_complete:
+                        # LiveKit says turn is complete despite accumulator's buffering
+                        # Override and proceed with original text
+                        logger.info("LiveKit override: Bypassing accumulator (turn detected complete)")
+                        # Use original text (not accumulated)
+                        logger.info(f"Proceeding with current text: {text[:80]}...")
+                    else:
+                        # Both agree - still buffering
+                        buffer = self.utterance_accumulator.get_buffer(speaker.value)
+                        if buffer and self.utterance_accumulator.config.emit_accumulating_status:
+                            preview = self.utterance_accumulator.get_buffer_preview(speaker.value)
+                            accumulating_msg = create_accumulating_message(
+                                speaker=speaker.value,
+                                buffer_preview=preview,
+                                segment_count=buffer.segment_count,
+                                duration_s=buffer.duration_s
+                            )
+                            await self.broadcast(accumulating_msg)
+                        return
                 
                 # Use accumulated text
                 text = complete_utterance.text
                 logger.info(f"Streaming accumulated complete: {text[:80]}...")
-        
-        # Question detection and answer generation
-        if self.question_detection_enabled:
-            is_question, q_confidence, q_type = await self.question_detector.is_actionable_question_async(
-                text,
-                self.session_state.conversation_history
-            )
+
+        # Phase 2: Route through LiveKit Session Manager if available (Path 2)
+        # This provides the "proper" LiveKit integration with automatic turn detection
+        path2_used = False
+        if (self.livekit_session_manager_enabled and
+            self.livekit_session_manager and
+            self.session_state.status == "listening"):
+            try:
+                # Route transcript through LiveKit Session Manager
+                # The manager will handle turn detection and trigger the agent
+                speaker_name = speaker.value
+                logger.info(f"Routing to LiveKit Session Manager: [{speaker_name}] {text[:80]}...")
+
+                await self.livekit_session_manager.handle_transcript(
+                    transcript=text,
+                    speaker=speaker_name
+                )
+
+                # Path 2 handles the entire pipeline (turn detection + question detection + answer generation)
+                # so we can skip the rest of this processing
+                path2_used = True
+                logger.info("Path 2 (LiveKit Session Manager) processing complete, skipping Path 1 pipeline")
+            except Exception as e:
+                logger.warning(f"LiveKit Session Manager failed, falling back to Path 1: {e}")
+                path2_used = False
+
+        # Path 1: Question detection and answer generation (fallback if Path 2 not used)
+        # Skip if Path 2 successfully processed the turn
+        if not path2_used:
+            if self.question_detection_enabled:
+                is_question, q_confidence, q_type = await self.question_detector.is_actionable_question_async(
+                    text,
+                    self.session_state.conversation_history
+                )
+                logger.info(f"Streaming question detection: {q_type} (confidence={q_confidence:.2f})")
+
+                if is_question and q_confidence >= self.question_confidence_threshold:
+                    await self._process_question_pipeline(text, q_type, pipeline_start)
+                else:
+                    logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
             logger.info(f"Streaming question detection: {q_type} (confidence={q_confidence:.2f})")
             
             if is_question and q_confidence >= self.question_confidence_threshold:
@@ -2438,7 +2640,29 @@ Provide a concise, punchy version that hits the key points quickly."""
             else:
                 logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
         else:
-            await self._generate_answer_for_question(text, pipeline_start)
+            # Accumulation not enabled or accumulator not available
+            # Use LiveKit if available to verify turn completion before processing
+            proceed_to_answer = True
+            
+            if (self.livekit_turn_detection_enabled and 
+                self.livekit_turn_detector and
+                LIVEKIT_AVAILABLE):
+                try:
+                    history = self._build_livekit_conversation_history()
+                    is_finished, livekit_confidence = await self.livekit_turn_detector.check(
+                        text=text,
+                        conversation_history=history
+                    )
+                    
+                    if not is_finished and livekit_confidence < 0.5:
+                        # LiveKit says incomplete - wait for more speech
+                        proceed_to_answer = False
+                        logger.info(f"LiveKit detected incomplete turn (confidence={livekit_confidence:.2f}), waiting...")
+                except Exception as e:
+                    logger.warning(f"LiveKit turn detection failed: {e}. Proceeding with current turn.")
+            
+            if proceed_to_answer:
+                await self._generate_answer_for_question(text, pipeline_start)
     
     def _on_streaming_error(self, error: Exception) -> None:
         """Handle streaming STT error."""
@@ -3435,14 +3659,129 @@ Provide a concise, punchy version that hits the key points quickly."""
             await self.broadcast(status_msg)
             
             logger.info("Listening resumed - live transcription active")
-            
+
         except Exception as e:
             logger.error(f"Failed to resume listening: {e}")
+
+    async def _handle_get_livekit_metrics(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle GET_LIVEKIT_METRICS message.
+
+        Returns LiveKit turn detection metrics in requested format.
+        """
+        try:
+            if not LIVEKIT_AVAILABLE or self.livekit_turn_detector is None:
+                error_msg = create_error_message(
+                    "LiveKit not available or not initialized",
+                    code="ERR_LIVEKIT_UNAVAILABLE"
+                )
+                await websocket.send(error_msg.to_json())
+                return
+
+            # Get metrics collector
+            from src.livekit_integration.livekit_metrics import get_metrics_collector
+            collector = get_metrics_collector()
+
+            # Get requested format (default: json)
+            data = message.data or {}
+            format_ = data.get("format", "json").lower()
+
+            # Get metrics based on format
+            if format_ == "json":
+                stats = collector.get_stats()
+                response_msg = create_livekit_metrics_message(stats, format="json")
+            elif format_ == "prometheus":
+                prometheus_text = collector.export_prometheus()
+                response_msg = create_livekit_metrics_message(
+                    {"prometheus": prometheus_text},
+                    format="prometheus"
+                )
+            elif format_ == "csv":
+                csv_text = collector.export_csv()
+                response_msg = create_livekit_metrics_message(
+                    {"csv": csv_text},
+                    format="csv"
+                )
+            else:
+                error_msg = create_error_message(
+                    f"Unsupported format: {format_}. Supported: json, prometheus, csv",
+                    code="ERR_INVALID_FORMAT"
+                )
+                await websocket.send(error_msg.to_json())
+                return
+
+            await websocket.send(response_msg.to_json())
+            logger.info(f"LiveKit metrics sent (format={format_})")
+
+        except Exception as e:
+            logger.error(f"Failed to get LiveKit metrics: {e}")
             error_msg = create_error_message(
-                f"Failed to resume listening: {e}",
-                code="ERR_RESUME_FAILED"
+                f"Failed to get metrics: {e}",
+                code="ERR_METRICS_ERROR"
             )
             await websocket.send(error_msg.to_json())
+
+    async def _handle_get_livekit_health(
+        self,
+        websocket: ServerConnection,
+        message: Message
+    ) -> None:
+        """
+        Handle GET_LIVEKIT_HEALTH message.
+
+        Returns LiveKit health status (simple health check).
+        """
+        try:
+            if not LIVEKIT_AVAILABLE:
+                # LiveKit not installed
+                response_msg = create_livekit_health_message(
+                    status="unhealthy",
+                    uptime_seconds=0,
+                    total_checks=0,
+                    error_rate=0,
+                    avg_latency_ms=0,
+                    last_check_time=None
+                )
+            elif self.livekit_turn_detector is None:
+                # LiveKit available but not initialized
+                response_msg = create_livekit_health_message(
+                    status="degraded",
+                    uptime_seconds=0,
+                    total_checks=0,
+                    error_rate=0,
+                    avg_latency_ms=0,
+                    last_check_time=None
+                )
+            else:
+                # LiveKit initialized, get real health
+                from src.livekit_integration.livekit_metrics import get_metrics_collector
+                collector = get_metrics_collector()
+                health = collector.get_health_check()
+
+                response_msg = create_livekit_health_message(
+                    status=health["status"],
+                    uptime_seconds=health["uptime_seconds"],
+                    total_checks=health["total_checks"],
+                    error_rate=health["error_rate"],
+                    avg_latency_ms=health["avg_latency_ms"],
+                    last_check_time=health.get("last_check_time")
+                )
+
+            await websocket.send(response_msg.to_json())
+            logger.debug(f"LiveKit health check sent: status={response_msg.data.get('status')}")
+
+        except Exception as e:
+            logger.error(f"Failed to get LiveKit health: {e}")
+            error_msg = create_error_message(
+                f"Failed to get health: {e}",
+                code="ERR_HEALTH_ERROR"
+            )
+            await websocket.send(error_msg.to_json())
+
 
     def _retrieve_context(self, question: str) -> tuple[list[str], ConfidenceLevel]:
         """
