@@ -65,13 +65,16 @@ class StreamingConfig:
     # Endpointing settings
     enable_endpointing: bool = True
     endpointing_timeout_ms: int = 1000  # Silence before triggering end
-    # Interim results settings  
+    # Interim results settings
     emit_interim_results: bool = True
     interim_results_interval_ms: int = 100
     # Audio settings
     sample_rate: int = 16000
     encoding: str = "linear16"  # pcm_s16le
     channels: int = 1
+    # Priority control: if False, only emit interim results, no turn signals
+    # Used when higher-priority semantic endpointing (e.g., LiveKit) is active
+    emit_turn_signals: bool = True
     # Provider-specific options
     extra_options: dict = field(default_factory=dict)
 

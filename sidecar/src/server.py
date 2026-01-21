@@ -685,6 +685,13 @@ class SidecarServer:
                 await self.livekit_session_manager.start()
 
                 logger.info("LiveKit Session Manager (AgentSession approach) enabled")
+
+                # LiveKit semantic detection is now active with higher priority
+                # Disable Deepgram/streaming turn signals to avoid conflicts
+                if self.streaming_stt_manager and self.streaming_stt_manager.is_active:
+                    self.streaming_stt_manager.disable_turn_signals()
+                    logger.info("[Priority] LiveKit semantic detection active - disabled streaming turn signals to avoid conflicts")
+                    logger.info("[Priority] Streaming STT will only provide interim transcripts for display")
             except Exception as e:
                 logger.warning(f"Failed to initialize LiveKit Session Manager: {e}")
                 self.livekit_session_manager = None

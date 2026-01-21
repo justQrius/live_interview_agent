@@ -75,6 +75,7 @@ class StreamingSTTManager:
         self._is_active = False
         self._reconnect_attempts = 0
         self._stored_config: Optional[StreamingConfig] = None
+        self._emit_turn_signals: bool = True  # Whether to emit turn signals (can be disabled for LiveKit priority)
     
     @property
     def is_active(self) -> bool:
@@ -98,6 +99,21 @@ class StreamingSTTManager:
     def supports_semantic_endpointing(self) -> bool:
         """Check if current provider supports semantic endpointing."""
         return self._provider.supports_semantic_endpointing if self._provider else False
+    
+    @property
+    def emit_turn_signals(self) -> bool:
+        """Whether to emit turn signals (can be disabled for higher-priority semantic detection)."""
+        return self._emit_turn_signals
+    
+    def disable_turn_signals(self) -> None:
+        """Disable turn signals - streaming provider only emits interim results."""
+        self._emit_turn_signals = False
+        logger.info("[StreamingSTT] Turn signals disabled (LiveKit semantic will handle)")
+    
+    def enable_turn_signals(self) -> None:
+        """Enable turn signals - streaming provider emits end-of-turn events."""
+        self._emit_turn_signals = True
+        logger.info("[StreamingSTT] Turn signals enabled (streaming provider handles)")
     
     def set_factory(self, factory: "ProviderFactory") -> None:
         """Set the provider factory."""
@@ -431,13 +447,20 @@ class StreamingSTTManager:
     
     async def _handle_end_of_turn(self, event: EndOfTurnEvent) -> None:
         """Handle end of turn event from provider."""
-        if self._callbacks.on_end_of_turn:
+        # Only emit turn signals if enabled (can be disabled for LiveKit priority)
+        if self._emit_turn_signals and self._callbacks.on_end_of_turn:
             await self._call_callback(
                 self._callbacks.on_end_of_turn,
                 event.final_transcript,
                 self._current_speaker,
                 event.confidence,
                 event.endpointing_type,
+            )
+        elif not self._emit_turn_signals:
+            # Log that we're skipping turn signal due to higher-priority semantic detection
+            logger.debug(
+                f"[StreamingSTT] Skipping turn signal for: {event.final_transcript[:50]}... "
+                f"(LiveKit semantic has priority)"
             )
     
     async def _call_callback(self, callback: Callable, *args) -> None:
