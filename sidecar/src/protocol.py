@@ -79,6 +79,12 @@ class MessageType(str, Enum):
     RAG_STATE = "RAG_STATE"  # Phase 8: Response with existing RAG state
     CACHE_REFRESH_COMPLETE = "CACHE_REFRESH_COMPLETE"  # Phase 8: Cache refresh done
     DATA_CLEARED = "DATA_CLEARED"  # Phase 8: All data cleared confirmation
+
+    # Phase 10: LiveKit Turn Detection - Monitoring & Metrics
+    GET_LIVEKIT_METRICS = "GET_LIVEKIT_METRICS"  # Client -> Server: Request LiveKit metrics
+    GET_LIVEKIT_HEALTH = "GET_LIVEKIT_HEALTH"  # Client -> Server: Request LiveKit health status
+    LIVEKIT_METRICS = "LIVEKIT_METRICS"  # Server -> Client: LiveKit metrics data
+    LIVEKIT_HEALTH = "LIVEKIT_HEALTH"  # Server -> Client: LiveKit health check status
     
     # Listening Control - Server -> Client
     LISTENING_PAUSED = "LISTENING_PAUSED"  # Confirm listening paused
@@ -593,7 +599,7 @@ def create_data_cleared_message(
 ) -> Message:
     """
     Create a DATA_CLEARED message.
-    
+
     Args:
         success: Whether clearing succeeded
         cleared_items: Dict with counts of cleared items
@@ -607,3 +613,60 @@ def create_data_cleared_message(
             "error": error
         }
     )
+
+
+# Phase 10: LiveKit Turn Detection Metrics Helper Functions
+
+
+def create_livekit_metrics_message(
+    metrics: dict,
+    format: str = "json"
+) -> Message:
+    """
+    Create a LIVEKIT_METRICS message.
+
+    Args:
+        metrics: Metrics data (from LiveKitMetricsCollector.get_stats())
+        format: Export format ("json", "prometheus", "csv")
+    """
+    return Message(
+        type=MessageType.LIVEKIT_METRICS,
+        data={
+            "metrics": metrics,
+            "format": format,
+            "timestamp": __import__("time").time()
+        }
+    )
+
+
+def create_livekit_health_message(
+    status: str,
+    uptime_seconds: float,
+    total_checks: int,
+    error_rate: float,
+    avg_latency_ms: float,
+    last_check_time: str | None = None
+) -> Message:
+    """
+    Create a LIVEKIT_HEALTH message.
+
+    Args:
+        status: Health status ("healthy", "warning", "unhealthy", "degraded")
+        uptime_seconds: Uptime in seconds
+        total_checks: Total number of checks performed
+        error_rate: Error rate (0.0 - 1.0)
+        avg_latency_ms: Average latency in milliseconds
+        last_check_time: ISO timestamp of last check (if any)
+    """
+    return Message(
+        type=MessageType.LIVEKIT_HEALTH,
+        data={
+            "status": status,
+            "uptimeSeconds": uptime_seconds,
+            "totalChecks": total_checks,
+            "errorRate": error_rate,
+            "avgLatencyMs": avg_latency_ms,
+            "lastCheckTime": last_check_time
+        }
+    )
+
