@@ -372,6 +372,31 @@ class LiveKitSessionManager:
             logger.error(f"Error stopping session manager: {e}", exc_info=True)
             raise
 
+    def set_rag_dependencies(self, vector_store=None, context_manager=None) -> None:
+        """
+        Set or update RAG dependencies after session manager initialization.
+
+        This allows updating the agent's RAG dependencies lazily after they
+        become available from async initialization. Follows the same pattern as
+        set_llm_provider, set_cached_content, set_candidate_profile, etc.
+
+        Args:
+            vector_store: Optional VectorStore instance for RAG retrieval.
+            context_manager: Optional context manager for RAG expansion.
+        """
+        if self.agent:
+            # Update agent's RAG dependencies
+            self.agent.set_rag_dependencies(vector_store, context_manager)
+            logger.info("[Session Manager] Forwarded RAG dependencies to agent")
+
+        # Store for future use (if agent not created yet, will pick these up)
+        if vector_store is not None:
+            self._vector_store = vector_store
+        if context_manager is not None:
+            self._context_manager = context_manager
+
+        logger.info("[Session Manager] RAG dependencies updated")
+
     @property
     def is_running(self) -> bool:
         """

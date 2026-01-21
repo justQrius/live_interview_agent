@@ -104,6 +104,33 @@ class LiveKitInterviewCoachAgent:
 
         logger.info("LiveKit Interview Coach Agent initialized")
 
+    def set_rag_dependencies(self, vector_store=None, context_manager=None) -> None:
+        """
+        Set or update RAG dependencies after agent initialization.
+
+        This allows updating the RAG engine lazily after it becomes available,
+        following the same pattern as set_llm_provider, set_cached_content, etc.
+
+        Args:
+            vector_store: Optional VectorStore instance for RAG retrieval.
+            context_manager: Optional context manager for RAG expansion.
+        """
+        if vector_store is not None and EXISTING_COMPONENTS_AVAILABLE:
+            try:
+                # Create new RAG engine with updated dependencies
+                self.rag_engine = EnhancedRAGEngine(
+                    vector_store,
+                    context_manager=context_manager
+                )
+                logger.info("[Agent] RAG dependencies updated successfully")
+            except Exception as e:
+                logger.warning(f"[Agent] Failed to update RAG dependencies: {e}", exc_info=True)
+        else:
+            logger.debug("[Agent] RAG dependencies unchanged (vector_store=None)")
+
+        logger.info("[Agent] RAG engine type after update: " + 
+                   (type(self.rag_engine).__name__ if self.rag_engine else "None"))
+
     async def on_user_turn_completed(
         self,
         turn_ctx: 'ChatContext',
