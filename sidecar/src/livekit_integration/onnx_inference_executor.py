@@ -98,17 +98,42 @@ class OnnxInferenceExecutor:
                 except Exception as e:
                     logger.warning(f"CUDA not available, falling back to CPU: {e}")
 
-            # Check if model files exist
-            model_file = os.path.join(self.model_path, "model.onnx")
-            if not os.path.exists(model_file):
+            # Check if model files exist - support both model.onnx and model_quantized.onnx
+            from pathlib import Path
+            model_base = Path(self.model_path)
+            
+            # Try multiple possible model filenames
+            possible_files = [
+                model_base / "model.onnx",
+                model_base / "model_quantized.onnx",
+            ]
+            
+            model_file = None
+            for file in possible_files:
+                if file.exists():
+                    model_file = file
+                    break
+            
+            if not model_file:
+                # Try as direct filename
+                if model_base.exists() and model_base.suffix == ".onnx":
+                    model_file = model_base
+                else:
+                    # None found
+                    pass
+            
+            if not model_file:
                 raise FileNotFoundError(
-                    f"ONNX model not found at {model_file}. "
-                    f"Download from: https://huggingface.co/livekit/turn-detector/tree/main/onnx"
+                    f"ONNX model not found in {self.model_path}. "
+                    f"Searched for: model.onnx, model_quantized.onnx. "
+                    f"Download from: https://huggingface.co/livekit/turn-detector"
                 )
+
+            logger.info(f"Found ONNX model: {model_file.name}")
 
             # Create ONNX Runtime session
             self._session = ort.InferenceSession(
-                model_file,
+                str(model_file),
                 providers=providers,
                 sess_options=self._create_session_options()
             )
@@ -129,6 +154,9 @@ class OnnxInferenceExecutor:
         except ImportError as e:
             logger.error(f"ONNX Runtime not installed: {e}")
             logger.error("Install with: pip install onnxruntime or onnxruntime-gpu")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to load ONNX model: {e}")
             raise
         except Exception as e:
             logger.error(f"Failed to load ONNX model: {e}")

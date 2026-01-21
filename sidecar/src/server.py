@@ -2313,7 +2313,18 @@ Provide a concise, punchy version that hits the key points quickly."""
                     logger.warning(f"Failed to add pre-loaded chunks (RAG degraded): {e}")
             else:
                 logger.info("RAG initialization complete - no pre-loaded chunks")
-                    
+
+            # Update LiveKit Session Manager with RAG dependencies if available
+            # This fixes the race condition where LiveKit agent was initialized with vector_store=None
+            if self.livekit_session_manager and hasattr(self.livekit_session_manager, 'set_rag_dependencies'):
+                try:
+                    self.livekit_session_manager.set_rag_dependencies(
+                        vector_store=vector_store,
+                        context_manager=self.context_manager
+                    )
+                    logger.info("[RAG] Updated LiveKit Session Manager with RAG dependencies")
+                except Exception as e:
+                    logger.warning(f"Failed to update LiveKit Session Manager RAG dependencies: {e}")
         except Exception as e:
             logger.warning(f"RAG initialization failed (session continues without RAG): {e}")
             # Don't raise - session continues without RAG support
