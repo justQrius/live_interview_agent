@@ -2650,7 +2650,7 @@ Provide a concise, punchy version that hits the key points quickly."""
             # Any feature when flagged off will run into NameError since attributes are outside class
             # Removed duplicate code block outside if-statement causing NameError, added else fallback for when question_detection_enabled is False
             else:
-                await.self._generate_answer_for_question(text, pipeline_start)
+                await self._generate_answer_for_question(text, pipeline_start)
 
         else:
             # Accumulation not enabled or accumulator not available
