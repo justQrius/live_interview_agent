@@ -171,6 +171,7 @@ class SessionState:
 
 
 class SidecarServer:
+    #SidecarServer owns STT, RAG, LLM, persistent session and grounded evaluation methods. this needs to be broken down into collaborators to improve class dependency
     """
     WebSocket server for the Live Interview Agent sidecar.
 
@@ -2646,12 +2647,11 @@ Provide a concise, punchy version that hits the key points quickly."""
                     await self._process_question_pipeline(text, q_type, pipeline_start)
                 else:
                     logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
-            logger.info(f"Streaming question detection: {q_type} (confidence={q_confidence:.2f})")
-            
-            if is_question and q_confidence >= self.question_confidence_threshold:
-                await self._process_question_pipeline(text, q_type, pipeline_start)
+            # Any feature when flagged off will run into NameError since attributes are outside class
+            # Removed duplicate code block outside if-statement causing NameError, added else fallback for when question_detection_enabled is False
             else:
-                logger.info(f"Skipping answer for non-question ({q_type}): {text[:50]}...")
+                await self._generate_answer_for_question(text, pipeline_start)
+
         else:
             # Accumulation not enabled or accumulator not available
             # Use LiveKit if available to verify turn completion before processing
