@@ -35,7 +35,7 @@ const ProviderRow: React.FC<{ provider: Provider; name: string; icon: string; co
       if (status.exists) {
         try {
             const key = await invoke<string>('get_api_key', { provider });
-            console.log(`[ProviderSettings] Retrieved ${provider} key:`, key.substring(0, 10) + '...');
+            // Never log key material, even partially.
             setInput(key);
         } catch (e) {
             console.error(`[ProviderSettings] Failed to retrieve ${provider} key:`, e);

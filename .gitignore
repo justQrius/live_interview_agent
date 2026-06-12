@@ -31,6 +31,22 @@ Thumbs.db
 .env
 .env.local
 
+# Runtime databases (SQLite, etc.) — never commit user data
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.db-journal
+
+# App data directories (in case anyone runs with cwd=repo)
+.live_interview_agent/
+data/
+.cache/
+sessions/
+vector_store/
+chroma/
+chroma_db/
+
 # Testing
 coverage/
 
