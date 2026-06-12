@@ -49,3 +49,6 @@ nul
 Screenshot*.png
 all_imports.txt
 definitions_*.txt
+ARCHITECTURE_EXPLANATION_COMPLETE.md
+BUG_FIXES_SUMMARY.md
+ENDPOINTING_PRIORITY_FIX.md

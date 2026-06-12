@@ -1,7 +1,7 @@
 {
   "name": "live_interview_agent",
   "version": "1.0.0",
-  "description": "AI-powered live interview agent that provides real-time contextual answers",
+  "description": "Real-time AI copilot for live conversations — interviews, sales calls, meetings. Captures audio, transcribes, and drafts grounded answers from your own documents.",
   "type": "module",
   "scripts": {
     "dev": "vite",
