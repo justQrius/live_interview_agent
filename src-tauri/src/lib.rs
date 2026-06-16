@@ -3,7 +3,7 @@ mod commands;
 mod utils;
 
 // Import commands for registration
-use commands::{config, sidecar, window};
+use commands::{config, sidecar};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,7 +20,6 @@ pub fn run() {
       config::set_api_key,
       config::delete_api_key,
       config::has_api_key,
-      window::toggle_screen_invisibility,
       sidecar::start_sidecar,
       sidecar::stop_sidecar,
       sidecar::is_sidecar_running,

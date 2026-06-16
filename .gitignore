@@ -39,7 +39,7 @@ Thumbs.db
 *.db-journal
 
 # App data directories (in case anyone runs with cwd=repo)
-.live_interview_agent/
+.interview_copilot/
 data/
 .cache/
 sessions/

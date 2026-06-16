@@ -81,11 +81,11 @@ class GeminiFileUploader:
     """
     Handles file uploads to Gemini with persistence and document type awareness.
     
-    Maintains a local copy of files in ~/.live_interview_agent/documents/
+    Maintains a local copy of files in ~/.interview_copilot/documents/
     to allow restoring context after app restart.
     """
     
-    DEFAULT_STORAGE_DIR = ".live_interview_agent/documents"
+    DEFAULT_STORAGE_DIR = ".interview_copilot/documents"
     MANIFEST_FILE = "manifest.json"
     
     def __init__(self, api_key: str, storage_dir: Optional[str] = None):

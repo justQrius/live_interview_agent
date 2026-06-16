@@ -1,8 +1,8 @@
-# Live Interview Agent & Meeting Copilot
+# Interview Copilot
 
-> **One app, two modes.** A cross-platform desktop assistant that listens to a live conversation — job interview, sales call, standup, customer discovery, 1:1 — and quietly drafts the right answer on your screen, drawn from your own documents, stories, and notes.
+> **One app, two modes.** A cross-platform desktop assistant that helps you prepare for interviews — practice mock interviews, refine your answers with STAR frameworks, and build a library of polished responses from your own documents, stories, and notes.
 
-Live Interview Agent captures the audio of the conversation (your microphone and the *other* side's audio via system loopback), transcribes it in real time, detects when you're being asked a question, and produces a grounded, in-context answer before you've finished formulating your own. The same pipeline that coaches you through "tell me about a time you handled conflict" can also keep a sales call on track, take running notes for a 1:1, or pre-draft answers for a panel interview.
+Interview Copilot helps you practice and improve your interview skills. Upload your resume, job description, and prepared Q&A, then run mock interview sessions where the app listens to your practice answers, provides real-time coaching on structure and consistency, and helps you refine your responses until they're polished and confident.
 
 Built with a sidecar architecture combining **Tauri (Rust)** for the desktop shell, **React (TypeScript)** for the UI, and a **Python AI engine** for real-time speech-to-text, RAG-powered answers, and intelligent coaching.
 
@@ -35,20 +35,15 @@ Built with a sidecar architecture combining **Tauri (Rust)** for the desktop she
 
 ## What it does
 
-You put the app on a second monitor (or just leave it open). It listens to:
+Interview Copilot helps you prepare for interviews by providing real-time coaching and feedback:
 
-1. **Your microphone** — so it knows when you're answering (and can stay quiet).
-2. **System audio (loopback)** — so it hears the other side of the call on Zoom, Teams, Google Meet, or any browser-based interview platform.
+1. **Upload your materials** — Resume, job description, prepared Q&A, company research
+2. **Run a mock session** — Practice answering questions out loud (either with a partner or solo)
+3. **Get instant feedback** — The app analyzes your answers for structure, consistency, and grounding
+4. **Build polished responses** — Refine your answers with STAR/SOAR/PREP frameworks
+5. **Review and improve** — Browse session history, export your best answers, track your progress
 
-When the other person asks you a question:
-
-1. The app transcribes what they said (locally, by default — no audio leaves your machine).
-2. A 4-tier completeness detector waits for the *whole* question, including natural pauses like "tell me about… [pause] …and how you handled it."
-3. A RAG pipeline pulls relevant material from documents you've uploaded — your resume, prepared Q&A, the job description, company research, your own meeting notes.
-4. An LLM drafts an answer grounded in that material, streamed to the UI in real time.
-5. Optional coaching panels pop up with STAR stories, structure hints (STAR / SOAR / PREP / CAR), and consistency warnings.
-
-The target end-to-end latency is **<1.5 seconds** from the end of the question to the first answer token on screen — fast enough that the answer is waiting for you, not the other way around.
+The target end-to-end latency is **<1.5 seconds** from the end of the question to the first coaching suggestion — fast enough that the feedback appears while the question is still fresh in your mind.
 
 ---
 
@@ -58,15 +53,15 @@ The pipeline is general; the prompts and document types are configurable. Today 
 
 | Scenario | How it helps |
 |---|---|
-| **Job interviews** | Real-time answer drafts, STAR story recall, consistency tracking, tone adjustment |
-| **Behavioral & technical screens** | Splits compound questions, resolves "tell me more about that project" anaphora across turns |
-| **Panel interviews** | Multi-question splitting, QA prioritization, document-aware retrieval |
-| **Sales / discovery calls** | Live answer drafts from your playbook, talking points, objection handling |
-| **1:1s & standups** | Captures both sides, surfaces relevant context from past notes or docs |
-| **Customer / vendor calls** | Keeps your talking points in front of you without breaking eye contact |
-| **Live meeting assistant** | Same pipeline with meeting-mode prompts; transcribe both sides while you stay focused on the conversation |
+| **Mock interview practice** | Practice answering questions with real-time feedback on structure and consistency |
+| **Behavioral & technical prep** | Split compound questions, practice STAR stories, refine technical explanations |
+| **Panel interview prep** | Multi-question practice, QA prioritization, document-aware retrieval |
+| **Sales / discovery prep** | Practice your playbook, talking points, objection handling |
+| **1:1s & standups** | Practice delivering concise, structured updates |
+| **Customer / vendor prep** | Keep your talking points in front of you during practice |
+| **Meeting preparation** | Same pipeline with meeting-mode prompts; practice before the real conversation |
 
-> The app is interview-mode by default because the coaching layer is most mature there, but nothing in the architecture is interview-specific — the question detector, RAG, and answer-generation stages work the same way regardless of what the *other* person is asking.
+> The app is interview-prep mode by default because the coaching layer is most mature there, but nothing in the architecture is interview-specific — the question detector, RAG, and answer-generation stages work the same way regardless of what you're practicing for.
 
 ---
 
@@ -74,9 +69,9 @@ The pipeline is general; the prompts and document types are configurable. Today 
 
 ```
 ┌──────────────────┐                          ┌──────────────────┐
-│  Other person    │──► System audio ──┐      │   You            │
-│  (Zoom / Meet /  │   (WASAPI /        │      │                  │
-│   Teams / phone) │    Core Audio)     │      │   Microphone ────┼──►
+│  Question Source  │──► Audio Input ──┐      │   You            │
+│  (Partner /       │   (Microphone /  │      │                  │
+│   Audio Playback) │    System Audio) │      │   Microphone ────┼──►
 └──────────────────┘                    │      └──────────────────┘
                                         ▼              │
                                 ┌──────────────────────────┐
@@ -100,9 +95,9 @@ The pipeline is general; the prompts and document types are configurable. Today 
                                                │  finalized question
                                                ▼
    ┌────────────────────┐   ┌──────────────────────────┐   ┌────────────────────┐
-   │  RAG retrieval     │──►│  LLM (Gemini / OpenAI /  │──►│  Streamed answer   │
-   │  ChromaDB + Gemini │   │  Anthropic, cached)      │   │  to UI             │
-   │  context cache     │   │  + coaching overlays     │   │  + STAR story      │
+   │  RAG retrieval     │──►│  LLM (Gemini / OpenAI /  │──►│  Coaching &        │
+   │  ChromaDB + Gemini │   │  Anthropic, cached)      │   │  Feedback          │
+   │  context cache     │   │  + STAR/SOAR/PREP hints   │   │  to UI             │
    └────────────────────┘   └──────────────────────────┘   └────────────────────┘
                 ▲                            ▲
                 │                            │
@@ -121,11 +116,11 @@ For the full system architecture, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 ## Features
 
 ### 🎙️ Real-time audio capture
-- **System loopback + microphone** — hears the *other* side on any video-call platform, not just your mic
+- **Microphone + system audio** — capture both your practice answers and questions (from a partner or audio playback)
 - **Multi-provider STT** — local Whisper (GPU-accelerated, 100% private) with Gemini cloud fallback
 - **Streaming transcription** — Deepgram Nova-3 WebSocket for ~150ms interim latency
-- **Speaker diarization** — ECAPA-TDNN voice embeddings distinguish "you" from "them" via a 10-second voice calibration
-- **Noise reduction** — adaptive filtering for calls in noisy environments
+- **Speaker diarization** — ECAPA-TDNN voice embeddings distinguish between speakers via a 10-second voice calibration
+- **Noise reduction** — adaptive filtering for practice in noisy environments
 - **Browser VAD** — Silero VAD in the UI thread for low-latency turn detection
 
 ### 🧠 Intelligence pipeline
@@ -241,8 +236,8 @@ For component-level detail, data flow, and extension points, see **[ARCHITECTURE
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/justQrius/live_interview_agent.git
-cd live_interview_agent
+git clone https://github.com/justQrius/interview-copilot.git
+cd interview-copilot
 
 # 2. Install frontend dependencies
 npm install
@@ -344,10 +339,10 @@ See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the complete list and defaults.
 ### Basic workflow
 
 1. **Upload context** — Add your resume, job description, prepared Q&A, company research, or any documents you want the app to draw from. The extraction pipeline automatically identifies STAR stories and builds a candidate profile.
-2. **Calibrate your voice** — Record a 10-second sample so the system can distinguish you from the other speakers. (Only needed once per device.)
-3. **Start a session** — Open the app, then open Zoom / Teams / Meet / your phone. The app captures the conversation from both sides.
-4. **Have the conversation** — The app transcribes the other person, detects when a question is complete, and drafts a grounded answer in real time.
-5. **Use coaching** — Watch for STAR story suggestions, structure hints, and consistency warnings as you go.
+2. **Calibrate your voice** — Record a 10-second sample so the system can distinguish between speakers. (Only needed once per device.)
+3. **Start a session** — Practice answering questions out loud (either with a partner asking questions or by recording yourself).
+4. **Get real-time feedback** — The app analyzes your answers and provides coaching suggestions on structure, consistency, and grounding.
+5. **Use coaching** — Watch for STAR story suggestions, structure hints, and consistency warnings as you practice.
 6. **Enhance or export** — Use the *Enhance* menu to re-draft an answer (more detail, more specific, STAR format, different tone, shorter). Export the full session transcript when you're done.
 
 ### Document types
@@ -376,7 +371,7 @@ After an answer is generated, click **Enhance** to re-draft it:
 ## Project structure
 
 ```
-live_interview_agent/
+interview-copilot/
 ├── src/                      # React frontend (TypeScript)
 │   └── ui/
 │       ├── components/       # 25+ components (AnswerDisplay, CoachingPanel, …)
@@ -452,7 +447,7 @@ python scripts/test_with_recordings.py
 ### Code style
 
 - **TypeScript / React** — functional components, hooks, Zustand, Tailwind, named exports, strict mode
-- **Rust** — Tauri commands in `src-tauri/src/commands/`, platform-specific code in `utils/platform.rs`, all errors as `Result<T, String>`
+- **Rust** — Tauri commands in `src-tauri/src/commands/`, all errors as `Result<T, String>`
 - **Python** — 3.11+ type hints, async/await, Black + isort, `Provider` and `Factory` patterns, always `from src.…` import prefix
 - **Provider Pattern** — implement `STTProvider` / `LLMProvider` / `SearchProvider` for new services
 - **Factory Pattern** — use `ProviderFactory` for instantiation so config and fallback work uniformly
@@ -486,7 +481,7 @@ python scripts/test_with_recordings.py
 
 | Metric | Target | Typical (measured) |
 |---|---|---|
-| End-to-end latency (speech end → first answer token) | <1.5s | ~1.2s |
+| End-to-end latency (speech end → first coaching suggestion) | <1.5s | ~1.2s |
 | Question detection | <10ms | ~5ms |
 | RAG retrieval | <200ms | ~150ms |
 | First LLM token (with Gemini context cache) | <500ms | ~400ms |
@@ -498,7 +493,7 @@ python scripts/test_with_recordings.py
 
 ## Privacy
 
-Live Interview Agent is designed to keep your data local by default:
+Interview Copilot is designed to keep your data local by default:
 
 - **Audio** stays on your machine when using Local Whisper (the default). You only opt in to cloud STT if you want lower latency on a machine without a GPU.
 - **Documents** you upload are stored in the local app data directory. Nothing is uploaded to any server unless you choose a cloud LLM provider, in which case only the relevant chunks (not your full library) are sent per query.

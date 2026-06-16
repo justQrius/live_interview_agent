@@ -36,7 +36,7 @@ pub fn set_api_key(provider: String, key: String) -> Result<(), String> {
     }
     let key_name = get_key_name(&provider);
     
-    eprintln!("[Rust] Attempting to store key: service={}, key_name={}", "live_interview_agent", key_name);
+    eprintln!("[Rust] Attempting to store key: service={}, key_name={}", "interview_copilot", key_name);
     
     keyring::store_api_key(&key_name, &key).map_err(|e| e.to_string())?;
     eprintln!("[Rust] Key stored successfully (using OS keyring or fallback)");

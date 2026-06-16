@@ -50,7 +50,7 @@ class OnnxInferenceExecutor:
 
         Args:
             model_path: Path to ONNX model files. If None, uses default cache.
-                       Default: ~/.live_interview_agent/turn_detector/
+                       Default: ~/.interview_copilot/turn_detector/
             device: Execution device ("cpu" or "cuda" if available)
             use_process_isolation: Run inference in separate process (optional,
                                   for GIL avoidance in extreme low-latency scenarios)
@@ -70,7 +70,7 @@ class OnnxInferenceExecutor:
     def _get_default_model_path(self) -> str:
         """Get default model cache path."""
         from pathlib import Path
-        cache_dir = Path.home() / ".live_interview_agent" / "turn_detector"
+        cache_dir = Path.home() / ".interview_copilot" / "turn_detector"
         cache_dir.mkdir(parents=True, exist_ok=True)
         return str(cache_dir)
 

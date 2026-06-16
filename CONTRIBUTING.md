@@ -1,4 +1,4 @@
-# Contributing to Live Interview Agent
+# Contributing to Interview Copilot
 
 Thanks for your interest in contributing! This project is a cross-platform desktop application with a React/TypeScript UI, a Tauri (Rust) shell, and a Python AI sidecar. Pull requests, bug reports, and feature requests are all welcome.
 
@@ -19,7 +19,7 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 
 ## Filing bugs
 
-Open a [GitHub Issue](https://github.com/justQrius/live_interview_agent/issues) and include:
+Open a [GitHub Issue](https://github.com/justQrius/interview-copilot/issues) and include:
 
 1. **What you expected to happen** and **what actually happened**
 2. **Steps to reproduce** — minimal if possible
@@ -63,8 +63,8 @@ Larger features — new providers, new LLM backends, new turn-detection strategi
 
 ```bash
 # 1. Clone
-git clone https://github.com/justQrius/live_interview_agent.git
-cd live_interview_agent
+git clone https://github.com/justQrius/interview-copilot.git
+cd interview-copilot
 
 # 2. Frontend
 npm install
@@ -138,7 +138,6 @@ See `ENDPOINTING_PRIORITY_FIX.md` for the priority rules when both layers are ac
 
 ### Rust (Tauri)
 - Tauri commands live in `src-tauri/src/commands/`
-- Platform-specific code in `utils/platform.rs`
 - Use the `keyring` crate for secure API key storage — never store secrets in config files
 - All errors returned as `Result<T, String>` from Tauri commands
 
@@ -153,7 +152,7 @@ See `ENDPOINTING_PRIORITY_FIX.md` for the priority rules when both layers are ac
 ## Project layout
 
 ```
-live_interview_agent/
+interview-copilot/
 ├── src/                      # React frontend (TypeScript)
 │   └── ui/
 │       ├── components/       # 25+ components

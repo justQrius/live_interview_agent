@@ -15,7 +15,7 @@ fn get_storage_path() -> Result<PathBuf, String> {
         .or_else(|_| std::env::var("HOME"))
         .map_err(|_| "Could not determine app data directory".to_string())?;
     
-    let dir = PathBuf::from(app_data).join("live_interview_agent");
+    let dir = PathBuf::from(app_data).join("interview_copilot");
     fs::create_dir_all(&dir).map_err(|e| format!("Failed to create storage directory: {}", e))?;
     
     Ok(dir.join(STORAGE_FILE))

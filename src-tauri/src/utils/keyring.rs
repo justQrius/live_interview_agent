@@ -1,7 +1,7 @@
 use keyring::Entry;
 use thiserror::Error;
 
-const SERVICE_NAME: &str = "live_interview_agent";
+const SERVICE_NAME: &str = "interview_copilot";
 
 #[derive(Error, Debug)]
 pub enum KeyringError {

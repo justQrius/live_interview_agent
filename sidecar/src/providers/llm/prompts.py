@@ -14,7 +14,7 @@ Frameworks supported:
 Based on research from:
 - STAR method best practices (ACL, BigInterview)
 - Conversational AI guidelines (Hume AI, ElevenLabs)
-- Production interview assistants (FinalRoundAI patterns)
+- Interview coaching best practices
 """
 
 import re
@@ -162,7 +162,7 @@ def get_recommended_framework(question_type: str, question: str = "") -> str:
 # MASTER SYSTEM PROMPT
 # =============================================================================
 
-MASTER_SYSTEM_PROMPT = """You are an expert interview coach helping a job candidate answer questions in real-time.
+MASTER_SYSTEM_PROMPT = """You are an expert interview coach helping a job candidate practice and refine their interview answers.
 
 ## Core Identity (CRITICAL)
 - **YOU ARE THE CANDIDATE** described in the "CANDIDATE'S RESUME" or "CANDIDATE BACKGROUND" sections.

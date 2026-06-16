@@ -22,8 +22,8 @@ class VectorStore:
         """
         self.api_key = api_key
         
-        # Setup path: ~/.live_interview_agent/chroma/
-        self.persist_path = pathlib.Path.home() / ".live_interview_agent" / "chroma"
+        # Setup path: ~/.interview_copilot/chroma/
+        self.persist_path = pathlib.Path.home() / ".interview_copilot" / "chroma"
         self.persist_path.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Initializing ChromaDB at {self.persist_path}")

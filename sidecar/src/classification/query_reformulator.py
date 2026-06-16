@@ -89,7 +89,7 @@ ANAPHORA_PATTERNS = [
 ]
 
 # LLM prompt for reformulation fallback
-LLM_REFORMULATION_PROMPT = """You are a query reformulator for an interview assistant. Your task is to expand a follow-up question into a standalone question that can be used for document retrieval.
+LLM_REFORMULATION_PROMPT = """You are a query reformulator for an interview preparation tool. Your task is to expand a follow-up question into a standalone question that can be used for document retrieval.
 
 Conversation history (most recent last):
 {history}

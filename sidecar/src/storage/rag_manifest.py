@@ -6,7 +6,7 @@ Tracks what documents have been uploaded and indexed, enabling:
 - Cache refresh without re-uploading documents
 - Clean "start fresh" functionality
 
-Storage: ~/.live_interview_agent/rag_manifest.json
+Storage: ~/.interview_copilot/rag_manifest.json
 """
 
 import json
@@ -111,14 +111,14 @@ class RagManifest:
     3. Provide "Clear All" functionality
     """
     
-    DEFAULT_PATH = Path.home() / ".live_interview_agent" / "rag_manifest.json"
+    DEFAULT_PATH = Path.home() / ".interview_copilot" / "rag_manifest.json"
     
     def __init__(self, manifest_path: Optional[Path] = None):
         """
         Initialize the manifest manager.
         
         Args:
-            manifest_path: Custom path for manifest file. Defaults to ~/.live_interview_agent/rag_manifest.json
+            manifest_path: Custom path for manifest file. Defaults to ~/.interview_copilot/rag_manifest.json
         """
         self.manifest_path = manifest_path or self.DEFAULT_PATH
         self.manifest_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,9 +1,9 @@
-# Live Interview Agent - System Architecture
+# Interview Copilot - System Architecture
 
 > **Version**: 2.0 (Phase 9)  
 > **Last Updated**: January 2026
 
-A comprehensive technical reference for the Live Interview Agent, a real-time AI-powered interview coaching system.
+A comprehensive technical reference for Interview Copilot, an AI-powered interview preparation system.
 
 ---
 
@@ -805,7 +805,7 @@ pub fn delete_key(service: &str) -> Result<()>
 ## Appendix A: File Structure
 
 ```
-live_interview_agent/
+interview-copilot/
 ├── src/                          # React Frontend
 │   └── ui/
 │       ├── components/           # React components

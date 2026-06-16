@@ -1,6 +1,6 @@
 # Security
 
-Thank you for taking the time to disclose security issues responsibly. The maintainers of Live Interview Agent take reports seriously and will work with you to understand and address the issue quickly.
+Thank you for taking the time to disclose security issues responsibly. The maintainers of Interview Copilot take reports seriously and will work with you to understand and address the issue quickly.
 
 ## Supported versions
 
@@ -17,7 +17,7 @@ This project is in active development. We do not maintain long-term backport bra
 
 Report privately via one of the following channels:
 
-1. **GitHub Security Advisories** (preferred): https://github.com/justQrius/live_interview_agent/security/advisories/new
+1. **GitHub Security Advisories** (preferred): https://github.com/justQrius/interview-copilot/security/advisories/new
 2. **Email**: open a GitHub issue requesting the maintainer's contact email, or check the git commit history (`git log`) for an active maintainer address
 
 A good report includes:
@@ -37,7 +37,7 @@ You can expect:
 
 ## Threat model
 
-Live Interview Agent is a **local desktop application**. Its security boundaries are:
+Interview Copilot is a **local desktop application**. Its security boundaries are:
 
 | Boundary | Notes |
 |---|---|

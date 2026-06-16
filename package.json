@@ -1,7 +1,7 @@
 {
-  "name": "live_interview_agent",
+  "name": "interview-copilot",
   "version": "1.0.0",
-  "description": "Real-time AI copilot for live conversations — interviews, sales calls, meetings. Captures audio, transcribes, and drafts grounded answers from your own documents.",
+  "description": "AI-powered interview preparation assistant. Practice mock interviews, refine your answers with STAR frameworks, and build confidence before the real thing.",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -1,7 +1,7 @@
 """
 Answer Structure Suggester.
 
-Provides real-time recommended answer structures (e.g. STAR, PREP)
+Provides recommended answer structures (e.g. STAR, PREP)
 based on the detected question type.
 
 Part of Phase 4E: Interview Coaching (STORY-067)

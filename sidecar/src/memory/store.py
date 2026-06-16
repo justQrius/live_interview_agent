@@ -215,7 +215,7 @@ class MemoryStore:
         Initialize the memory store.
 
         Args:
-            db_path: Path to the SQLite database file. Defaults to ~/.live_interview_agent/memory.db
+            db_path: Path to the SQLite database file. Defaults to ~/.interview_copilot/memory.db
             pool_size: Number of connections in the pool
         """
         self.db_path = db_path or self._default_path()
@@ -226,7 +226,7 @@ class MemoryStore:
     def _default_path(self) -> str:
         """Get the default database path."""
         home = Path.home()
-        app_dir = home / ".live_interview_agent"
+        app_dir = home / ".interview_copilot"
         app_dir.mkdir(parents=True, exist_ok=True)
         return str(app_dir / "memory.db")
 

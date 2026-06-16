@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Default database location
-DEFAULT_DB_DIR = ".live_interview_agent"
+DEFAULT_DB_DIR = ".interview_copilot"
 DEFAULT_DB_NAME = "sessions.db"
 
 
@@ -113,7 +113,7 @@ class SessionHistoryStore:
         Args:
             db_path: Path to SQLite database file.
                      Use ":memory:" for in-memory database (testing).
-                     If None, uses default path ~/.live_interview_agent/sessions.db
+                     If None, uses default path ~/.interview_copilot/sessions.db
         """
         if db_path is None:
             # Use default path in home directory

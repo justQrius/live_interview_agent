@@ -5,9 +5,9 @@
  * Logs are automatically saved to the app's log directory.
  * 
  * Log file location:
- * - Windows: %APPDATA%/com.live-interview-agent/logs/
- * - macOS: ~/Library/Logs/com.live-interview-agent/
- * - Linux: ~/.config/com.live-interview-agent/logs/
+ * - Windows: %APPDATA%/com.interviewcopilot/logs/
+ * - macOS: ~/Library/Logs/com.interviewcopilot/
+ * - Linux: ~/.config/com.interviewcopilot/logs/
  */
 
 import { trace, debug, info, warn, error, attachConsole } from '@tauri-apps/plugin-log';

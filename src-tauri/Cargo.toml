@@ -1,10 +1,10 @@
 [package]
-name = "live-interview-agent"
+name = "interview-copilot"
 version = "0.1.0"
-description = "Real-time AI copilot for live conversations — interviews, sales calls, meetings. Captures audio, transcribes, and drafts grounded answers from your own documents."
-authors = ["Live Interview Agent Team"]
+description = "AI-powered interview preparation assistant. Practice mock interviews, refine your answers with STAR frameworks, and build confidence."
+authors = ["Interview Copilot Team"]
 license = "MIT"
-repository = "https://github.com/justQrius/live_interview_agent"
+repository = "https://github.com/justQrius/interview-copilot"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -28,14 +28,3 @@ thiserror = "2"
 
 [dev-dependencies]
 serial_test = "3"
-
-# Platform-specific dependencies for screen invisibility
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26"
-objc = "0.2"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-x11 = "2.21"

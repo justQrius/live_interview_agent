@@ -86,7 +86,7 @@ class ContextUsageTracker:
             self._db_path = Path(db_path)
         else:
             # Default to user data directory
-            data_dir = Path.home() / ".live_interview_agent" / "analytics"
+            data_dir = Path.home() / ".interview_copilot" / "analytics"
             data_dir.mkdir(parents=True, exist_ok=True)
             self._db_path = data_dir / "context_usage.db"
         
