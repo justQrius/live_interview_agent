@@ -189,7 +189,13 @@ class GeminiFileUploader:
     def _save_file_to_disk(self, filename: str, content: bytes) -> None:
         """Save file content to storage directory."""
         try:
-            file_path = self.storage_path / filename
+            safe_name = os.path.basename(filename)
+            if not safe_name or safe_name.startswith('.'):
+                safe_name = f"uploaded_{int(time.time())}_{safe_name}"
+            file_path = self.storage_path / safe_name
+            resolved = file_path.resolve()
+            if not str(resolved).startswith(str(self.storage_path.resolve())):
+                raise ValueError(f"Path traversal detected: {filename}")
             with open(file_path, 'wb') as f:
                 f.write(content)
         except Exception as e:

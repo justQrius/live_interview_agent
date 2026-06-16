@@ -28,9 +28,9 @@ const ProviderRow: React.FC<{ provider: Provider; name: string; icon: string; co
 
   const checkStatus = async () => {
     try {
-      console.log(`[ProviderSettings] Checking key status for ${provider}...`);
+      if (import.meta.env.DEV) console.log(`[ProviderSettings] Checking key status for ${provider}...`);
       const status = await invoke<ApiKeyStatus>('has_api_key', { provider });
-      console.log(`[ProviderSettings] ${provider} key exists:`, status.exists);
+      if (import.meta.env.DEV) console.log(`[ProviderSettings] ${provider} key exists:`, status.exists);
       setHasKey(status.exists);
       if (status.exists) {
         try {
@@ -53,12 +53,12 @@ const ProviderRow: React.FC<{ provider: Provider; name: string; icon: string; co
     setIsSaving(true);
     setStatusMsg(null);
     try {
-      console.log('[ProviderSettings] Saving API key for provider:', provider);
+      if (import.meta.env.DEV) console.log('[ProviderSettings] Saving API key for provider:', provider);
       await invoke('set_api_key', { provider, key: input });
-      console.log('[ProviderSettings] Save successful, checking if key exists...');
+      if (import.meta.env.DEV) console.log('[ProviderSettings] Save successful, checking if key exists...');
       
       const status = await invoke<ApiKeyStatus>('has_api_key', { provider });
-      console.log('[ProviderSettings] Verification check result:', status);
+      if (import.meta.env.DEV) console.log('[ProviderSettings] Verification check result:', status);
       
       setHasKey(status.exists);
       setStatusMsg({ text: status.exists ? 'Saved' : 'Warning', type: status.exists ? 'success' : 'error' });
