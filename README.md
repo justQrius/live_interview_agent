@@ -171,6 +171,17 @@ For the full system architecture, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Architecture
 
+<p align="center">
+  <a href="docs/architecture/system-architecture.html">
+    <img src="docs/architecture/system-architecture.png" alt="Interview Copilot system architecture" width="100%">
+  </a>
+</p>
+
+> **Explore the [interactive architecture diagram](docs/architecture/system-architecture.html)** — click nodes to focus components, trace relationships between the Tauri desktop shell, WebSocket IPC, and the Python sidecar, and switch between guided views (question→answer path, streaming STT, memory & coaching). Works in light/dark themes; no build step needed.
+
+<details>
+<summary>Classic ASCII diagram</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           Tauri Desktop Shell                           │
@@ -211,6 +222,8 @@ For the full system architecture, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 │  Gemini (STT/LLM/Cache/Search) │ OpenAI (GPT-5) │ Anthropic │ Deepgram │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+</details>
 
 For component-level detail, data flow, and extension points, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
